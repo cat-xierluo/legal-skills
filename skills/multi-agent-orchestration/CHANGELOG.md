@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.36.9] - 2026-10-12
+
+### 新增
+- 补录 zcode-gui 波次配套资产（多会话积压恢复）：references 34（本地 Web 与官方远控浏览器派发过渡路径）/35（浏览器自动化操作映射）/37（worker 资源收尾）/39（稀疏 worktree 派发）。
+- scripts 补录：checkout-plan.py（只读检出准入）、read-worker-result.sh、spawn-worker-checkout.sh、zcode-browser-driver.cjs 及配套测试。
+- 方向注记：zcode-gui 专线分支已于 2026-10-12 清理冻结；本批为通用编排能力留档入库。
+
 ## [2.36.8] - 2026-10-04
 
 ### 修复
@@ -238,6 +245,15 @@
 
 - `spawn-worker-remote.sh spawn --prompt-file F`：spawn 后把任务书经 `orca terminal send --terminal <handle> --environment <配对名>` 投进节点终端——节点侧 spawn 本就对 TUI 投过通用 preamble（"详细指令将由 PM 后续投递"），本步补上真正的任务书，TUI 实时渲染、双机 Orca UI 可见真实推进。修正 v2.30.0-2.30.4 E2E 用 `claude -p` 内嵌任务的错误模式（`-p` 全程缓冲输出，终端看不到任何推进，且绕开 terminal-managed 的 checkpoint 契约）。
 - 细节：句柄从节点 METADATA `.session.orca.terminal_handle` 经 ssh 读取；需 personal config 节点段新增可选 `orca_environment` 字段（Orca 配对名），缺失时打印手动补投命令而非静默跳过；send 失败重试一次（10s，吸收 TUI 就绪抖动）；投递结果与任务书 sha256 记入 PM 软账 `prompt` 段。任务书要求：用 Edit 工具改文件（绕开 shell 追加白名单坑）、按 checkpoint 契约写 STATUS.json（建议基于 `templates/worker-prompt.md` 生成）。
+
+### 文档完善（2026-09-30 独立审查）
+
+- 在 TASKS.md 登记回执并发消费、远程 cleanup CLI 合同和跨主机路径三项复核任务。仅登记确认问题、证据与正反验收；未修复运行代码、未提升实现版本或声明完整运行通过。
+
+### 后续文档维护检查点（2026-10-02）
+- 收敛06/08/09/10与legacy driver的24，五份参考2910→467行；保留运行合同、旧诊断入口与按需读取路由，不修改脚本、配置或默认backend。
+- 本地命令生成86项、参数/帮助9项及77处链接/锚点检查通过；上述检查基于当前本机运行基线，不代表本次文档提交包含所有后续功能实现或完成新版本发布。
+- 新上下文Agent前向行为、真实模型任务与长期稳定性未重新验证。文档使用的后续指南/运行能力须与对应功能提交一并集成；本次仅为文档检查点。
 
 ## [2.30.4] - 2026-09-29
 

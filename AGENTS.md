@@ -89,7 +89,7 @@ except ImportError:
 
 1. **法律专业应用技能**：使用 CC BY-NC（署名-非商业性使用）
    - 涉及法律业务分析、文书生成、专业咨询的技能
-   - 示例：`litigation-analysis`、`legal-proposal-generator`、`legal-text-format`、`legal-qa-extractor`
+   - 示例：`judgment-analysis`、`legal-proposal-generator`、`legal-text-format`、`legal-qa-extractor`
 
 2. **通用工具类技能**：使用 MIT 许可证
    - 内容获取、格式转换、开发工具等通用功能
@@ -385,6 +385,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.9.4 | 2026-10-13 | 许可证示例技能名随 `litigation-analysis` 更名为 `judgment-analysis` 同步更新（v2.0.0） |
 | v1.9.3 | 2026-10-06 | 所有 Agent 开发改用独立 worktree；主目录固定 main、具名串行采用；删除主目录 checkout/pull 及整目录覆盖示例 |
 | v1.9.2 | 2026-09-23 | Skill 开发规范唯一维护源改为 skill-lint（细则在其 references/），删除 docs/ 下已内化的 8 份开发/协作指南文档 |
 | v1.9.1 | 2026-09-23 | 将通用工具及协作技能示例由旧名 funasr-transcribe 更新为 local-asr |

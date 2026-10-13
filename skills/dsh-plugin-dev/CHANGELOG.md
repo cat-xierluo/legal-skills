@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.1] - 2026-10-12
+
+### 新增
+- references/ui-ux-workbench.md：插件工作台与运行视图的设计与验收方法（真实入口观察、版式按产品任务选择）。
+
 ## [0.6.0] - 2026-10-01
 
 - official-capabilities 新增条目 #6（插件 Config 与 settings 表单机制：Config 命名导出/~standard 同步契约/volatile 活引用与写协议/vendor 方言门/子节点 toJSON——零依赖 duck-typed 三暗门，dsh-plugins PR #55）与 #7（`domain/changed` 存储域变更事件：耐久后写序 emit/新快照/进程内边界，PR #68）；待查清单收口「读取回执」项（bizlink v1 固化时评估维持业务侧）。

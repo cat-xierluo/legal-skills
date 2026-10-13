@@ -31,7 +31,7 @@ legal-qa-extractor:
   display_name: "法律问答知识提取"
 legal-text-format:
   display_name: "法律文本格式化"
-litigation-analysis:
+judgment-analysis:
   display_name: "判决书诉讼分析"
 legal-proposal-generator:
   display_name: "法律服务文档生成"

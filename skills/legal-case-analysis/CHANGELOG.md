@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [1.1.1] - 2026-10-13
+
+### 文档完善
+
+- SKILL.md、`references/analysis-engine-boundary.md`、`references/workflow.md` 中的相邻节点引用随 `litigation-analysis` 更名为 `judgment-analysis` 同步更新（更名见其 v2.0.0），分工内容不变。
+
+## [1.1.0] - 2026-10-11
+
+### 改进
+
+- 明确综合案件研判职责：按案件目标整合材料、组织法律检索和论证，不与单份判决解读争夺入口。
+- 承接起诉状证据初评与庭审复盘的按需参考，保留事实、推断与法源核验边界。
+- 增加判决分析交接的消费规则，复用来源、决定性争点与待核事项，避免重复生成整份报告。
+
 ## [1.0.0] - 2026-08-06
 
 > 正式发布版。承接 v0.3.5~v0.4.0 自迭代成果（11 轮无引导真材验证），经 eval-harness 两轮复验收敛（95/100，法律分析实质维度满分）。自迭代评估库：`private-skills/eval-harness/evals/legal-case-analysis-self-evolve-260805/`。

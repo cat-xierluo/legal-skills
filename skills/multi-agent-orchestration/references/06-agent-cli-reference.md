@@ -1,796 +1,114 @@
-# Agent CLI 完整参考手册
+# 常用 CLI 参数与读取路由
 
-> 2026-09-30 当前合同：日常 Claude Code/Codex；CodeBuddy、独立 ZCode CLI/MiniMax Code、Qoder CN、千问办公仅用户指定时使用。QoderWork 已移除。按需启动与权限以 `26-optional-cli-backends.md`、`27-qwenwork-cli-worker.md` 为准；本文 QoderWork/旧 ZCode 无 TUI/旧模型等历史条目不作为当前派发配方。
-> 以下保留历史 CLI 研究；非当前 backend 不得据此扩张白名单。
+目录：[入口](#1-先按任务选入口) · [公共参数](#2-renderer-公共参数) · [Claude](#3-claude-code) · [Codex](#4-codex) · [生成后检查](#5-生成后检查与推荐)
 
-> 本文档为 SKILL.md 的补充参考文档，汇总本机已安装的所有 Agent CLI 的命令规范。
-> 更新日期：2026-08-12
+在已选定 backend、准备渲染启动命令时读取本页。派发流程从 [SKILL.md](../SKILL.md) 开始；backend 的机械许可由 [harness policy](../config/harness-backend-policy.json) 决定，具体模式由 [dispatch profile](32-dispatch-profiles.md) 决定。
 
----
+`render-runtime-profile.sh` 只生成命令和上下文，不创建工作树、运行 Agent 或投递任务。生成命令不代表准入通过；交给正式 spawn 入口，继续使用同一任务的范围、验证、预算和身份。
 
-## 0. 总览
+## 1. 先按任务选入口
 
-| CLI | 版本 | 二进制路径 | 交互模式 | 批处理模式 | ACP | 额度来源 | 默认 model（个人偏好） |
-|-----|------|-----------|----------|-----------|-----|---------|------------------------|
-| Claude Code | 2.1.208 | `~/.local/bin/claude` | `claude` | `claude -p` | ✗ | Anthropic API / 第三方 provider / OAuth | （由 `config/orchestration-personal.json` 的 `main_force.task_routing` 决定） |
-| Codex | 0.147.0-alpha.6.5 | `~/.local/bin/codex` | `codex` | `codex exec` | ✗ | OpenAI API | （见 `codex_policy.policy`，默认 `explicit_only` 时不主动派） |
-| OpenCode | 1.17.6 | `~/.opencode/bin/opencode` | `opencode` | `opencode run` | ✓ `opencode acp` | 多 provider（config.toml） | `opencode:<provider>/<model>`（按 OpenCode profile） |
-| Hermes Agent | 0.17.0 | `~/.local/bin/hermes` | `hermes` / `hermes chat` | `hermes chat -q "..."` | ✓ `hermes acp` | 多 provider（pooled auth） | （按 hermes profile） |
-| Kimi CLI | 0.39 | `~/.local/bin/kimi` | `kimi` | `kimi --print -c "..."` | ✓ `kimi --acp` | Moonshot API | （按 kimi profile） |
-| Gemini CLI | 0.29.0 | `/opt/homebrew/bin/gemini` | `gemini` | `gemini -p "..."` | ✓ `--experimental-acp` | Google AI / Vertex | （按 gemini profile） |
-| QoderWork CLI | 1.0.45 | QoderWork CN.app 内 bin（或 `~/.local/bin/qoderclicn` symlink） | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `Qwen3.8-Max`、`Qwen3.7-Max`（见下方模型表） |
-| CodeBuddy CLI | 2.115.0 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | CodeBuddy 平台额度 / 内置模型 | `hy3`、`deepseek-v4-flash`、`deepseek-v4-pro` |
-| Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 | （按 rudder profile） |
-| ZCode | 0.16.5 | `~/.local/bin/zcode` → ZCode.app 内 zcode.cjs | `zcode` | `zcode app-server`（经 zcode-worker-driver.py） | ✗（TUI 缺件） | BigModel Coding Plan（GUI 同凭证） | `GLM-5.3`、`GLM-5.3-Flash`（见 ref 09） |
+| 已选入口 | 操作资料 | 选择边界 |
+|---|---|---|
+| Claude Code | 本页 §3 | 日常 worker；provider/OAuth 明确区分 |
+| Codex | 本页 §4 | 日常可选；仍消费个人配置与本轮授权 |
+| CodeBuddy | [08 操作指南](08-codebuddy-cli-worker.md) | 用户明确指定时使用 |
+| 独立 ZCode CLI | [28 模型与套餐](28-zcode-cli-bigmodel-coding-plan.md)、[30 原生 Orca](30-zcode-native-orca.md) | 用户明确指定；长程使用原生交互 CLI |
+| MiniMax Code | [26 按需 backend](26-optional-cli-backends.md) | 用户明确指定；默认 Orca，保留显式直连 |
+| 独立 Qoder CN / 千问办公 | [26](26-optional-cli-backends.md)、[27](27-qwenwork-cli-worker.md) | 两个配置与身份边界不同的入口 |
+| legacy ZCode driver | [09 兼容入口](09-zcode-cli-worker.md)、[24 安全合同](24-zcode-driver-safety.md) | 不代表独立原生 CLI；先核配置隔离能力 |
+| ZCode GUI | [34 GUI 操作](34-zcode-desktop-remote.md)、[35 驱动](35-zcode-browser-automation.md) | 浏览器路线，不能套 CLI backend 身份 |
 
-> 默认 model 列来源：`config/orchestration-personal.json` 的 `main_force.task_routing` 与 `backend_model_routing.<backend>.default_models`（详见 SKILL.md §9）；缺省回落本表。Codex 默认行为按 `codex_policy.policy` 决定；个人偏好通常 `explicit_only`——只在用户明确要求时解封。
+QoderWork 已移除。OpenCode/custom 的历史 renderer 能输出命令，但正式 spawn 不据此允许该 backend；Kimi/Gemini/Rudder 的历史研究同样不是派发许可。Hermes 的 PM host 权限按 policy 判定，不等于存在 Hermes worker backend。
 
-**未安装 / 不可用**：OpenClaw（symlink 已断）、Reasonix、Aider、Devin。
+不要把这张表维护为本机软件资产表或模型推荐榜。当前模型/额度读取已选配置与真实可用入口；任务匹配读取 [01](01-model-selection-matrix.md)，日常与显式选择边界读取 SKILL。
 
----
+## 2. renderer 公共参数
 
-## 1. Claude Code（`claude`）
+从项目工作区使用 Skill 脚本的确定路径。以下命令均仅生成文本，示例模型和路径需由本轮已核输入替换。
 
-> SKILL.md 已有详细覆盖。本节仅做参数速查补充。
-
-### 1.1 核心参数速查
-
-```
-用法: claude [options] [prompt]
-
-交互模式:     claude
-批处理模式:   claude -p "prompt"  或  claude -p < prompt.md
-流式输出:     claude -p --output-format stream-json "prompt"
-```
-
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `-p` / `--print` | 非交互模式，打印后退出 | worker 批处理必选 |
-| `--output-format <fmt>` | `text` / `json` / `stream-json` | stream-json 适合 PM 解析 |
-| `--settings <file-or-json>` | 加载 settings JSON（provider 配置） | 第三方 provider 路由 |
-| `--setting-sources <src>` | `user` / `project` / `local` | 控制加载哪些配置层 |
-| `--strict-mcp-config` | 只用 `--mcp-config` 的 MCP server | 隔离 MCP 工具 |
-| `--mcp-config <config>` | 加载 MCP 服务器配置 | 注入自定义工具 |
-| `--permission-mode <mode>` | `default` / `accept_edits` / `bypass_permissions` / `dont_ask` / `auto` | worker 自动化程度 |
-| `--dangerously-skip-permissions` | 跳过所有权限检查 | 沙箱环境专用 |
-| `--system-prompt <prompt>` | 自定义系统提示词 | 角色定制 |
-| `--append-system-prompt <prompt>` | 追加系统提示词 | 增量指令 |
-| `-c` / `--continue` | 继续最近会话 | 断点续跑 |
-| `-r` / `--resume [id]` | 恢复指定会话 | 指定 session |
-| `--session-id <uuid>` | 使用指定 session ID | 可预测 session |
-| `--worktree [name]` | 创建 git worktree | 文件隔离 |
-| `--tmux` | 为 worktree 创建 tmux session | 需配合 --worktree |
-| `--tools <tools...>` | 限制可用工具集 | 收窄 worker 能力 |
-| `--allowed-tools <tools>` | 允许的工具 | 白名单 |
-| `--disallowed-tools <tools>` | 禁止的工具 | 黑名单 |
-| `--effort <level>` | `low` / `medium` / `high` / `xhigh` / `max` | 控制思考深度 |
-| `--model <model>` | 指定模型 | 覆盖默认模型 |
-| `--fallback-model <model>` | 主模型不可用时 fallback | 容错 |
-| `--max-turns <n>` | 最大交互轮数 | 控制预算 |
-| `--add-dir <dirs>` | 添加工作目录 | 跨目录访问 |
-| `--bare` | 最小模式：跳过 hooks/LSP/plugins/CLAUDE.md | 与 Agent 工具调用门禁冲突；spawn 默认 fail-closed |
-| `--safe-mode` | 禁用所有自定义配置 | 排障 |
-| `--agent <agent>` | 指定 agent | 自定义角色 |
-| `--agents <json>` | JSON 定义自定义 agents | 多角色 |
-| `-i` / `--prompt-interactive <text>` | 执行 prompt 并继续交互 | 半自动 |
-| `--remote-control [name]` | 启用远程控制 | 外部驱动 |
-
-### 1.2 Worker 启动模式
-
-**Provider registry（推荐）**：
-```bash
-eval "$(bash scripts/render-runtime-profile.sh \
-  --backend claude-code \
-  --provider-registry config/claude-providers.local.json \
-  --api-provider deepseek \
-  --model v4flash \
-  --mode batch \
-  --prompt-file /tmp/task.prompt.md)"
-
-bash -lc "$WORKER_COMMAND"
-```
-
-registry 里每个 provider 有自己的 `base_url`、`auth_token_env` / `api_key_env`、`auth_type` 和 `models`。`render-runtime-profile.sh` 会把模型别名解析成 provider 真实模型名，再交给 `claude --model`。
-
-**Settings 文件（兼容旧路径）**：
-```bash
-bash scripts/claude-provider-env.sh \
-  --settings /path/to/provider.settings.json \
-  --model provider-model \
-  -- \
-  claude --settings /path/to/provider.settings.json \
-    --model provider-model \
-    -p --output-format stream-json \
-    --permission-mode acceptEdits \
-  < /tmp/task.prompt.md
-```
-
-**tmux 交互式（可纠偏/可接管）**：
-```bash
-tmux new-session -d -s worker-claude -c /path/to/worktree \
-  'bash scripts/claude-provider-env.sh --settings /path/to/provider.settings.json --model provider-model -- claude --settings /path/to/provider.settings.json --model provider-model --permission-mode auto'
-```
-
-第三方 provider 不要裸跑 `claude --settings ...`。标准路径是先用 `render-runtime-profile.sh` 生成命令；该命令默认包 `scripts/claude-provider-env.sh`。wrapper 会清理继承的 `ANTHROPIC_*` provider 路由变量、从 registry 或 settings 导入 env、补齐 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY`、设置 `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1`，并给 `claude` 注入 `--setting-sources project,local`。这样用户级 `~/.claude/settings.json` 里的 MiniMax/其他 provider 不会覆盖本次 worker。
-
-**Claude 官方 worktree + tmux**：
-```bash
-claude --worktree feature-x --tmux
-```
-
-### 1.3 已知坑点
-
-- `< redirect` 在 tmux 内必须用 `bash -lc` 包裹
-- `-p` + `--output-format stream-json` + tmux detached 组合可能导致启动即死
-- 大 prompt（> 5KB）+ 大 codebase 会触发 autocompact thrash
-- `--bare`、`--safe-mode`、`CLAUDE_CODE_SIMPLE=1` 会跳过或可能跳过 hooks；`--setting-sources` 排除 `local` 时项目 PreToolUse settings 也不会加载。需要依赖安装门禁的 worker 不得静默使用，spawn 会要求修正命令或显式接受 `prompt_only_no_mechanical_enforcement` 降级
-
----
-
-## 2. Codex（`codex`）
-
-### 2.1 核心参数速查
-
-```
-用法: codex [OPTIONS] [PROMPT]          # 交互模式
-      codex exec [OPTIONS] [PROMPT]     # 批处理模式
-```
-
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `exec` | 非交互执行子命令 | worker 批处理入口 |
-| `-m` / `--model <MODEL>` | 指定模型（如 `o3`, `o4-mini`） | 模型路由 |
-| `-s` / `--sandbox <MODE>` | `read-only` / `workspace-write` / `danger-full-access` | 安全控制 |
-| `--dangerously-bypass-approvals-and-sandbox` | 跳过所有审批和沙箱 | 沙箱环境专用 |
-| `-c` / `--config <key=value>` | 覆盖 config.toml 配置 | 运行时调参 |
-| `-p` / `--profile <NAME>` | 加载 `$CODEX_HOME/<name>.config.toml` | 多 profile 路由 |
-| `--oss` | 使用开源模型 | 本地/低成本任务 |
-| `--local-provider <PROVIDER>` | `lmstudio` / `ollama` | 本地推理 |
-| `-i` / `--image <FILE>` | 附加图片 | 多模态任务 |
-| `--enable <FEATURE>` | 启用 feature flag | 实验功能 |
-| `--disable <FEATURE>` | 禁用 feature flag | 稳定性控制 |
-| `--strict-config` | config.toml 字段不识别时报错 | 配置校验 |
-
-### 2.2 子命令
-
-| 子命令 | 说明 |
-|--------|------|
-| `exec` | 非交互执行（worker 用） |
-| `review` | 代码审查 |
-| `resume` | 恢复之前会话 |
-| `login` / `logout` | 认证管理 |
-| `mcp` | MCP 服务器管理 |
-| `plugin` | 插件管理 |
-| `apply` | 应用最新 diff（`git apply`） |
-| `doctor` | 诊断安装/配置/运行时健康 |
-| `cloud` | 浏览 Codex Cloud 任务 |
-| `features` | 查看 feature flags |
-
-### 2.3 Worker 启动模式
-
-**批处理**：
-```bash
-codex exec -m o4-mini -s danger-full-access - < /tmp/task.prompt.md
-```
-
-**tmux 交互式**：
-```bash
-tmux new-session -d -s worker-codex -c /path/to/worktree \
-  'codex -m o4-mini -s workspace-write'
-```
-
-**tmux 批处理**：
-```bash
-tmux new-session -d -s worker-codex -c /path/to/worktree \
-  "bash -lc 'codex exec -m o4-mini -s danger-full-access - < /tmp/task.prompt.md'"
-```
-
-**本地开源模型**：
-```bash
-codex exec --oss --local-provider ollama -m qwen2.5-coder -s workspace-write - < /tmp/task.prompt.md
-```
-
-### 2.4 Profile 路由
-
-Codex 的 profile 机制通过 `-p` / `--profile` 加载 `$CODEX_HOME/<name>.config.toml`：
-
-```bash
-# 使用自定义 profile
-codex exec -p legal-worker -m o4-mini -s danger-full-access - < /tmp/task.prompt.md
-
-# 覆盖配置项
-codex exec -c 'model="o3"' -c 'shell_environment_policy.inherit=all' - < /tmp/task.prompt.md
-```
-
-> **0.147 实测（2026-08-30）**：profile 是 `$CODEX_HOME/<name>.config.toml` 独立文件（顶层键，无 `[profiles.X]` 包裹）。把 `[profiles.X]` 内嵌进 config.toml 是 legacy 写法，`-p X` 会直接报错拒绝加载（`cannot be used while config.toml contains legacy [profiles.X]`）。本机已装 `~/.codex/spark.config.toml`（GPT-5.3-Codex-Spark 档，见 §2.5）。
-
-### 2.5 与 Skill 集成要点
-
-- Codex 的 `exec` 是 worker 的标准入口，不支持 `< redirect` 时同样需要 `bash -lc` 包裹
-- `-s danger-full-access` 是 worker 自动化的常用选项，但需确保 worktree 隔离
-- Codex 没有内建的 `--system-prompt` 参数，系统提示需在 prompt 文件或 config.toml 中设定
-- `codex apply` 可在 worker 完成后单独应用 diff，作为 PM 收口的替代路径
-- 本机 `codex` 可能是已经固定 `--sandbox` / `--ask-for-approval` 的安全 launcher。`render-runtime-profile.sh` 只有在可读脚本中证明两个值与请求完全一致时才省略重复参数；否则继续显式传参。不要把“参数重复导致 CLI exit 2”误判成 Agent/Orca 启动失败。
-- **launcher 重复 flag 实测（2026-08-30，spark-lane 首派撞坑）**：本机 `~/.local/bin/codex` launcher 固定 `--sandbox danger-full-access --ask-for-approval never`。给 `--command` 显式带 `-a never -s workspace-write` 会与 launcher 注入值重复，codex 以 `cannot be used multiple times` exit 2，终端退化成死 zsh（后续 send 的中文 prompt 会被 zsh 当命令执行）。正确姿势：`render-runtime-profile.sh --sandbox danger-full-access --approval never`（与 launcher 一致）→ 输出省略 flag 的 `codex -p <profile>`。经该 launcher 启动的 codex 沙箱实际恒为 danger-full-access，隔离靠 Orca worktree 兜底；profile 文件里的 sandbox_mode 会被 launcher 的 CLI flag 覆盖，不起收紧作用。
-
-### 2.6 GPT-5.3-Codex-Spark 额度 lane（2026-08-30 实测接入）
-
-| 项 | 值 |
+| 参数 | 含义与限制 |
 |---|---|
-| 模型 slug | `gpt-5.3-codex-spark`（`-m` 直配或 profile `-p spark` 均实测通过） |
-| 额度池 | ChatGPT 订阅 OAuth（`~/.codex/auth.json`），与 gpt-5.6-sol/gpt-5.5 主额度**分开计算** |
-| 解锁策略 | `codex_policy.spark_lane`（orchestration-personal.json）：简单开发/文档整理/批量机械活 PM 可自主派；深度分析禁止。其他 codex 模型仍 explicit_only |
-| 能力画像 | 机械活强：要素提取/格式化/代码定位（行号引用真实不幻觉）；法律推理弱（漏时效中断、利率上限提示）——比 minimax-M3 低一档的批量卸载位 |
-| profile | `~/.codex/spark.config.toml`（样例 `config/codex-spark.profile.toml.example`） |
-| 派发链 | `render-runtime-profile.sh --backend codex --codex-profile spark --sandbox danger-full-access --approval never` → `spawn-worker.sh --worker-backend codex --command "codex -p spark"`（见上条：flag 必须与 launcher 一致才省略） |
-| 网络 | 本机 WebSocket 连 chatgpt.com 被拒时 codex 自动 fallback HTTPS，正常工作，无需处理 |
-| 不接入 route_suggest | ChatGPT 订阅额度无 API 可查，dump_quota_summary.py 产不出数据；PM 按任务类型直接路由，不进 quota_aware_routing lanes |
+| `--backend` | 必选；renderer 支持列表不等于 spawn 白名单 |
+| `--mode interactive\|batch` | 默认 interactive；按任务选择，不因批处理可渲染就替换长程交互任务 |
+| `--model` | 指定已选择的模型；独立 ZCode CLI 拒绝此启动参数，须原生会话选择 |
+| `--runtime-profile` | 写入生成上下文的 profile 标签，不单独授予权限 |
+| `--api-provider` / `--provider-slot` | provider 与并发槽位标签；实际额度/lease 仍由正式入口校验 |
+| `--prompt-file` | batch 必需，指向本轮确定的任务文件 |
+| `--output command` | 只输出启动命令字符串，适合供 spawn 的 `--command` 消费 |
+| `--output shell` | 默认；输出命令及上下文变量，先核来源和字段再消费 |
+| `--output prompt-context` | 输出描述上下文；不是实际启动回执 |
 
----
+保持完整 command 的参数和引用，不手工拆引号，不将任务正文当 shell 代码拼接。正式启动和完成链分别读取 [13](13-orca-cli-worker.md)、[14](14-pm-orchestrate.md)；短路径示例见 [00](00-fast-dispatch-runbook.md)。
 
-## 3. OpenCode（`opencode`，历史候选、不可派发）
+## 3. Claude Code
 
-### 3.1 核心参数速查
+### provider 与 OAuth
 
-```
-用法: opencode [project]                # 交互 TUI
-      opencode run [message..]          # 批处理
-      opencode acp                      # ACP 服务器
-```
-
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `run [message..]` | 非交互执行 | worker 批处理入口 |
-| `-m` / `--model <provider/model>` | 指定模型（格式 `provider/model`） | 模型路由 |
-| `-c` / `--continue` | 继续最近会话 | 断点续跑 |
-| `-s` / `--session <id>` | 恢复指定会话 | session 管理 |
-| `--fork` | fork 当前会话 | 分支实验 |
-| `--prompt <text>` | 设置 prompt | 批处理 |
-| `--agent <name>` | 指定 agent | 角色定制 |
-| `--pure` | 不加载外部插件 | 减少干扰 |
-| `--format <fmt>` | 输出格式（`json` 等） | PM 解析 |
-
-### 3.2 子命令
-
-| 子命令 | 说明 |
-|--------|------|
-| `run` | 非交互执行（worker 用） |
-| `acp` | ACP 服务器模式 |
-| `mcp` | MCP 服务器管理 |
-| `providers` / `auth` | Provider 和凭证管理 |
-| `models [provider]` | 列出可用模型 |
-| `agent` | Agent 管理 |
-| `session` | Session 管理 |
-| `stats` | Token 用量和成本统计 |
-| `export` / `import` | Session 数据导入导出 |
-| `serve` | 无头服务器 |
-| `web` | 启动 Web 界面 |
-| `plugin` | 插件管理 |
-| `github` | GitHub agent 管理 |
-| `pr <number>` | 拉取 PR 分支并运行 |
-
-### 3.3 Worker 启动模式
-
-**批处理**：
-```bash
-opencode run --model anthropic/claude-sonnet-4-20250514 "$(cat /tmp/task.prompt.md)"
-```
-
-**tmux 交互式**：
-```bash
-tmux new-session -d -s worker-opencode -c /path/to/worktree \
-  'opencode --model anthropic/claude-sonnet-4-20250514'
-```
-
-**ACP 服务器**：
-```bash
-tmux new-session -d -s worker-opencode-acp -c /path/to/worktree \
-  'opencode acp'
-```
-
-**Web 界面**：
-```bash
-opencode web --port 8080
-```
-
-### 3.4 Provider 管理
-
-OpenCode 的 provider 通过 `opencode providers` 管理，支持多 provider 配置：
+第三方 provider 使用 `--settings` 或 `--provider-registry`，同时给精确 `--model`。registry 还需 `--api-provider`；有 models 映射时，renderer 校验别名并生成真实模型名。
 
 ```bash
-opencode providers          # 查看已配置 provider
-opencode models             # 列出所有可用模型
-opencode models anthropic   # 列出 Anthropic provider 下的模型
-opencode stats              # 查看 token 用量
+bash scripts/render-runtime-profile.sh \
+  --backend claude-code --mode interactive \
+  --settings /absolute/private/provider.settings.json \
+  --model provider-model --output command
 ```
 
-模型格式为 `provider/model`，例如 `anthropic/claude-sonnet-4-20250514`、`openai/gpt-4o`、`google/gemini-2.5-pro`。
+renderer 默认包装 `claude-provider-env.sh`，隔离继承的 provider 路由变量，按所选配置设置认证及模型，并使用 `--setting-sources project,local`。不要绕过 wrapper 裸启动，再依赖主终端的配置探针推断 worker provider。
 
-### 3.5 与 Skill 集成要点
+registry 的 `auth_type` 由 registry 决定；settings 路径可通过 `--auth-type` 显式选择脚本支持的方式。真实配置留在私有文件，不能写入任务正文、公共日志或 Git。
 
-- `opencode run` 支持直接传 message 参数（不需要 stdin redirect），比 Claude Code / Codex 更方便
-- `opencode acp` 可直接作为 ACP 服务器，适合已有 ACP client/adapter 的项目
-- `opencode pr <number>` 可自动拉取 PR 分支并启动，适合 PR review worker
-- `opencode stats` 提供内置成本统计，PM 可直接查询 worker 消耗
+已有订阅/OAuth 路线使用 `--backend claude-oauth`；生成命令清理 Anthropic API 路由环境变量。它是既有 Claude 路线，不新增 PM host 或 worker 身份。
 
----
+### 权限与配置
 
-## 4. Hermes Agent（`hermes`）
+| renderer 参数 | 当前生成行为 |
+|---|---|
+| `--permission-mode` | 未指定时 interactive 为 `auto`，batch 为 `acceptEdits`；显式值原样生成 |
+| `--no-mcp` | 注入只使用空 MCP 配置的参数；Claude 路线需显式选择 |
+| `--setting-sources` | provider wrapper 默认 `project,local`；保留本地 hook 所需配置层 |
+| `--claude-bare` | 仅 provider 隔离路线显式选择；会标注 degraded/unhooked，不能据此绕过 spawn 安装门 |
+| `--no-provider-env-isolation` | 显式关闭 wrapper 的高级选项；registry 路线拒绝此组合 |
 
-### 4.1 核心参数速查
+`auto` 的普通 Bash 判断与编排 hook 是不同层。安装、受保护 Git 操作、范围和完成协议仍按 [依赖与授权合同](02-runtime-dependencies.md) 及 SKILL 执行。`--bare`、safe/simple 模式或排除 local 配置可能使 hook 无法证明；缺证时消费正式门的拒绝/显式降级结果。
 
-```
-用法: hermes                    # 交互模式（默认 TUI）
-      hermes chat -q "prompt"   # 单次查询
-      hermes --cli              # 强制经典 REPL
-```
+### 模式与恢复
 
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `-z` / `PROMPT` | 单次查询 prompt | 批处理 |
-| `-m` / `--model <MODEL>` | 指定模型 | 模型路由 |
-| `--provider <PROVIDER>` | 指定 provider | provider 路由 |
-| `-t` / `--toolsets <TOOLSETS>` | 启用工具集 | 收窄/扩展能力 |
-| `--resume <SESSION>` | 恢复指定会话 | session 管理 |
-| `--continue [NAME]` | 继续最近/指定会话 | 断点续跑 |
-| `--worktree` | 启动时创建 git worktree | 文件隔离 |
-| `--accept-hooks` | 自动接受 hooks | 减少人工干预 |
-| `--skills <SKILLS>` | 指定技能集 | 定制能力 |
-| `--yolo` | 自动批准所有操作 | 沙箱自动化 |
-| `--pass-session-id` | 输出 session ID | PM 追踪 |
-| `--ignore-user-config` | 忽略用户配置 | 隔离环境 |
-| `--ignore-rules` | 忽略规则文件 | 测试/排障 |
-| `--safe-mode` | 安全模式 | 排障 |
-| `--tui` | 使用现代 TUI | 可视化 |
-| `--cli` | 强制经典 REPL | 脚本兼容 |
+interactive 保留会话以供观察和纠偏。batch 由 renderer 生成 `-p --verbose --output-format stream-json`，从确定的 prompt 文件输入。不要把短请求成功当作持续任务闭环证明。
 
-### 4.2 关键子命令
+恢复既有 worker 时沿原 Session/Task/Dispatch 读取正式恢复动作。CLI 原生 continue/resume 只是工具能力，不能代替编排身份或成为重发完整任务的理由。
 
-| 子命令 | 说明 |
-|--------|------|
-| `chat` | 交互对话（默认） |
-| `model` | 选择默认模型 |
-| `fallback` | 管理 fallback provider 链 |
-| `auth` | 池化凭证管理（add/list/remove/reset） |
-| `setup` | 交互式设置向导 |
-| `acp` | ACP 服务器模式 |
-| `mcp` | MCP 服务器管理 |
-| `sessions` | 会话管理（list/rename/export/prune） |
-| `kanban` | 多 profile 协作看板 |
-| `cron` | 定时任务管理 |
-| `gateway` | 消息网关（WhatsApp/Slack 等） |
-| `dashboard` | Web UI 仪表盘 |
-| `skills` / `bundles` / `plugins` | 技能/插件管理 |
-| `doctor` | 诊断检查 |
-| `profile` | 多 profile 隔离管理 |
-| `computer-use` | macOS Computer Use 后端 |
+## 4. Codex
 
-### 4.3 Worker 启动模式
-
-**单次查询**：
-```bash
-hermes chat -q "$(cat /tmp/task.prompt.md)" -m gpt-4o --yolo
-```
-
-**tmux 交互式**：
-```bash
-tmux new-session -d -s worker-hermes -c /path/to/worktree \
-  'hermes --worktree --yolo -m gpt-4o'
-```
-
-**tmux + worktree 隔离**（Hermes 原生支持 `--worktree`）：
-```bash
-tmux new-session -d -s worker-hermes \
-  'hermes --worktree feature-x --yolo -m gpt-4o'
-```
-
-**ACP 服务器**：
-```bash
-tmux new-session -d -s worker-hermes-acp -c /path/to/worktree \
-  'hermes acp'
-```
-
-### 4.4 Pooled Auth 机制
-
-Hermes 独特的池化凭证系统，适合多 provider 路由：
+### 生成命令
 
 ```bash
-hermes auth add <provider>     # 添加凭证到池
-hermes auth list               # 列出池内凭证
-hermes auth remove <p> <t>     # 移除凭证
-hermes auth reset <provider>   # 重置耗尽状态
-hermes fallback add            # 添加 fallback provider
-hermes fallback list           # 查看 fallback 链
+bash scripts/render-runtime-profile.sh \
+  --backend codex --mode interactive \
+  --model selected-model --codex-profile selected-profile \
+  --sandbox danger-full-access --approval never --output command
 ```
 
-### 4.5 与 Skill 集成要点
+模型/profile 必须是本轮实际选定值；未使用 profile 时省略该参数。不要复制旧软件版本或个人 Spark 配置作为通用默认。
 
-- Hermes 的 `--worktree` 是内建的，比 Claude Code 的 `--worktree` 更早支持
-- Pooled auth + fallback chain 机制让 Hermes 天然适合多 provider 路由场景
-- `--pass-session-id` 可让 PM 精确追踪 worker session
-- `--yolo` 等同于 Claude Code 的 `--dangerously-skip-permissions`
-- Hermes 有丰富的子命令生态（kanban、cron、gateway），可作为编排层的补充工具
-- `hermes profile` 支持多 profile 隔离，类似 Claude Code 的多 settings 文件
+| renderer 参数 | 当前生成行为 |
+|---|---|
+| `--model` | 生成 Codex `-m` |
+| `--codex-profile` | 生成 `-p`；配置文件语法以该实际 CLI 版本为准 |
+| `--sandbox` | 默认 `danger-full-access`，显式更窄模式保留 |
+| `--approval` | 默认 `never`，仍受宿主实际权限合同约束 |
+| `--mode batch --prompt-file` | 生成 `codex exec`，以 stdin 输入本轮文件 |
 
----
+当 renderer 从可读 launcher 脚本中证明 sandbox/approval 与请求完全一致时，会省略重复 flag；否则显式保留。重复参数报错是启动失败，不代表 Agent 已收到任务。先核 argv、退出码和终端实际进程，不能把业务文本继续发送给已退回的 shell。
 
-## 5. Kimi CLI（`kimi`）
+配置中的 sandbox 字段、命令行覆盖与实际宿主权限应分别核对。不要凭 profile 名字猜测权限或认证来源，也不要把本机一种 profile 文件布局推广到所有 Codex 版本。
 
-### 5.1 核心参数速查
+## 5. 生成后检查与推荐
 
-```
-用法: kimi                        # 交互模式
-      kimi --print -c "prompt"    # 批处理模式
-      kimi --acp                  # ACP 服务器
-```
+1. 确认选择来源：用户指定的 backend/model，或已配置的日常路由；有额度不等于可自动改用显式限定 backend。
+2. 确认 command 中实际 backend、模型、权限、输入方式与任务类型一致；ZCode 原生模型另由会话回读核实。
+3. 把 command 交给原任务的 spawn/profile 合同，保留 scope、预算、provider、验证和完成通道；不在本页直接执行裸 CLI 绕过准备阶段。
+4. 读取正式回执并核真实运行与输入消费。若未启动或身份不明，按 [排障索引](10-parallel-lessons.md) 回到原任务处理。
+5. 任务返回后由 PM 验收产物并结算。输入 accepted、退出码 0 和模型自述都不能单独证明任务交付。
 
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `-c` / `-q` / `--command` / `--query <TEXT>` | 用户查询 | 批处理入口 |
-| `-m` / `--model <TEXT>` | 指定模型 | 模型路由 |
-| `-w` / `--work-dir <DIR>` | 工作目录 | 目录指定 |
-| `-C` / `--continue` | 继续上次会话 | 断点续跑 |
-| `--print` | 非交互打印模式 | worker 批处理 |
-| `--acp` | ACP 服务器模式 | 协议集成 |
-| `--ui [shell\|print\|acp]` | UI 模式选择 | 控制交互方式 |
-| `--input-format [text\|stream-json]` | 输入格式 | PM 输入管道 |
-| `--output-format [text\|stream-json]` | 输出格式 | PM 解析 |
-| `--mcp-config-file <FILE>` | MCP 配置文件 | 工具注入 |
-| `--mcp-config <TEXT>` | MCP 配置 JSON | 内联工具注入 |
-| `-y` / `--yolo` / `--yes` / `--auto-approve` | 自动批准 | 沙箱自动化 |
-| `--agent-file <FILE>` | 自定义 agent 规范文件 | 角色定制 |
-
-### 5.2 Worker 启动模式
-
-**批处理**：
-```bash
-kimi --print -c "$(cat /tmp/task.prompt.md)" -m kimi-latest -y
-```
-
-**tmux 交互式**：
-```bash
-tmux new-session -d -s worker-kimi -c /path/to/worktree \
-  'kimi -y -m kimi-latest'
-```
-
-**ACP 服务器**：
-```bash
-tmux new-session -d -s worker-kimi-acp -c /path/to/worktree \
-  'kimi --acp'
-```
-
-**流式输出**：
-```bash
-kimi --print --output-format stream-json -c "$(cat /tmp/task.prompt.md)"
-```
-
-### 5.3 与 Skill 集成要点
-
-- Kimi CLI 的参数风格接近 Claude Code（`--print`、`--mcp-config`、`--yolo`）
-- `-w` / `--work-dir` 可直接指定工作目录，不需要 `cd` 再启动
-- `--agent-file` 支持自定义 agent 规范，适合给 worker 注入特定角色行为
-- 原生支持 `stream-json` 输出格式，PM 可直接解析
-- `kimi` 和 `kimi-cli` 是同一个二进制（两个入口）
-
----
-
-## 5A. CodeBuddy CLI（`codebuddy`）
-
-> 2026-06-21 实测：CodeBuddy 桌面端内置 codebuddy CLI。当前应使用正式 `codebuddy` backend，不再称为 custom CLI；它不同于 Moonshot 官方 `kimi` CLI。
-
-### 5A.1 二进制位置与版本
-
-本节只记录已有桌面端的二进制位置，不授权 worker 安装软件、写 shell 配置或创建全局 symlink。缺失时按 SKILL.md Execution Authority 报告 BLOCKED；只有用户明确批准精确命令后才能修改环境。
-
-| 属性 | 值 |
-|------|-----|
-| 二进制路径 | `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy` |
-| 版本 | `2.115.0`（2026-08-05 复测） |
-| 配置目录 | `~/.workbuddy/` |
-| 自定义模型配置 | `~/.workbuddy/models.json` |
-
-`codebuddy --help` 的模型列表可能滞后。2026-06-21 实测中，help 只列出 `kimi-k2.5`，但 `--model kimi-k2.6` 能正常调用，交互界面显示 `Kimi-K2.6 · internal Usage Billing`。
-
-### 5A.2 核心参数速查
-
-```
-用法: codebuddy [options] [prompt]
-
-交互模式:     codebuddy
-批处理模式:   codebuddy --print "prompt"
-```
-
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `-p` / `--print` | 非交互输出后退出 | smoke test / 小任务 |
-| `--model <model>` | 指定模型 ID，如 `kimi-k2.6` | 模型路由 |
-| `--permission-mode <mode>` | `acceptEdits` / `bypassPermissions` / `default` / `plan` | 自动化控制 |
-| `-y` / `--dangerously-skip-permissions` | 跳过权限检查 | 沙箱 worktree 中可用 |
-| `--tools <value>` | 限制内置工具，空字符串表示禁用工具 | smoke test |
-| `--output-format <fmt>` | `text` / `json` / `stream-json` | PM 解析 |
-| `--worktree [name]` | 创建 git worktree | 不建议替代 PM 手动 worktree |
-| `--tmux` | 配合 `--worktree` 创建 tmux | 不建议替代 PM 手动 tmux |
-| `--session-id <uuid>` | 指定 CLI 会话 ID | 可追踪会话 |
-| `--system-prompt` / `--append-system-prompt` | 系统提示 | 角色定制 |
-| `--mcp-config` / `--strict-mcp-config` | MCP 配置 | 工具注入 |
-| `--acp` | ACP 模式 | 协议集成 |
-
-### 5A.3 tmux Worker 启动模式
-
-推荐 PM 先用 `spawn-worker.sh` 创建 worktree，再在该 worktree 内启动交互式 CodeBuddy：
-
-```bash
-tmux new-session -d \
-  -s wr-ch07-codebuddy-kimi-k26-r1 \
-  -c /path/to/worktree \
-  'bash -lc '\''exec "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy" \
-    --model kimi-k2.6 \
-    --permission-mode bypassPermissions \
-    --session-id wr-ch07-codebuddy-kimi-k26-r1'\'''
-```
-
-短 smoke test 可用：
-
-```bash
-"/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy" \
-  --print \
-  --model kimi-k2.6 \
-  --permission-mode default \
-  --tools '' \
-  --output-format text \
-  '只回复 OK，不要做任何文件操作。'
-```
-
-### 5A.4 实测注意事项
-
-- 每个新 worktree 首次启动会询问信任目录。PM 只选择 `Trust folder only`，不要信任 `worktrees/**` 父目录。
-- `--model kimi-k2.6` 虽不一定出现在 help 列表中，但可通过短提示词和交互界面的 `Kimi-K2.6` 标识确认。
-- 书稿评测 r1 已完整跑通：review、正文修订、self-check、result、metadata、commit、sentinel done。
-- worker 可能在提交后更新 `metadata.json` 的 `commit_sha` / `status` 字段，导致一个未提交尾巴。PM 收口时要检查 `git status --short`，若只剩 metadata 完成态字段，可补一个 `chore(eval): finalize codebuddy kimi metadata` 提交。
-- 交互式 r2 bootstrap 曾出现 CodeBuddy 内部 shell/write 工具长时间挂起。若 1-2 分钟没有 `STATUS.json`，PM 应先 Esc 中断，检查无业务改动后重启 tmux session；必要时由 PM 仅在 Session Context 中写入“重启中”状态，再投递 Full Prompt。业务正文和报告仍应由 worker 完成。
-- 对长任务优先交互式 tmux，不建议一发 `--print` 跑完整书稿 worker；交互式模式便于处理信任目录、权限、工具挂起和 prompt 纠偏。
-
----
-
-## 6. Gemini CLI（`gemini`）
-
-### 6.1 核心参数速查
-
-```
-用法: gemini [query..]            # 交互模式
-      gemini -p "prompt"          # 非交互（headless）模式
-```
-
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `-p` / `--prompt <TEXT>` | 非交互模式 + prompt | worker 批处理 |
-| `-m` / `--model <MODEL>` | 指定模型 | 模型路由 |
-| `-i` / `--prompt-interactive <TEXT>` | 执行 prompt 后继续交互 | 半自动 |
-| `-s` / `--sandbox` | 沙箱模式 | 安全控制 |
-| `-y` / `--yolo` | 自动批准所有操作 | 沙箱自动化 |
-| `--approval-mode <MODE>` | `default` / `auto_edit` / `yolo` / `plan` | 精细审批控制 |
-| `--experimental-acp` | ACP 模式 | 协议集成 |
-| `--allowed-mcp-server-names` | 允许的 MCP server | 工具白名单 |
-| `--allowed-tools` | 不需确认即可运行的工具 | 工具白名单 |
-| `-e` / `--extensions` | 使用的扩展列表 | 能力控制 |
-| `-l` / `--list-extensions` | 列出可用扩展 | 能力探索 |
-| `-r` / `--resume <id>` | 恢复会话（`latest` 或 index） | session 管理 |
-| `--list-sessions` | 列出可用会话 | session 探索 |
-| `--delete-session <id>` | 删除会话 | session 清理 |
-| `--include-directories <dirs>` | 额外工作目录 | 跨目录访问 |
-| `-o` / `--output-format <fmt>` | `text` / `json` / `stream-json` | PM 解析 |
-| `--raw-output` | 不消毒模型输出 | 调试（有安全风险） |
-
-### 6.2 子命令
-
-| 子命令 | 说明 |
-|--------|------|
-| `mcp` | MCP 服务器管理 |
-| `extensions` | 扩展管理 |
-| `skills` | 技能管理 |
-| `hooks` | Hook 管理 |
-
-### 6.3 Worker 启动模式
-
-**批处理**：
-```bash
-gemini -p "$(cat /tmp/task.prompt.md)" -m gemini-2.5-pro -y
-```
-
-**tmux 交互式**：
-```bash
-tmux new-session -d -s worker-gemini -c /path/to/worktree \
-  'gemini -y --approval-mode auto_edit -m gemini-2.5-pro'
-```
-
-**审批模式分级**：
-```bash
-# plan 模式（只读，不执行）
-gemini --approval-mode plan -p "分析这个代码库的架构"
-
-# auto_edit 模式（自动批准编辑，但执行命令仍需确认）
-gemini --approval-mode auto_edit -p "修复这个 bug"
-
-# yolo 模式（全自动）
-gemini --approval-mode yolo -p "重构这个模块"
-```
-
-### 6.4 与 Skill 集成要点
-
-- Gemini CLI 的 `--approval-mode` 提供最细粒度的审批控制（4 级）
-- `-p` 是 headless 模式的标准入口，支持 stdin pipe
-- 原生支持 `stream-json` 输出格式
-- `--experimental-acp` 标记为实验性，ACP 稳定性待验证
-- Gemini CLI 的子命令生态（extensions/skills/hooks）与 Claude Code 结构类似
-- `--sandbox` 是布尔开关（不像 Codex 有多级 sandbox mode）
-
----
-
-## 7. QoderWork CLI（`qoderclicn` / `qodercli`）
-
-> 详细研究见 `references/07-qoderwork-cli-worker.md`。本节为速查补充。
-
-### 7.1 核心参数速查
-
-```
-用法: qoderclicn [options] [query...]
-
-交互模式:     qoderclicn
-批处理模式:   qoderclicn -p "prompt"
-```
-
-| 参数 | 说明 | 编排用途 |
-|------|------|---------|
-| `-p` / `--print` | 非交互模式 | worker 批处理 |
-| `-m` / `--model <model>` | 指定模型 key | 模型路由 |
-| `-w` / `--cwd <dir>` | 工作目录 | 目录指定 |
-| `--permission-mode <mode>` | `default` / `accept_edits` / `bypass_permissions` / `dont_ask` / `auto` | 自动化控制 |
-| `--dangerously-skip-permissions` | 跳过所有权限 | 沙箱专用 |
-| `--system-prompt <text>` | 自定义系统提示词 | 角色定制 |
-| `--append-system-prompt <text>` | 追加系统提示词 | 增量指令 |
-| `--mcp-config <config>` | MCP 服务器配置 | 工具注入 |
-| `--strict-mcp-config` | 只用 mcp-config 的 server | 工具隔离 |
-| `--tools <tools...>` | 限制内置工具 | 能力收窄 |
-| `--allowed-tools` / `--disallowed-tools` | 工具白/黑名单 | 精细控制 |
-| `--attachment <file>` | 附加文件 | 上下文注入 |
-| `--max-output-tokens <size>` | 最大输出 token | 预算控制 |
-| `--reasoning-effort <level>` | 推理努力程度 | 质量/成本平衡 |
-| `--context-window <size>` | 显式上下文窗口 | 适配任务 |
-| `-c` / `--continue` | 继续最近会话 | 断点续跑 |
-| `-r` / `--resume [id]` | 恢复指定会话 | session 管理 |
-| `--worktree [name]` | 创建 git worktree | 建议仍由 PM 手动创建 worktree |
-| `--agent <name>` / `--agents <json>` | Agent 管理 | 角色定制 |
-| `--setting-sources <source>` | 配置源 | 环境控制 |
-| `--settings <json>` | 额外 settings | 运行时配置 |
-
-### 7.2 可用模型
-
-> 复测：2026-08-05 CLI 1.0.45 `--list-models`。**推荐用具体名**（`-m Qwen3.8-Max`），旧 alias 兼容但映射可能过时。
-
-| `--model` 实际名（推荐） | 旧 alias | 备注 |
-|-----|------|------|
-| `Qwen3.8-Max` | —（新旗舰） | 2026-08 新旗舰，每日免费额度 |
-| `Qwen3.7-Max` | `qmodel_latest` | 上一代旗舰 |
-| `Qwen3.7-Plus` | `qmodel` | |
-| `Qwen3.6-Flash` | `q36fmodel` | |
-| `DeepSeek-V4-Pro` | `dmodel` | |
-| `DeepSeek-V4-Flash` | `dfmodel` | |
-| `GLM-5.2` | `gm51model`（过时，指 5.1） | 2026-08 新增 |
-| `Kimi-K2.7-Code` | `kmodel`（过时，指 K2.6） | 代码档 |
-| `MiniMax-M2.7` | `mmodel` | |
-| `Auto` | — | 自动路由 |
-
-### 7.3 关键限制
-
-- **不能从 QoderWork 桌面端内部启动**（SDK 环境变量干扰），必须在干净终端运行
-- 认证和额度与桌面端共用 `~/.qoderworkcn/`
-- CN 版与国际版是两个 CLI：CN 版为 `/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn`，国际版为 `/Applications/QoderWork.app/Contents/Resources/bin/qodercli`
-- `/usr/local/bin/qoder` 可能指向旧 Qoder 编辑器 CLI，不是 QoderWork agent CLI
-- 有 `--worktree` 参数，但多 Agent 编排建议仍由 PM 用 `spawn-worker.sh` 手动创建 worktree / 分支 / Session Context，再用 `tmux -c <worktree>` 启动 CLI
-- 新 worktree 首次启动会询问信任目录，只选择当前 folder
-- 书稿评测中 `qmodel_latest` 已确认显示为 `Qwen3.7-Max Model`，可跑 `writing-reviewer` 单章 worker
-
----
-
-## 8. Rudder（`rudder`）
-
-> Rudder 更偏项目管理/编排工具而非纯 coding agent，但其 `agent` 子命令可作为 worker。
-
-### 8.1 核心参数速查
-
-```
-用法: rudder [options] [command]
-
-启动:       rudder run            # 引导启动 + 运行
-诊断:       rudder doctor         # 健康检查
-```
-
-| 参数/子命令 | 说明 |
-|-------------|------|
-| `start` | 启动 Rudder Desktop |
-| `run` | 引导启动并运行 |
-| `onboard` | 首次设置向导 |
-| `doctor` | 诊断检查 |
-| `agent` | Agent 操作 |
-| `issue` | Issue 操作 |
-| `worktree` | Worktree 管理 |
-| `worktree:make <name>` | 创建隔离 worktree 实例 |
-| `worktree:cleanup <name>` | 清理 worktree |
-| `plugin` | 插件管理 |
-| `auth` | 认证管理 |
-| `context` | CLI 上下文 profile |
-
-### 8.2 与 Skill 集成要点
-
-- Rudder 的 `worktree:make` / `worktree:cleanup` 可作为 worktree 生命周期管理的替代工具
-- `rudder agent` 可操作 agent，但具体能力取决于 Rudder 实例配置
-- 更适合作为编排层的补充（issue 追踪、worktree 管理），而非纯 coding worker
-- 与 SKILL.md 的 spawn-worker.sh 思路类似，但走 Rudder 自己的基础设施
-
----
-
-## 9. 跨 CLI 对比矩阵
-
-### 9.1 Worker 能力对比
-
-| 能力 | Claude Code | Codex | OpenCode | Hermes | Kimi | Gemini | QoderWork | ZCode |
-|------|-------------|-------|----------|--------|------|--------|-----------|-------|
-| 批处理模式 | `claude -p` | `codex exec` | `opencode run` | `hermes chat -q` | `kimi --print -c` | `gemini -p` | `qoderclicn -p` | `zcode --mode yolo -p` |
-| stream-json | ✓ | ✗ | `--format json` | ✗ | ✓ | ✓ | ✓ | `--json` 收尾汇总 |
-| ACP 服务器 | ✗ | ✗ | ✓ `acp` | ✓ `acp` | ✓ `--acp` | ✓ `--experimental-acp` | ✗ | ✗（私有 ZCode Protocol） |
-| 原生 worktree | ✓ `--worktree` | ✗ | ✗ | ✓ `--worktree` | ✗ | ✗ | ✓ `--worktree` | ✗ |
-| 自定义系统提示 | ✓ | ✗（需 config） | ✗（需 config） | ✗（需 config） | ✓ `--agent-file` | ✗ | ✓ | ✗ |
-| MCP 工具注入 | ✓ `--mcp-config` | ✓ `mcp` | ✓ `mcp` | ✓ `mcp` | ✓ `--mcp-config` | ✓ `mcp` | ✓ `--mcp-config` | ✗（0.16.5 无 CLI 参数） |
-| 工具白/黑名单 | ✓ | ✗ | ✗ | ✓ `--toolsets` | ✗ | ✓ `--allowed-tools` | ✓ | ✗（未实现） |
-| 权限分级 | 5 级 | 3 级 sandbox | ✗ | `--yolo` | `--yolo` | 4 级 approval | 5 级 | `--mode yolo` 必须 |
-| 会话管理 | ✓ | ✓ `resume` | ✓ `session` | ✓ `sessions` | ✓ `--continue` | ✓ `--resume` | ✓ | ✓ `--resume`（sqlite） |
-| 多 provider | settings 文件 | config.toml + profile | config.toml | pooled auth | 单 provider | 单 provider | 平台统一 | config.json provider 表 |
-
-### 9.2 tmux Worker 启动模板对比
-
-```bash
-# === Claude Code ===
-tmux new-session -d -s W -c WT "$WORKER_COMMAND"  # WORKER_COMMAND from render-runtime-profile.sh
-
-# === Codex ===
-tmux new-session -d -s W -c WT 'codex -m o4-mini -s workspace-write'
-
-# === OpenCode ===
-tmux new-session -d -s W -c WT 'opencode --model anthropic/claude-sonnet-4-20250514'
-
-# === Hermes ===
-tmux new-session -d -s W -c WT 'hermes --yolo -m gpt-4o'
-
-# === Kimi ===
-tmux new-session -d -s W -c WT 'kimi -y -m kimi-latest'
-
-# === Gemini ===
-tmux new-session -d -s W -c WT 'gemini -y --approval-mode auto_edit -m gemini-2.5-pro'
-
-# === QoderWork ===
-tmux new-session -d -s W -c WT 'qoderclicn -m qmodel_latest --permission-mode auto'
-
-# === CodeBuddy ===
-tmux new-session -d -s W -c WT 'codebuddy --model kimi-k2.6 --permission-mode bypassPermissions'
-
-# === ZCode（无 TUI，走 skill driver：长驻 app-server + 事件渲染 + stdin→session/send）===
-tmux new-session -d -s W -c WT 'python3 <skill>/scripts/zcode-worker-driver.py'
-```
-
-其中 `W` = session name, `WT` = worktree path。Claude Code 实际派发时优先用 `render-runtime-profile.sh` 生成 `WORKER_COMMAND`，避免漏掉 registry/settings wrapper 参数。
-
----
-
-## 10. 选用建议
-
-| 场景 | 推荐 CLI | 理由 |
-|------|---------|------|
-| 主力 coding worker | Claude Code | 最成熟的 tool use + 最丰富的参数控制 |
-| OpenAI 模型路由 | Codex | 直接消耗 OpenAI 额度，sandbox 分级 |
-| 多 provider 灵活切换 | OpenCode / Hermes | 内置多 provider 管理 |
-| 法律检索 MCP 任务 | QoderWork | 元典/企查查 MCP 工具链 |
-| 需要 ACP 协议 | OpenCode / Hermes / Kimi | 原生 ACP 服务器 |
-| Google 模型路由 | Gemini | 直接消耗 Google AI 额度 |
-| 轻量级/Kimi 模型 | Kimi | 参数简洁，原生 stream-json |
-| 项目管理/编排辅助 | Rudder | issue/worktree/agent 管理 |
-| 本地开源模型 | Codex `--oss` | lmstudio/ollama 集成 |
+历史 CLI 全表、型号价格、个人默认值和旧实验保存在原维护任务及归档中；本页只维护本 Skill 实际使用的参数合同。参数生成可在无模型请求下验证，真实 backend 功能须另有原生任务证据。

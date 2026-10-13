@@ -258,3 +258,6 @@ skills/multi-agent-orchestration/config/remote-dispatch-inbox/
 # github-star-manager 运行导出产物含个人 star 私有数据，仅限本地
 skills/github-star-manager/scripts/output/
 skills/github-star-manager/output/
+.audit-evidence/
+# ZCode Desktop 本地工具配置（自动生成，含本机规则区）
+.zcodeignore

@@ -2,18 +2,31 @@
 name: legal-case-analysis
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.0.0"
+version: "1.1.0"
 license: CC-BY-NC
-description: 本技能应在用户需要基于案件材料、咨询材料、合同资料、证据材料或检索结果进行法律分析、案件研判、风险评估、诉讼策略、刑事案件研判与审查起诉分析、非诉风险判断、客户说明或法律分析报告时使用。它是法律任务的前置分析引擎，不要求每次都生成正式报告。不要用于：单纯 OCR、单纯法条案例检索、单纯 Word 排版转换、仅需包装服务方案且无需新增法律分析的文档生成。
+description: 综合案件研判。本技能应在用户需要整合案件、咨询、合同、证据、庭审笔录或检索材料，判断请求与抗辩、组织法律检索、评估风险并制定诉讼或非诉策略时使用，包括起诉状证据初评、庭审复盘和上诉再审综合研判。仅解读一份判决书用 judgment-analysis；纯检索或仅将已有结论成文分别交检索、文档技能。
 ---
 
-# legal-case-analysis
+# 综合案件研判
 
 通用法律分析 Skill。用于把零散案件材料整理成可验证、可检索、可论证、可复用的法律分析结果。
 
 本技能首先是法律分析引擎，其次才按需要生成报告、咨询答复、客户说明或检索任务清单。法律分析可以作为其他 Skill 的前置步骤使用。
 
 本技能不绑定具体案由。具体领域规则通过案件材料、法律检索结果和用户目标动态补足。
+
+## 与相邻节点的分工
+
+按用户目标选择入口，不按材料数量机械分流：一份合同也可以启动综合研判；一份判决也可以成为综合救济评估的起点，但材料不足处保留待核。
+
+| 用户目标 | 主责 |
+|---|---|
+| 读懂这份判决、拆解裁判理由和文内疑点 | `judgment-analysis`；它无需本 Skill 前置 |
+| 整合起诉状、证据、庭审、判决等材料，判断请求/抗辩或完整上诉再审路径 | 本 Skill；按目标补足事实与法源 |
+| 围绕明确命题仅查法条或类案 | 当前可用法律检索 Skill；需要适用分析再回本 Skill |
+| 已有研判结论，组织成服务方案或汇报 | `legal-proposal-generator` |
+
+收到判决分析成果时，按 [职责与交接规则](references/analysis-engine-boundary.md) 复用来源、争点和待核问题；无需再生成一份同样的判决报告。用户只要整理既有信息时不强制启动全案分析。
 
 ## 核心原则
 
@@ -80,6 +93,8 @@ description: 本技能应在用户需要基于案件材料、咨询材料、合�
 - `references/element-litigation-nine-step.md`：要件式诉讼分析九步法，用于**民事/民商事**诉讼和争议解决场景的分析支架。
 - `references/criminal-case-analysis.md`：刑事案件分析法（**不法—有责二阶层为主干**，审查起诉骨架 + 辩护对抗检验），用于刑事案件研判、审查起诉/审查逮捕底稿、定性与量刑分析；先客观不法后主观有责，层层递进、任一层不过即出罪。
 - `references/fact-evidence-extraction.md`：事实与证据抽取规则。
+- `references/complaint-evidence-extraction.md`：起诉状与证据初评，按需进入综合研判。
+- `references/hearing-transcript-extraction.md`：庭审复盘、质证情况与庭后待办；不把法官提问当作裁判结论。
 - `references/civil-commercial-analysis-workflow.md`：复杂民商事案件法律分析步骤。
 - `references/issue-spotting.md`：法律问题识别和问题树拆解规则，含权利束型案由的权项穷尽规则（人身权项/财产权项分列）、程序路径（主/并行/后续）识别规则与管辖分析衔接。
 - `references/legal-research-bridge.md`：法律检索衔接规则。
