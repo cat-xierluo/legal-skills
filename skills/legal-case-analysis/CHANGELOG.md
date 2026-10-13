@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [1.1.1] - 2026-10-13
+
+### 文档完善
+
+- SKILL.md、`references/analysis-engine-boundary.md`、`references/workflow.md` 中的相邻节点引用随 `litigation-analysis` 更名为 `judgment-analysis` 同步更新（更名见其 v2.0.0），分工内容不变。
+
 ## [1.1.0] - 2026-10-11
 
 ### 改进

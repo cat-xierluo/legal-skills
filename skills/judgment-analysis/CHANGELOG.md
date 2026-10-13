@@ -1,5 +1,17 @@
 # 变更历史
 
+## [2.0.0] - 2026-10-13
+
+### 改进
+
+- **技能重命名**：`litigation-analysis` → `judgment-analysis`，目录名、frontmatter `name` 与调用名同步变更。v1.5.0 已将职责收敛为单份判决书深度分析，旧名“诉讼分析”指向过宽，本次更名使调用名与职责对齐（更名史：`legal-doc-analysis` → `litigation-analysis` → `judgment-analysis`）。
+- 推翻 v1.5.0 “保留 `litigation-analysis` 调用名”的决定：职责边界经 legal-case-analysis v1.1.0 解耦后已稳定，维持旧名将持续误导编排层把全案研判任务路由到本技能。
+- `references/` 四个文件中的技能自引用同步更新为新名。
+
+### 破坏性变更
+
+- 调用名与目录名变更为 `judgment-analysis`，旧名 `litigation-analysis` 不再可用；已发布包 `litigation-analysis-1.4.0.zip` 的下载链接继续有效，但内容对应更名前的旧版本。
+
 ## [1.5.0] - 2026-10-11
 
 ### 改进

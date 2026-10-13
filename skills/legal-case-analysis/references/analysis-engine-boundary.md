@@ -1,6 +1,6 @@
 # 法律分析引擎定位与协作边界
 
-本文件用于区分 `legal-case-analysis` 与其他法律文档类 Skill，包括 `litigation-analysis`、法律检索与 `legal-proposal-generator`。
+本文件用于区分 `legal-case-analysis` 与其他法律文档类 Skill，包括 `judgment-analysis`、法律检索与 `legal-proposal-generator`。
 
 ## 一、核心定位
 
@@ -75,7 +75,7 @@
 
 ## 五、与判决单文件节点及检索的边界
 
-`litigation-analysis` 负责读懂单份判决；本 Skill 负责围绕案件目标综合材料、检索法律并形成判断。判决分析不要求补齐卷宗；本 Skill 也不因只有一份材料就拒绝启动，但不能隐去关键缺口。
+`judgment-analysis` 负责读懂单份判决；本 Skill 负责围绕案件目标综合材料、检索法律并形成判断。判决分析不要求补齐卷宗；本 Skill 也不因只有一份材料就拒绝启动，但不能隐去关键缺口。
 
 - 用户只要判决解读：直接使用判决节点，不先做完整综合研判。
 - 判决 + 附件，但用户只要判决分析：目标判决单独处理，附件不自动读取。
