@@ -2,20 +2,20 @@
 name: case-progress
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.1.0"
+version: "0.9.0"
 license: CC-BY-NC
 description: 案件进度与状态台账管理。案件 case.yaml 的唯一写入引擎（新增任务、推进任务、登记期限、更新案件阶段、校验、存量迁移），Agent 会话的进度加载与写回契约，以及案件进度监控对账。当用户或 Agent 需要"更新案件进度/推进任务/登记期限/更新案件阶段/同步案件状态/校验或迁移案件数据/查看案件结构化状态"时使用。不要用于：看板展示与周研判（用 case-dashboard）、案件建档初始化（用 new-case）。
 ---
 
 # case-progress - 案件进度与状态管理（办案进度台账）
 
-> **状态：v0.1.0 骨架**。设计真值见消费项目 SuitAgent `docs/case-dashboard与数据真值方案.md`（v1.5，决策 #045/#046）。
+> **状态：v0.9.0，邮寄接口已接入**。设计真值见消费项目 SuitAgent `docs/case-dashboard与数据真值方案.md`（v1.5，决策 #045/#046）。
 
 ## 职责
 
 | 功能 | 形式 |
 | --- | --- |
-| 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / set-stage / set-fields / validate / migrate / render（audit / report 留 M6） |
+| 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / **add-mailing / set-mailing** / set-stage / set-fields / validate / migrate / render（audit / report 留 M6） |
 | 视图渲染 | `render <短码>`：生成 `案件视图.md` + `案件视图.html`（00 目录，一页纸派生视图，勿手改）；**每次写入自动刷新已存在的视图文件**——无需 hooks 即保持新鲜 |
 | 会话契约 | `references/contract.md`：Agent 会话开始 `show` 加载状态 + 按 context 指针读叙事文档；结束经 CLI 写回，**禁止手改 yaml** |
 | **列表写入陷阱（set-fields）** | `set-fields` 的**列表是整体替换而非追加**：传 `{"任务": [新增一条]}` 会把该列表原有的全部条目冲掉。schema 校验（每行需 `source`）拦不住"漏传其余条目"——新条目若恰好带合法 `source`，校验直接通过、数据已被清空。**追加一条前必须先 `show`/读出该列表全量，把原条目 + 新条目一起传入**；写入后立刻复核条数与关键 id，异常从备份恢复 |
@@ -62,3 +62,7 @@ references/   schema.md（v4.0 字段字典）、contract.md（会话契约）�
 ## 路线图
 
 M2 写入引擎 → M3a v4.0 数据模型 → M3b 轻量写回入口 → M4 存量迁移 → M6 hooks 监控（远期）。详见 TASKS.md 与消费项目方案。
+
+## 邮寄接口回归
+
+使用 `python3 scripts/test_case_store_mailing.py` 运行合成案件 CLI 回归；需要 PyYAML（`python3 -m pip install PyYAML`）。覆盖登记、查询、回写、来源保护及失败不写盘，不访问真实案件或承运商网站。
