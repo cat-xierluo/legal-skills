@@ -1,18 +1,44 @@
-# ZCode Worker Driver 安全底座（TASK-2026-09-13-ZCODE-DRIVER-SAFETY）
+# ZCode legacy driver 操作与安全合同
 
-> 配套脚本：`scripts/zcode-worker-driver.py`（重构）、
-> `scripts/test-zcode-driver.sh`（契约测试，27 项）、
-> `scripts/test_zcode_driver_safety.py`（故障注入，59 项，全部真实
-> driver+stub 进程）。上游背景见 references/09-zcode-cli-worker.md。
+目录：[定位与调用](#0-定位与边界) · [就绪屏障](#1-启动就绪屏障readiness-barrier) · [私有配置](#2-私有配置隔离显式入口失败关闭) · [权限](#3-权限模式显式化) · [关闭](#6-有界关闭与精确-child-句柄) · [退出码](#7-退出码一览) · [验证边界](#8-验证与未验证范围)
+
+维护兼容 `zcode` app-server driver 时读取本页。实现为 `scripts/zcode-worker-driver.py`，确定性验证入口为 `scripts/test-zcode-driver.sh` 与 `scripts/test_zcode_driver_safety.py`。独立原生 `zcode-cli` 使用 [28 模型与套餐](28-zcode-cli-bigmodel-coding-plan.md) 和 [30 原生 Orca](30-zcode-native-orca.md)，不套用本页启动配方。
 
 ## 0. 定位与边界
 
-本轮是 zcode worker 安全底座，为后续"社区同会话控制器"与"Start 宿主桥"
+本 driver 提供 legacy worker 安全底座，为后续"社区同会话控制器"与"Start 宿主桥"
 接线做前置，**不宣称打通 Start/Weekend、官方远控或机器控制**。官方
 0.16.5 `app-server` 不接受 `--settings`，因此本 driver 在该版本上以
 `UNSUPPORTED_CONFIG_ISOLATION`（退出码 68）失败关闭，**不能作为默认
 worker 入口部署**；待支持 `--settings` 的社区运行时（另立合同）接入后
 可直接复用本 driver。
+
+### 调用与控制接口
+
+仅在已证明子 CLI 接受隔离配置时，由正式 spawn 合同消费以下 driver 命令；先绑定授权工作树、任务身份和权限模式。默认 renderer 未补齐私有 `--settings`，不能将其输出直接认作可用的 legacy 启动命令。
+
+```bash
+python3 scripts/zcode-worker-driver.py \
+  --cwd /absolute/authorized/worktree \
+  --bin /absolute/verified/zcode \
+  --settings /absolute/private/worker.settings.json \
+  --model provider-id/model-id --mode build
+```
+
+| 输入 | 合同 |
+|---|---|
+| `--cwd` | 必须是现有的授权目录 |
+| `--settings` | 必需；既有私有 JSON 文件，权限 0600，不从共享认证复制生成 |
+| `--bin` | 子 CLI 路径；先核隔离参数兼容性 |
+| `--model` | 可省略并使用私有 settings 的 modelRef；裸 modelId 的 provider 从该配置解析 |
+| `--mode` | build/edit/plan/yolo；默认 build，其他值需显式选择 |
+| `--bootstrap-timeout` / `--close-timeout` | 启动与关闭等待上限，默认 45 秒 / 5 秒 |
+| 普通 stdin 文本 | READY 后交 `session/send`，不是 shell 命令 |
+| `/status` | 读取本地投影与 `session/read` |
+| `/stop` / `/compact` | 停止当前回合但保留进程 / 压缩会话 |
+| `/quit` | 关闭会话并有界回收精确子进程 |
+
+协议使用逐行 JSON 帧。`session/create` 的 ID 从 `result.session.sessionId` 读取；显式模型切换的 `session/setModel` 参数为 `{sessionId, model: {providerId, modelId}, persistAsWorkspaceLastUsed: false}`，随后以 `session/read` 的 `result.session.model` 核实实际模型。不要因 setModel 返回成功或收到通知就跳过回读，也不要改为持久化全局模型。
 
 ## 1. 启动就绪屏障（readiness barrier）
 
@@ -113,11 +139,11 @@ create → setModel(仅 --model 时) → session/read
 | 66 | 子进程异常退出 |
 | 68 | UNSUPPORTED_CONFIG_ISOLATION（官方 0.16.5 拒绝 --settings） |
 | 70 | /quit 的 close 未在限时内确认 |
-| 130/143 | SIGINT/SIGINT 结算完成 |
+| 130/143 | SIGINT/SIGTERM 结算完成 |
 
 ## 8. 验证与未验证范围
 
-已验证（stub 真实进程，两套件 86 项全绿）：
+历史验证（2026-09-13 原安全底座任务记录：stub 真实进程，两套件 86 项；不是本次文档整理重新运行的结果）：
 
 - setModel 延迟/失败、read 回读不符、无回包、无 create → 65 + 0 发送；
 - 早输入按序 drain、控制指令永不入会话、延迟 /quit 不丢 drain；
@@ -127,14 +153,13 @@ create → setModel(仅 --model 时) → session/read
 - 敏感字段脱敏（token/cookie/ticket/apiKey）、未知通知只出键名、
   runtime-headers fail-closed 回包、权限请求可识别拒绝。
 
-`NOT_VERIFIED`（本轮明确不声称）：
+`NOT_VERIFIED`（legacy driver 的未验范围，不能扩写为独立原生 CLI 的现状）：
 
 - 真实 provider 上的任何请求（0 模型请求、0 凭证使用）；
 - 官方 bundle 的 `--settings` 配置加载行为（已知反而被拒）与任何真实
   隔离效果；支持该旗标的社区运行时尚未接入；
 - 桌面宿主 / Start 宿主桥 / 官方远控 / MAO ZCode supervised 链路；
-- `spawn-worker.sh` 默认命令仍指向本 driver——**在官方 0.16.5 上会
-  得到 68**，需 PM 决策切换条件（不在本任务 4 文件范围）。
+- legacy 默认命令未提供必需 `--settings` 时先报配置错误 64；显式补齐该参数后，官方 0.16.5 的已知拒绝路径为 68。不能把两种前置失败混成已启动，更不能据此切换其他 backend。
 
 ## 版本记录
 

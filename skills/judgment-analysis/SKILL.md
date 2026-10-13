@@ -1,15 +1,15 @@
 ---
-name: litigation-analysis
+name: judgment-analysis
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.5.0"
+version: "2.0.0"
 license: CC-BY-NC
 description: 判决书深度分析。本技能应在用户需要读懂一份判决书、拆解法院事实认定与裁判理由、解释判决主文或提炼文内疑点时使用。不要用于起诉状与证据初评、庭审笔录复盘、多材料综合研判或完整上诉再审决策；这些任务使用 legal-case-analysis。
 ---
 
 # 判决书深度分析
 
-围绕一份判决书，回答“法院认定了什么、依据是什么、推理怎样连接到结果、哪些地方值得进一步核实”。保留 `litigation-analysis` 调用名；每次完成一个判决文书节点，不扩展为全案研判。
+围绕一份判决书，回答“法院认定了什么、依据是什么、推理怎样连接到结果、哪些地方值得进一步核实”。本技能自 v2.0.0 起由 `litigation-analysis` 更名为 `judgment-analysis`（更名史：`legal-doc-analysis` → `litigation-analysis` → `judgment-analysis`），旧调用入口不再使用；每次完成一个判决文书节点，不扩展为全案研判。
 
 ## 输入与职责边界
 

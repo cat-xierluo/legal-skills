@@ -89,7 +89,7 @@ profiles:
         - new-case
         - court-sms
         # 合同与诉讼
-        - litigation-analysis
+        - judgment-analysis
         - contract-review
         - contract-copilot
         - legal-proposal-generator

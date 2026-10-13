@@ -26,6 +26,7 @@
 | 案件时间线 | `日期\|事件类型` 复合键 |
 | 当事人（我方/对方） | `姓名\|角色` 复合键 |
 | 证据索引 | `名称` |
+| 邮寄跟踪 | `单号` |
 | 索赔与评估 | `项目` |
 | 更新历史 | 追加式，无行键 |
 
@@ -46,6 +47,7 @@
 | 任务 | list（**唯一任务真源**） | core | 全部 |
 | 案件时间线 | list | core | dashboard、lawyer |
 | 开庭与听证 | list | litigation | dashboard、lawyer |
+| 邮寄跟踪 | list（行键=单号） | core | dashboard、agent |
 | 证据索引 | list | 对抗性 | agent |
 | 费用信息 | map（支出 + 索赔列表） | core | lawyer |
 | 争议焦点与法律研究 | map（两个索引列表） | litigation | agent、dashboard |
@@ -216,7 +218,18 @@
 
 规则见 §7：容器机制现在定型，具体字段**惰性定义**（某类非诉项目实际接入时才立档案，遵循字段准入原则）。litigation 案件此节保持空 map 或省略。
 
-### 2.17 更新历史（追加式）
+### 2.17 邮寄跟踪（list，行键 = 单号）
+
+寄件交割的结构化真值（EMS/顺丰等庭审材料邮寄）；轨迹查询凭证 PDF 落 08 目录，本表只存状态与指针。`{单号: str✅（行键，案件内唯一）, 承运商: enum✅（ems|sf|other）, 内容: str|null（内装材料）, 寄出日期: date|null, 寄件人: str|null, 收件方: str|null, 状态: enum✅（pending 已下单待揽收 | in_transit 在途 | signed 签收 | abnormal 退回/滞留等异常）, 最新轨迹: str|null（最近一条轨迹摘要）, 签收日期: date|null, 凭证文件: list[str]（下单截图/轨迹水印 PDF 相对路径，追加式）, source}`。
+
+- `签收日期` 保存已记录的历史签收节点；后续状态纠正（如签收后退回为 abnormal）不自动删除该日期。它不单独证明当前状态，调用方仍须核对最新轨迹。
+- 日期须为有效的 `YYYY-MM-DD`；单号保留字符串（含前导零）。凭证路径不得为绝对路径、上级目录或经符号链接逃逸案件目录。
+- `source=user` 仅允许 `--actor user` 更新。`set-fields` 拒绝邮寄跟踪整表替换，避免误清空或绕过行保护。
+- 登记经 `add-mailing`，更新经 `set-mailing`（单号定位；`--signed` 自动置状态 signed）；勿用 set-fields 整体替换本表。
+- 时间线仍记一条对应事件（事件类型=举证/送达），明细在本表；两处由 agent 收尾流程同步维护。
+- 查询留痕流程见 express-tracking skill（浏览器自动化官网查询 → 带时间戳+URL 水印 PDF）。
+
+### 2.18 更新历史（追加式）
 
 `{日期: date, 操作者: str（case_store/律师名/agent 名）, 动作: str, 细节: str}`——统一五种旧字段集（action/更新原因/备注/版本 语义并入 动作/细节）。
 
