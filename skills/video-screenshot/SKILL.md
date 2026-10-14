@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
 description: 视频截图提取、滚动文字提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，用匿名标注私有语料建立脱敏双路径基线，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。显式滚动文字模式用本地 OCR 与保守正文裁区输出可复制 TXT/Markdown、原OCR和回源；该模式保存原文，与线索索引的隐私口径不同。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计、滚动文字提取、录屏转文字、转录页面提取。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
-version: "1.0.0"
+version: "1.0.1"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -15,10 +15,14 @@ license: MIT
 
 用户要求录屏内已有正文的可复制文字时，使用此入口。它会**保存 OCR 原文**、截图和来源路径；先选择私密、仓库外的新目录，与后述不保存原文的证据线索模式区分。
 
+先执行 [弱模型六步执行卡](references/scroll-text.md#弱模型六步执行卡先执行)。环境/引擎由本地`check_scroll_env.py`输出固定状态和next_action；模型不根据包目录猜可用性，不临场重装或修全局环境。只有真实非敏感OCR探测返回ready后才进入提取。
+
 依赖：已配置 Python 3.10+、Pillow、ffmpeg/ffprobe；macOS 推荐系统 Apple Vision，先用已有 Swift 编译器明确构建仓库外 helper：
 
 ```bash
 swiftc scripts/scroll_vision.swift -o /仓库外工具目录/video-screenshot-vision
+python3 scripts/check_scroll_env.py --engine vision \
+  --ocr-executable /仓库外工具目录/video-screenshot-vision --deny-network
 python3 scripts/scroll_text.py -i /输入/录屏.mp4 -o /私有输出/全新目录 \
   --engine vision --ocr-executable /仓库外工具目录/video-screenshot-vision --deny-network
 ```
@@ -31,7 +35,7 @@ python3 scripts/scroll_text.py -i /输入/录屏.mp4 -o /私有输出/全新目�
 <!-- skill-lint:constraint SCROLL-TEXT-LOCAL-BOUNDED -->
 限定帧数、像素、布局+正文 OCR 总数、批量与少量模型疑点预算；耗尽时保留部分/待核结果，失败不能冒成功，不覆盖已有结果。输出 TXT/MD、raw、provenance、全页/裁图、疑点和真实进程记录。页面时间与 fps 推导抽样秒数分开标注，不称整场全文。
 
-检查 `receipt.json`、首尾和正文裁边，运行 `python3 scripts/check_scroll_text.py --verify-output <目录>`。模型只看 `review/INSTRUCTIONS.md` 指定的少量相邻图；不能读图保持 `not_reviewed`，不装作已审。OCR 引擎零报错不证明文字全对或零遗漏。
+按固定分支运行：环境blocked报告缺项；提取partial保留部分/待核；不能读图保留not_reviewed；不扩大预算或语义修稿。检查 `receipt.json`、首尾和正文裁边，运行 `python3 scripts/check_scroll_text.py --verify-output <目录>`。模型只看 `review/INSTRUCTIONS.md` 指定的少量相邻图；不能读图保持 `not_reviewed`，不装作已审。OCR 引擎零报错不证明文字全对或零遗漏。
 
 ## 工作流
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "skill": {"name": "video-screenshot", "version": "1.0.0"},
+  "skill": {"name": "video-screenshot", "version": "1.0.1"},
   "producer": {
     "id": "video-screenshot-pipeline",
     "implementation_paths": [
@@ -12,7 +12,8 @@
       "scripts/benchmark.py",
       "scripts/scroll_text.py",
       "scripts/scroll_ocr.py",
-      "scripts/scroll_vision.swift"
+      "scripts/scroll_vision.swift",
+      "scripts/check_scroll_env.py"
     ]
   },
   "artifacts": [

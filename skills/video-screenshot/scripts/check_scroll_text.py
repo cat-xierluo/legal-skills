@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import csv
+from types import SimpleNamespace
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -14,6 +15,7 @@ from PIL import Image, ImageDraw
 from scroll_text import (select_roi, observations, stitch, pixel_hash, promote_new,
                          resolve_new_output, parse_args, run, write_texts)
 from scroll_ocr import normalize_lines, OCRFailure
+import check_scroll_env as env_probe
 
 
 def line(text, y, h=.022):
@@ -206,12 +208,45 @@ def cli_fixtures():
             assert p.returncode!=0
 
 
+def environment_fixtures():
+    packages={'normal':{'PIL':'pillow','rapidocr_onnxruntime':'rapid','onnxruntime':'user-site/onnx'},
+              'isolated':{'PIL':'pillow','rapidocr_onnxruntime':'rapid','onnxruntime':None}}
+    args=SimpleNamespace(engine='rapidocr',ocr_executable=None,deny_network=False,timeout=10)
+    with patch.object(env_probe,'package_visibility',return_value=(packages,None)), patch.object(env_probe.shutil,'which',return_value='/tool'):
+        result=env_probe.diagnose(args)
+    assert result['status']=='blocked' and result['code']=='USER_SITE_PACKAGES_HIDDEN'
+    assert result['hidden_by_user_site_isolation']==['onnxruntime'] and result['engine_probe']=='not_run'
+    assert not result['automatic_install'] and not result['cloud_fallback']
+    visible={'normal':dict(packages['normal']),'isolated':dict(packages['normal'])}
+    args.engine='vision'
+    for text, expected in [('LOCAL OCR PROBE 12345','ready'),('some unrelated words','blocked'),('', 'blocked')]:
+        class StubEngine:
+            executable='/controlled-helper'
+            processes=[{'exit_code':0}]
+            def __init__(self,*a,**kw):pass
+            def recognize(self,paths):
+                assert Path(paths[0]).is_file()
+                return [{'normalized_lines':[{'text':text}]}]
+        with patch.object(env_probe,'package_visibility',return_value=(visible,None)), patch.object(env_probe.shutil,'which',return_value='/tool'), patch('scroll_ocr.LocalOCR',StubEngine):
+            result=env_probe.diagnose(args)
+        assert result['status']==expected
+    with patch.object(env_probe,'package_visibility',return_value=(visible,None)), patch.object(env_probe.shutil,'which',side_effect=lambda name: None if name=='video-screenshot-vision' else '/tool'):
+        result=env_probe.diagnose(args)
+    assert result['code']=='VISION_HELPER_MISSING' and result['next_action']=='compile_helper_if_swiftc_available'
+    # A failed package-discovery child must block rather than fabricate availability.
+    with patch.object(env_probe,'package_visibility',return_value=({},'child failed')), patch.object(env_probe.shutil,'which',return_value='/tool'):
+        result=env_probe.diagnose(args)
+    assert result['code']=='PYTHON_PROBE_FAILED'
+
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--case', choices=['all','core','cli'],default='all');p.add_argument('--verify-output',type=Path)
     args=p.parse_args()
     if args.verify_output:
         verify_output(args.verify_output);print('SCROLL_OUTPUT_BINDING_PASSED');return
-    if args.case in ('all','core'): fixtures()
+    if args.case in ('all','core'):
+        fixtures()
+        environment_fixtures()
     if args.case in ('all','cli'): cli_fixtures()
     print('SCROLL_DOMAIN_CHECKS_PASSED')
 
