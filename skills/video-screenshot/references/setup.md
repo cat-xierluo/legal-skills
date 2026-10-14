@@ -110,3 +110,7 @@ uv run scripts/prepare_vision_audit.py \
 # 8. 只有做算法/参数迭代时，才建立仓库外真实语料基线
 # 详见 references/benchmarking.md
 ```
+
+## 滚动文字显式入口
+
+`scroll_text.py` 使用已配置环境，不执行上文 uv 自动准备。macOS Apple Vision 构建、RapidOCR 独立环境与新目录/原文留存边界见 [滚动文字协议](scroll-text.md)。不能把该含原文结果目录交给原不保存正文的证据线索应用器。

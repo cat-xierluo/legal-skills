@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
-description: 视频截图提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，用匿名标注私有语料建立脱敏双路径基线，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
-version: "0.9.1"
+description: 视频截图提取、滚动文字提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，用匿名标注私有语料建立脱敏双路径基线，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。显式滚动文字模式用本地 OCR 与保守正文裁区输出可复制 TXT/Markdown、原OCR和回源；该模式保存原文，与线索索引的隐私口径不同。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计、滚动文字提取、录屏转文字、转录页面提取。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
+version: "1.0.0"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -10,6 +10,28 @@ license: MIT
 # video-screenshot — 视频截图提取与精筛
 
 从录屏中提取可追溯的证据截图。默认先在本地执行时间簇择优、内容增量精筛和高置信加载态过滤；只有当前模型支持图像输入且基础结果仍需精简时，才准备少量多模态审计材料。
+
+## 滚动页面文字提取（显式模式）
+
+用户要求录屏内已有正文的可复制文字时，使用此入口。它会**保存 OCR 原文**、截图和来源路径；先选择私密、仓库外的新目录，与后述不保存原文的证据线索模式区分。
+
+依赖：已配置 Python 3.10+、Pillow、ffmpeg/ffprobe；macOS 推荐系统 Apple Vision，先用已有 Swift 编译器明确构建仓库外 helper：
+
+```bash
+swiftc scripts/scroll_vision.swift -o /仓库外工具目录/video-screenshot-vision
+python3 scripts/scroll_text.py -i /输入/录屏.mp4 -o /私有输出/全新目录 \
+  --engine vision --ocr-executable /仓库外工具目录/video-screenshot-vision --deny-network
+```
+
+新入口不自动安装依赖或云回退；缺组件给诊断。其他已配置环境可用 `--engine rapidocr`，详细依赖、显式 ROI、预算和失败语义见 [滚动文字协议](references/scroll-text.md)。
+
+<!-- skill-lint:constraint SCROLL-TEXT-CONSERVATION -->
+保留全页与真实 OCR 来源，只缓存像素完全相同的输入；自动裁区证据不足时回退全页，不按近似图像吞正文，不按同文全局合并真实独立发言。用行块序列重叠拼接，保留读数变体/无法对齐片段，不凭常识改写原 ASR。
+
+<!-- skill-lint:constraint SCROLL-TEXT-LOCAL-BOUNDED -->
+限定帧数、像素、布局+正文 OCR 总数、批量与少量模型疑点预算；耗尽时保留部分/待核结果，失败不能冒成功，不覆盖已有结果。输出 TXT/MD、raw、provenance、全页/裁图、疑点和真实进程记录。页面时间与 fps 推导抽样秒数分开标注，不称整场全文。
+
+检查 `receipt.json`、首尾和正文裁边，运行 `python3 scripts/check_scroll_text.py --verify-output <目录>`。模型只看 `review/INSTRUCTIONS.md` 指定的少量相邻图；不能读图保持 `not_reviewed`，不装作已审。OCR 引擎零报错不证明文字全对或零遗漏。
 
 ## 工作流
 
@@ -176,6 +198,7 @@ python3 scripts/apply_vision_review.py \
 | 依赖 | 安装方式 |
 |---|---|
 | ffmpeg ≥ 5.0 | macOS: `brew install ffmpeg`<br>Linux: `sudo apt-get install ffmpeg` |
+| Swift 编译器（仅 Apple Vision helper） | 使用已安装的 macOS Command Line Tools；构建见滚动文字入口，不自动安装 |
 | Python ≥ 3.10 | macOS: `brew install python` |
 | uv | macOS: `brew install uv` |
 
@@ -188,8 +211,11 @@ python3 scripts/apply_vision_review.py \
 
 同一可选依赖也用于证据线索多锚点分类：`uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py -i <基础输出目录>`。缺失时清晰降级为视觉主体与时序排序，不影响基础抽帧。
 
+新滚动入口直接使用已安装的 Pillow（缺失时提示 `python3 -m pip install Pillow`），不会经 uv 自动准备。Apple Vision 只用系统框架；RapidOCR 显式选择且在隔离 user-site 的子进程运行。
+
 ## 验收与安全边界
 
+- 新文字模式运行 `python3 scripts/check_scroll_text.py --case all`，再复查真实录屏输出；其自含夹具不替代 OCR 语义质量证明。
 - 运行 `uv run scripts/check_pipeline.py --case all`，要求全部领域回归通过并输出 `DOMAIN_CHECKS_PASSED`。
 - 评测底座可单独运行 `uv run scripts/check_pipeline.py --case benchmark`；该合成 CLI 回归只证明评测合同、FFmpeg 兼容和脱敏汇总可用，不证明真实截图准确率。
 - 输出事务可单独运行 `uv run scripts/check_pipeline.py --case transactional-output`，必须覆盖坏视频、非法参数、符号链接、未知文件、下游产物保护、成功替换和提交回滚。
@@ -200,6 +226,8 @@ python3 scripts/apply_vision_review.py \
 
 ## 所需权限与安全说明
 
+- **文字模式留存**：`scroll_text.py` 显式保存 raw/TXT/MD/来源/进程记录到仓库外新目录，仅缓存完全相同的像素。0700 staging 完整后用本机不覆盖原子提交；运行错误保留 staging/部分产物供核查。它不使用截图路径的旧目录替换/归档规则。
+- **环境与本地引擎**：OCR 子进程仅继承 PATH/HOME/TMPDIR/语言等运行环境，不传云凭据；macOS `--deny-network` 实际隔离 OCR。Swift/helper 或显式 RapidOCR 属本地受信代码，使用系统重命名接口做原子提交。
 - **本地文件访问**：读取用户明确提供的视频；图片与复核 JSON 只写入显式输出目录，Skill `archive/` 仅写入 `_report.json` 与 `extraction_meta.json` 元数据副本；不扫描无关目录。
 - **本地进程执行**：以参数数组调用本机 `ffmpeg`、`ffprobe` 和 Python 脚本，不使用 shell 拼接执行用户输入。
 - **事务性替换**：新结果只写入目标同级 staging；成功提交前不改动旧目录。旧目录必须通过所有权标记，或通过旧版报告与实际帧清单一致性校验；若发现证据线索、视觉复核、精选结果、符号链接或未知文件，拒绝覆盖并提示改用新目录。

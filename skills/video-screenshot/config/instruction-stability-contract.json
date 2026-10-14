@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "skill": {"name": "video-screenshot", "version": "0.9.0"},
+  "skill": {"name": "video-screenshot", "version": "1.0.0"},
   "producer": {
     "id": "video-screenshot-pipeline",
     "implementation_paths": [
@@ -9,12 +9,20 @@
       "scripts/apply_vision_review.py",
       "scripts/prepare_evidence_leads.py",
       "scripts/apply_evidence_review.py",
-      "scripts/benchmark.py"
+      "scripts/benchmark.py",
+      "scripts/scroll_text.py",
+      "scripts/scroll_ocr.py",
+      "scripts/scroll_vision.swift"
     ]
   },
   "artifacts": [
     {"id": "pipeline-validation", "stage": "final", "required": true},
-    {"id": "benchmark-summary", "stage": "final", "required": true}
+    {"id": "benchmark-summary", "stage": "final", "required": true},
+    {
+      "id": "scroll-validation",
+      "stage": "final",
+      "required": true
+    }
   ],
   "checkers": [
     {
@@ -37,6 +45,22 @@
       "runtime": "python3",
       "implementation": "scripts/check_benchmark_summary.py",
       "args": ["--input", "{artifact:benchmark-summary}"],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "scroll-invariants",
+      "kind": "active",
+      "modality": "schema",
+      "artifact_stages": [
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/check_scroll_artifact.py",
+      "args": [
+        "--input",
+        "{artifact:scroll-validation}"
+      ],
       "timeout_seconds": 30
     }
   ],
@@ -104,6 +128,42 @@
         "transaction-cleanup-before-probe-historical"
       ],
       "historical_failure_known": true
+    },
+    {
+      "id": "SCROLL-TEXT-CONSERVATION",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#SCROLL-TEXT-CONSERVATION"
+      ],
+      "checker_ids": [
+        "scroll-invariants"
+      ],
+      "case_ids": [
+        "scroll-valid",
+        "scroll-collapses-true-repetition",
+        "scroll-approximate-cache-historical"
+      ],
+      "historical_failure_known": true
+    },
+    {
+      "id": "SCROLL-TEXT-LOCAL-BOUNDED",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#SCROLL-TEXT-LOCAL-BOUNDED"
+      ],
+      "checker_ids": [
+        "scroll-invariants"
+      ],
+      "case_ids": [
+        "scroll-valid",
+        "scroll-exceeds-budget",
+        "scroll-error-success"
+      ],
+      "historical_failure_known": false
     }
   ],
   "cases": [
@@ -207,6 +267,97 @@
       ],
       "expected": "blocked",
       "expected_exit_code": 3
+    },
+    {
+      "id": "scroll-valid",
+      "kind": "positive",
+      "constraint_ids": [
+        "SCROLL-TEXT-CONSERVATION",
+        "SCROLL-TEXT-LOCAL-BOUNDED"
+      ],
+      "checker_ids": [
+        "scroll-invariants"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "scroll-validation",
+          "path": "assets/stability/scroll-valid.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "scroll-collapses-true-repetition",
+      "kind": "mutation",
+      "constraint_ids": [
+        "SCROLL-TEXT-CONSERVATION"
+      ],
+      "checker_ids": [
+        "scroll-invariants"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "scroll-validation",
+          "path": "assets/stability/scroll-collapses-true-repetition.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "scroll-approximate-cache-historical",
+      "kind": "historical",
+      "constraint_ids": [
+        "SCROLL-TEXT-CONSERVATION"
+      ],
+      "checker_ids": [
+        "scroll-invariants"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "scroll-validation",
+          "path": "assets/stability/scroll-approximate-cache-historical.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "scroll-exceeds-budget",
+      "kind": "mutation",
+      "constraint_ids": [
+        "SCROLL-TEXT-LOCAL-BOUNDED"
+      ],
+      "checker_ids": [
+        "scroll-invariants"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "scroll-validation",
+          "path": "assets/stability/scroll-exceeds-budget.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "scroll-error-success",
+      "kind": "mutation",
+      "constraint_ids": [
+        "SCROLL-TEXT-LOCAL-BOUNDED"
+      ],
+      "checker_ids": [
+        "scroll-invariants"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "scroll-validation",
+          "path": "assets/stability/scroll-error-success.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
     }
   ],
   "stability": {
@@ -259,6 +410,22 @@
         "value_type": "boolean",
         "condition": "equals",
         "expected": true
+      },
+      {
+        "id": "conservation-passed",
+        "checker_id": "scroll-invariants",
+        "constraint_id": "SCROLL-TEXT-CONSERVATION",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
+        "id": "bounded-local-passed",
+        "checker_id": "scroll-invariants",
+        "constraint_id": "SCROLL-TEXT-LOCAL-BOUNDED",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
       }
     ],
     "observables": [
@@ -306,6 +473,26 @@
         "id": "output-transaction-mode",
         "checker_id": "pipeline-invariants",
         "constraint_ids": ["TRANSACTIONAL-OUTPUT-SAFETY"],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "scroll-source-observation-set",
+        "checker_id": "scroll-invariants",
+        "constraint_ids": [
+          "SCROLL-TEXT-CONSERVATION"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "scroll-completion-state",
+        "checker_id": "scroll-invariants",
+        "constraint_ids": [
+          "SCROLL-TEXT-LOCAL-BOUNDED"
+        ],
         "comparison": "set_equal",
         "required": true,
         "tolerance": null

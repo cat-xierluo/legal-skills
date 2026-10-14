@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "observations": [
+    {
+      "id": "A",
+      "frame": "F1",
+      "slot": 0,
+      "text": "真的。"
+    },
+    {
+      "id": "B",
+      "frame": "F1",
+      "slot": 1,
+      "text": "真的。"
+    },
+    {
+      "id": "C",
+      "frame": "F2",
+      "slot": 0,
+      "text": "真的。"
+    }
+  ],
+  "blocks": [
+    {
+      "text": "真的。",
+      "observation_ids": [
+        "A",
+        "B",
+        "C"
+      ]
+    }
+  ],
+  "cache_reuses": [
+    {
+      "pixel_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "cached_pixel_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "budgets": {
+    "frames": {
+      "actual": 2,
+      "max": 600
+    },
+    "pixels_per_frame": {
+      "actual": 3000000,
+      "max": 4000000
+    },
+    "ocr_images": {
+      "actual": 2,
+      "max": 600
+    },
+    "review_images": {
+      "actual": 2,
+      "max": 18
+    },
+    "review_groups": {
+      "actual": 1,
+      "max": 6
+    }
+  },
+  "source_sha_before": "1111111111111111111111111111111111111111111111111111111111111111",
+  "source_sha_after": "1111111111111111111111111111111111111111111111111111111111111111",
+  "old_output_sha_before": "2222222222222222222222222222222222222222222222222222222222222222",
+  "old_output_sha_after": "2222222222222222222222222222222222222222222222222222222222222222",
+  "engine_error": false,
+  "budget_exhausted": false,
+  "status": "draft_requires_review"
+}
