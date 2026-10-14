@@ -7,40 +7,39 @@
 目标是让普通、较弱多模态或纯文字模型能按固定分支执行。抽帧、正文定位、OCR、重叠拼接交给脚本；模型只读取简短状态和少量疑点，不承担批量读图、全文拼接或Python环境推理。
 
 1. **固定两条路径**：读取用户给定视频，选择私密、仓库外、尚不存在的新输出目录。`<Skill目录>`使用当前加载技能的实际路径。不得扫描无关材料；不覆盖旧输出。
-2. **跑环境诊断**：macOS使用已验证的本地Vision分支；其他平台或用户明确指定时用RapidOCR。先运行 `python3 <Skill目录>/scripts/check_scroll_env.py --engine vision --ocr-executable <已有本地helper> --deny-network`。Rapid分支使用实际准备好的Python执行同一脚本并传`--engine rapidocr`。只读JSON的 `status`、`code`、`next_action`、`message`；包路径仅作诊断，不用它们拼接临时PYTHONPATH。
-3. **按固定状态行动**：仅 `ready` + `LOCAL_OCR_PROBE_OK` 时运行下方录屏命令，并使用同一Python、引擎和helper。`VISION_HELPER_MISSING`且已有swiftc时，按下方命令在新的仓库外工具位置编译再复查；没有编译器则报告缺项。`USER_SITE_PACKAGES_HIDDEN`表示当前隔离进程看不到已安装的用户级包，使用已有完整独立环境或明确的Vision分支；不称全机没装、不移除隔离、不自行安装/卸载/迁移依赖。其他blocked状态只报告诊断，不猜“可用”。
+2. **跑环境诊断**：运行 `python3 <Skill目录>/scripts/run_scroll.py --check-env --deny-network`（非macOS省略deny-network）。统一入口自动使用准备好的Skill独立Python，auto在非敏感测试图上探测本地Vision/Rapid。只读JSON的`status`、`code`、`next_action`、`message`，不处理包路径或临时PYTHONPATH。
+3. **按固定状态行动**：仅`ready` + `LOCAL_OCR_PROBE_OK`时运行下方统一提取命令，复用同一runtime-dir和引擎参数。`NO_LOCAL_BACKEND_READY`时，已有系统组件且用户授权准备依赖，则运行下方明确准备命令，再诊断；否则报告缺项。`SUPPORTED_NATIVE_PYTHON_NOT_FOUND`报告不兼容的版本/架构，不自动下载解释器。其他blocked报告诊断，不临场重装全局包、移除隔离或猜“可用”。
 4. **读结果状态**：读退出码和`receipt.json`，不加载全部raw或正文来判断成功。`0/draft_requires_review`只表示本地链路成功；`3/partial|failed`保留材料、报告未完成范围；`2`报告预检/提交错误与staging位置。不重复写同一旧目录，不擅自增大预算或切到云端。
-5. **跑输出检查，再按能力复核**：运行 `python3 <Skill目录>/scripts/check_scroll_text.py --verify-output <新输出>`。纯文字模型到这里可交付本地草稿，复核状态保持`not_reviewed`；能看图时一次只读`review/INSTRUCTIONS.md`的一题指定相邻图，填`confirmed / visible_difference / cannot_read`。看不清时选cannot_read；不按OCR假装看图，不语义纠正原ASR，不自动应用改稿，不增加题数。
+5. **跑输出检查，再按能力复核**：运行 `python3 <Skill目录>/scripts/run_scroll.py --verify-output <新输出>`。纯文字模型到这里可交付本地草稿，复核状态保持`not_reviewed`；能看图时一次只读`review/INSTRUCTIONS.md`的一题指定相邻图，填`confirmed / visible_difference / cannot_read`。看不清时选cannot_read；不按OCR假装看图，不语义纠正原ASR，不自动应用改稿，不增加题数。
 6. **按固定口径交付**：给TXT/MD、疑点/回源路径；报告源SHA是否一致、实际引擎、partial/待核状态及视觉复核范围。页面时间与录屏抽样秒数分开。没有逐字核验，不写“全文准确/无遗漏”；没有弱模型实际前向测试，不写“弱模型稳定性已经验证”。
 
-诊断脚本只生成一张非敏感临时测试图，执行受信本地引擎并核对PROBE/12345锚点。找到包文件或程序名不能单独得到ready；这项探测也不代表真实正文准确率。不会安装、改变Python配置、读取会议内容或覆盖既有输出。非敏感测试不通过时保留blocked。
+诊断/auto选择最多对两种后端分别使用一张非敏感临时测试图，核对PROBE/12345锚点。找到包或程序名不能单独得到ready；探测不代表真实正文准确率。源OCR开始前选择一次；正文处理失败保部分结果，不中途静默换后端。
 
-## 本地引擎与入口
+## Skill内部双后端与统一入口
 
-先确认 `python3` 可导入 Pillow，`ffmpeg`/`ffprobe` 可运行；缺失时由用户自己的环境管理流程安装。新入口不经 uv 自动下载、不调用云 OCR、不自动切换引擎。
+适配源码、固定依赖清单、准备和选择逻辑均在Skill内。Vision底层由macOS系统框架提供；RapidOCR包及模型存入`~/.cache/video-screenshot/ocr/`的独立venv，不改全局Python、user-site、shell配置或共享加载入口。缓存按源码/依赖清单及运行架构区分，marker绑定执行文件SHA。准备脚本检查已有解释器版本与架构；ARM进程跳过Intel解释器。第三方依赖保留原许可证，公开Git不包含平台二进制和大模型文件。
 
-macOS 使用系统 Apple Vision；需要已经安装的 Swift 编译器（Command Line Tools）。仅在明确构建时执行：
-
-```bash
-swiftc scripts/scroll_vision.swift -o /仓库外工具目录/video-screenshot-vision
-python3 scripts/scroll_text.py \
-  -i /输入/录屏.mp4 -o /私有输出/全新目录 \
-  --engine vision --ocr-executable /仓库外工具目录/video-screenshot-vision \
-  --deny-network
-```
-
-`--deny-network` 要求实际 `sandbox-exec` 可用，否则失败；它只隔离 OCR 子进程，不代表整个系统或模型沙箱。helper 使用准确级中文/英文识别，关闭语言纠错，返回真实 top-left 归一化 bbox 和置信度。置信度是引擎读数，不是准确率证明。边缘框若略超图像（不超过2%）保留真实值并标记 `bbox_outside_image`，不伪造裁平坐标；该行仍列为边界疑点。
-
-Linux/其他已配置环境可显式使用 RapidOCR：
+首次明确准备两种后端：
 
 ```bash
-# 仅在明确准备依赖时使用自己的独立环境；脚本不执行安装
-/独立环境/bin/python -m pip install Pillow rapidocr-onnxruntime
-/独立环境/bin/python scripts/check_scroll_env.py --engine rapidocr
-/独立环境/bin/python scripts/scroll_text.py -i /输入/录屏.mp4 -o /私有输出/全新目录 --engine rapidocr
+python3 scripts/prepare_ocr.py --engine both --install-deps
 ```
 
-RapidOCR 在当前 Python 的 `-s` 子进程内运行，禁用 user-site 干扰；若包装器、包初始化或识别失败，保留真实异常和安装提示，不冒充空白页成功。本机是否可用以实际运行记录为准。优先读`check_scroll_env.py`的结构化诊断：普通Python可见、`-s`不可见时是目录隔离差异，不等于全机未安装。可用 `--ocr-executable` 指向受信本地 Vision-compatible helper：每输入图输出一行 `{path,lines,error}` JSON，`lines` 可为字符串（无 bbox/confidence）或 `{text,bbox,confidence}`。无坐标的旧 helper 保留未知值、原顺序，自动 ROI 回退全页；不捏造框和分数。helper 路径指向可执行文件，不接受 shell 命令串。
+Vision仅使用已有swiftc编译适配；Rapid选择已有同架构Python3.10—3.12并从官方PyPI安装`config/rapidocr-requirements.txt`到专属venv。依赖下载不上传录屏或OCR内容。仅Linux/Rapid环境传`--engine rapidocr --install-deps`；只准备Vision传`--engine vision`。没有`--install-deps`时不安装Rapid。未知/中断缓存拒绝覆盖，保留prepare-processes与错误诊断；确需另做准备时明确指定全新`--runtime-dir`并在后续命令复用，不自动删除旧缓存。
+
+正常运行使用同一入口：
+
+```bash
+python3 scripts/run_scroll.py --check-env --deny-network
+python3 scripts/run_scroll.py -i /输入/录屏.mp4 -o /私有输出/全新目录 --deny-network
+python3 scripts/run_scroll.py --verify-output /私有输出/已生成目录
+```
+
+统一入口自动使用准备好的独立Python承担Pillow操作与Rapid子进程；只有Vision缓存时使用当前已配置Pillow的Python。缺Pillow给诊断，不自动安装。默认auto优先真实探测Vision，然后尝试已准备Rapid；都不可用时阻塞。`--engine vision|rapidocr`显式选择；高级兼容用法允许`--ocr-executable`或`--rapid-python`，弱模型默认无需这些参数。
+
+`--deny-network`要求macOS的sandbox-exec，否则失败，不冒充隔离；仅隔离OCR子进程，非macOS省略并披露隔离未验证。Vision准确级中英文识别关闭语言纠错，Rapid子进程用`-s`禁用user-site。普通Python可见而`-s`不可见表示隔离差异，不能称全机未安装。两种本地后端的实际质量需要材料实测，不宣称准确率相同。
+
+保留显式helper协议：每输入图输出一行`{path,lines,error}` JSON，lines为字符串或`{text,bbox,confidence}`。无坐标旧helper保留未知/原顺序，自动ROI回退全页。真实归一化边缘框略超图像（最多2%）保留并标记bbox_outside_image，列为边界疑点，不伪造框/分数。helper为可执行文件路径，不接受shell命令串。
 
 ## 顺序与正文区域
 
@@ -55,7 +54,7 @@ RapidOCR 在当前 Python 的 `-s` 子进程内运行，禁用 user-site 干扰�
 
 ## 预算与失败语义
 
-默认间隔 0.5 秒；最多 600 张帧、每帧 4M 像素、600 次图像 OCR（布局+正文共享）；每批最多 8 图、超时 90 秒。模型疑点最多 6 组/18 张唯一全页来源，每组最多 3 张相邻页，hard cap 8 组/24 张。参数可降低，代码限制不能隐式突破。
+默认间隔 0.5 秒；最多 600 张帧、每帧 4M 像素、600 次图像 OCR（布局+正文共享）；每批最多 8 图、超时 90 秒。模型疑点最多 6 组/18 张唯一全页来源，每组最多 3 张相邻页，hard cap 8 组/24 张。参数可降低，代码限制不能隐式突破。auto另有最多2次非敏感图后端预检，与源图600次预算分开；receipt的backend_probe_images和backend-preflight.json记录实际次数/进程，源OCR计数不含这些测试图。
 
 - `0`：本地提取链路完成，`draft_requires_review`；不代表文字全对或全文无遗漏。
 - `3`：`partial` 或 `failed`；预算耗尽/引擎运行错误/没有正文。新目录保留已生成的帧、raw、诊断和可用稿，并披露待处理范围。不能把部分结果当完整完成。
@@ -76,6 +75,7 @@ RapidOCR 在当前 Python 的 `-s` 子进程内运行，禁用 user-site 干扰�
 | `issues.json` / `uncertain.md` | 未对齐、边界、缺 OCR 和文字变体；原始正文不丢弃 |
 | `review/questions.json` / `INSTRUCTIONS.md` | 小批相邻图单一疑点任务，默认 `not_reviewed` / `pending` |
 | `ocr-processes.json` / `extraction-process.json` | 真实 argv、退出码、stderr、引擎与耗时；含敏感原读数 |
+| `backend-preflight.json` | auto选择的非敏感测试真实进程；显式选择时为空，与源OCR预算分开 |
 | `receipt.json` | 原片前后 SHA、来源、参数、状态、引擎及预算实耗 |
 | `output-manifest.json` | 最终输出文件与真实 SHA，供检查完整性 |
 

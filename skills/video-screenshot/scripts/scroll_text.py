@@ -406,7 +406,7 @@ def run(args):
         raise ValueError('输入视频不存在')
     ffmpeg, duration, source_width, source_height = probe(source)
     source_sha = digest(source)
-    ocr = LocalOCR(args.engine, args.ocr_executable, args.batch_size, args.ocr_timeout, args.deny_network)
+    ocr = LocalOCR(args.engine, args.ocr_executable, args.batch_size, args.ocr_timeout, args.deny_network, args.rapid_python, args.runtime_dir)
     staging = Path(tempfile.mkdtemp(prefix='.'+target.name+'.staging-', dir=target.parent))
     os.chmod(staging, 0o700)
     begun = time.monotonic()
@@ -534,13 +534,15 @@ def run(args):
         make_review(staging, frames, issues, args.max_review_groups, args.max_review_images)
         dump(staging/'frames.json', {'schema': SCHEMA, 'frames': frames})
         dump(staging/'ocr-processes.json', ocr.processes)
+        dump(staging/'backend-preflight.json', ocr.preflight_processes)
         after_sha = digest(source)
         if source_sha != after_sha:
             raise ValueError('源视频内容运行中发生变化，拒绝提交结果')
         dump(staging/'receipt.json', {'schema': SCHEMA, 'status': status, 'source': str(source),
             'source_sha256_before': source_sha, 'source_sha256_after': after_sha, 'source_bytes': source.stat().st_size,
             'staging_path': str(staging), 'output_path': str(target), 'source_duration_seconds': duration, 'source_size': [source_width,source_height], 'frame_count': len(files),
-            'ocr_images': ocr.calls, 'ocr_errors': errors, 'engine': args.engine, 'engine_executable': ocr.executable,
+            'ocr_images': ocr.calls, 'ocr_errors': errors, 'engine': ocr.engine, 'engine_requested': args.engine, 'pipeline_python': sys.executable, 'engine_executable': ocr.executable,
+            'backend_probe_images': sum(x['images'] for x in ocr.preflight_processes), 'backend_selection_failures': getattr(ocr,'backend_selection_failures',[]),
             'deny_network': args.deny_network, 'time_basis': 'fps_filter_derived_approx_not_source_pts',
             'blocks': len(blocks), 'body_characters': sum(len(key(b['text'])) for b in blocks),
             'roi_methods': dict(Counter(f['roi']['method'] for f in frames)), 'parameters': vars(args),
@@ -555,6 +557,7 @@ def run(args):
     except BaseException:
         # Preserve only this run's staging for diagnostics; never change an existing output.
         dump(staging/'ocr-processes.json', ocr.processes)
+        dump(staging/'backend-preflight.json', ocr.preflight_processes)
         print(f'失败诊断 staging 保留: {staging}', file=sys.stderr)
         raise
 
@@ -578,8 +581,10 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('-i', '--input', required=True)
     p.add_argument('-o', '--output', required=True, help='必须为仓库外不存在的新目录')
-    p.add_argument('--engine', choices=['vision','rapidocr'], default='vision')
+    p.add_argument('--engine', choices=['auto','vision','rapidocr'], default='auto')
     p.add_argument('--ocr-executable', help='Vision 本地 JSONL helper 路径（不调用 shell）')
+    p.add_argument('--rapid-python', help='显式已有独立Rapid环境Python；默认发现Skill管理环境')
+    p.add_argument('--runtime-dir', help='Skill管理后端缓存根目录；默认~/.cache/video-screenshot/ocr')
     p.add_argument('--deny-network', action='store_true', help='macOS OCR 子进程拒绝网络，工具不存在则失败')
     p.add_argument('--interval', type=float, default=.5)
     p.add_argument('--max-frames', type=int, default=600)

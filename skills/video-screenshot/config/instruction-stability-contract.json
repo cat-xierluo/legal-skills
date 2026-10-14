@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "skill": {"name": "video-screenshot", "version": "1.0.1"},
+  "skill": {"name": "video-screenshot", "version": "1.1.0"},
   "producer": {
     "id": "video-screenshot-pipeline",
     "implementation_paths": [
@@ -13,7 +13,11 @@
       "scripts/scroll_text.py",
       "scripts/scroll_ocr.py",
       "scripts/scroll_vision.swift",
-      "scripts/check_scroll_env.py"
+      "scripts/check_scroll_env.py",
+      "scripts/run_scroll.py",
+      "scripts/prepare_ocr.py",
+      "scripts/ocr_runtime.py",
+      "config/rapidocr-requirements.txt"
     ]
   },
   "artifacts": [

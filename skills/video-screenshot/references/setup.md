@@ -113,4 +113,4 @@ uv run scripts/prepare_vision_audit.py \
 
 ## 滚动文字显式入口
 
-`scroll_text.py` 使用已配置环境，不执行上文 uv 自动准备。macOS Apple Vision 构建、RapidOCR 独立环境与新目录/原文留存边界见 [滚动文字协议](scroll-text.md)。不能把该含原文结果目录交给原不保存正文的证据线索应用器。
+`run_scroll.py`统一入口使用Skill准备的本地Vision/Rapid独立环境，不执行上文uv自动准备。首次明确准备：`python3 scripts/prepare_ocr.py --engine both --install-deps`；正常入口不会安装。架构检查、诊断、预算和原文留存边界见[滚动文字协议](scroll-text.md)。不能把该含原文结果目录交给原不保存正文的证据线索应用器。

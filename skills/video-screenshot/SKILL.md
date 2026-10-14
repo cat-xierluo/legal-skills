@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
 description: 视频截图提取、滚动文字提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，用匿名标注私有语料建立脱敏双路径基线，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。显式滚动文字模式用本地 OCR 与保守正文裁区输出可复制 TXT/Markdown、原OCR和回源；该模式保存原文，与线索索引的隐私口径不同。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计、滚动文字提取、录屏转文字、转录页面提取。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
-version: "1.0.1"
+version: "1.1.0"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -15,19 +15,22 @@ license: MIT
 
 用户要求录屏内已有正文的可复制文字时，使用此入口。它会**保存 OCR 原文**、截图和来源路径；先选择私密、仓库外的新目录，与后述不保存原文的证据线索模式区分。
 
-先执行 [弱模型六步执行卡](references/scroll-text.md#弱模型六步执行卡先执行)。环境/引擎由本地`check_scroll_env.py`输出固定状态和next_action；模型不根据包目录猜可用性，不临场重装或修全局环境。只有真实非敏感OCR探测返回ready后才进入提取。
+先执行 [弱模型六步执行卡](references/scroll-text.md#弱模型六步执行卡先执行)。Apple Vision 与 RapidOCR 的适配、准备和自动选择都封装在本 Skill 内。弱模型使用统一入口，不判断包目录、Python架构或手工选引擎。
 
-依赖：已配置 Python 3.10+、Pillow、ffmpeg/ffprobe；macOS 推荐系统 Apple Vision，先用已有 Swift 编译器明确构建仓库外 helper：
+一次明确准备（已有 ffmpeg/ffprobe；Rapid需要已有、与运行进程架构一致的Python 3.10—3.12，Vision需要macOS已有Swift编译器）：
 
 ```bash
-swiftc scripts/scroll_vision.swift -o /仓库外工具目录/video-screenshot-vision
-python3 scripts/check_scroll_env.py --engine vision \
-  --ocr-executable /仓库外工具目录/video-screenshot-vision --deny-network
-python3 scripts/scroll_text.py -i /输入/录屏.mp4 -o /私有输出/全新目录 \
-  --engine vision --ocr-executable /仓库外工具目录/video-screenshot-vision --deny-network
+python3 scripts/prepare_ocr.py --engine both --install-deps
 ```
 
-新入口不自动安装依赖或云回退；缺组件给诊断。其他已配置环境可用 `--engine rapidocr`，详细依赖、显式 ROI、预算和失败语义见 [滚动文字协议](references/scroll-text.md)。
+这条准备命令可从官方PyPI下载Rapid包/模型到Skill专属缓存独立venv，不改全局/user-site。未明确准备时不传`--install-deps`；正常诊断和提取不会安装。非macOS明确准备`--engine rapidocr --install-deps`。没有对应系统组件时报告缺项。
+
+```bash
+python3 scripts/run_scroll.py --check-env --deny-network
+python3 scripts/run_scroll.py -i /输入/录屏.mp4 -o /私有输出/全新目录 --deny-network
+```
+
+默认`auto`只在源OCR前用非敏感测试图选择真正可用的本地后端：Vision优先，失败后尝试已准备的RapidOCR，最多两次；都失败明确阻塞。显式`--engine vision|rapidocr`仍可用。`--deny-network`需要macOS的sandbox-exec；其他平台省略该选项并披露网络隔离未验证。后端选定后不在正文处理中静默切换。详细依赖、显式 ROI、预算和失败语义见 [滚动文字协议](references/scroll-text.md)。
 
 <!-- skill-lint:constraint SCROLL-TEXT-CONSERVATION -->
 保留全页与真实 OCR 来源，只缓存像素完全相同的输入；自动裁区证据不足时回退全页，不按近似图像吞正文，不按同文全局合并真实独立发言。用行块序列重叠拼接，保留读数变体/无法对齐片段，不凭常识改写原 ASR。
@@ -215,11 +218,11 @@ python3 scripts/apply_vision_review.py \
 
 同一可选依赖也用于证据线索多锚点分类：`uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py -i <基础输出目录>`。缺失时清晰降级为视觉主体与时序排序，不影响基础抽帧。
 
-新滚动入口直接使用已安装的 Pillow（缺失时提示 `python3 -m pip install Pillow`），不会经 uv 自动准备。Apple Vision 只用系统框架；RapidOCR 显式选择且在隔离 user-site 的子进程运行。
+滚动文字统一入口自动使用本Skill准备的独立Python（含Pillow）；仅Vision环境则使用当前已配置Pillow的Python。固定Rapid依赖见`config/rapidocr-requirements.txt`，由上方明确准备命令一次安装到专属venv；不经uv隐式准备。Apple Vision底层由macOS提供，Swift适配源码在Skill内。第三方包/模型保留其许可证，不提交到本技能Git。
 
 ## 验收与安全边界
 
-- 新文字模式运行 `python3 scripts/check_scroll_text.py --case all`，再复查真实录屏输出；其自含夹具不替代 OCR 语义质量证明。
+- 新文字模式运行 `python3 scripts/run_scroll.py --verify-output <结果目录>` 做独立绑定检查；开发回归运行 `python3 scripts/check_scroll_text.py --case all`，再复查真实录屏输出；其自含夹具不替代 OCR 语义质量证明。
 - 运行 `uv run scripts/check_pipeline.py --case all`，要求全部领域回归通过并输出 `DOMAIN_CHECKS_PASSED`。
 - 评测底座可单独运行 `uv run scripts/check_pipeline.py --case benchmark`；该合成 CLI 回归只证明评测合同、FFmpeg 兼容和脱敏汇总可用，不证明真实截图准确率。
 - 输出事务可单独运行 `uv run scripts/check_pipeline.py --case transactional-output`，必须覆盖坏视频、非法参数、符号链接、未知文件、下游产物保护、成功替换和提交回滚。
@@ -231,7 +234,7 @@ python3 scripts/apply_vision_review.py \
 ## 所需权限与安全说明
 
 - **文字模式留存**：`scroll_text.py` 显式保存 raw/TXT/MD/来源/进程记录到仓库外新目录，仅缓存完全相同的像素。0700 staging 完整后用本机不覆盖原子提交；运行错误保留 staging/部分产物供核查。它不使用截图路径的旧目录替换/归档规则。
-- **环境与本地引擎**：OCR 子进程仅继承 PATH/HOME/TMPDIR/语言等运行环境，不传云凭据；macOS `--deny-network` 实际隔离 OCR。Swift/helper 或显式 RapidOCR 属本地受信代码，使用系统重命名接口做原子提交。
+- **环境与本地引擎**：OCR 子进程仅继承 PATH/HOME/TMPDIR/语言等运行环境，不传云凭据；macOS `--deny-network` 实际隔离 OCR。明确prepare --install-deps才会联网下载到专属venv，正常run入口不安装。Swift/helper 或 RapidOCR 属本地受信代码，使用系统重命名接口做原子提交。
 - **本地文件访问**：读取用户明确提供的视频；图片与复核 JSON 只写入显式输出目录，Skill `archive/` 仅写入 `_report.json` 与 `extraction_meta.json` 元数据副本；不扫描无关目录。
 - **本地进程执行**：以参数数组调用本机 `ffmpeg`、`ffprobe` 和 Python 脚本，不使用 shell 拼接执行用户输入。
 - **事务性替换**：新结果只写入目标同级 staging；成功提交前不改动旧目录。旧目录必须通过所有权标记，或通过旧版报告与实际帧清单一致性校验；若发现证据线索、视觉复核、精选结果、符号链接或未知文件，拒绝覆盖并提示改用新目录。

@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 import time
+import tempfile
+from ocr_runtime import backend_candidates
 
 
 class OCRFailure(RuntimeError):
@@ -42,17 +44,51 @@ def normalize_lines(record):
 
 
 class LocalOCR:
-    def __init__(self, engine, executable=None, batch_size=8, timeout=90, deny_network=False):
+    def __init__(self, engine, executable=None, batch_size=8, timeout=90, deny_network=False, rapid_python=None, runtime_dir=None):
+        self.preflight_processes = []
+        if engine == 'auto':
+            failures = []
+            choices = backend_candidates('auto', executable, rapid_python, runtime_dir)
+            if not choices:
+                raise OCRFailure('没有已准备的本地后端；运行 prepare_ocr.py，再使用统一入口。不自动安装或云回退。')
+            from PIL import Image, ImageDraw
+            with tempfile.TemporaryDirectory(prefix='scroll-auto-probe-') as folder:
+                path=Path(folder).resolve()/'probe.png'
+                im=Image.new('RGB',(800,240),'white')
+                ImageDraw.Draw(im).text((20,80),'LOCAL OCR PROBE 12345',fill='black')
+                im.resize((1600,480)).save(path)
+                all_logs=[]
+                for kind, binary in choices[:2]:
+                    trial = None
+                    try:
+                        trial=LocalOCR(kind, binary if kind=='vision' else None, batch_size, timeout,
+                                       deny_network, binary if kind=='rapidocr' else None, runtime_dir)
+                        record=trial.recognize([path])[0]
+                        text=''.join(x['text'] for x in record['normalized_lines']).upper().replace(' ','')
+                        if 'PROBE' not in text or '12345' not in text:
+                            raise OCRFailure('本地后端探测没有识别固定锚点')
+                        all_logs.extend(trial.processes)
+                        self.__dict__.update(trial.__dict__)
+                        self.calls, self.processes = 0, []
+                        self.preflight_processes = all_logs
+                        self.backend_selection_failures = failures
+                        return
+                    except (OCRFailure, OSError) as exc:
+                        failures.append({'engine':kind,'error':str(exc)})
+                        if trial is not None:
+                            all_logs.extend(trial.processes)
+            raise OCRFailure('本地后端均未通过实际探测: '+json.dumps(failures,ensure_ascii=False))
         self.engine, self.batch_size, self.timeout = engine, batch_size, timeout
         self.deny_network, self.calls, self.processes = deny_network, 0, []
         self.executable = None
         if engine == 'vision':
-            self.executable = shutil.which(executable or 'video-screenshot-vision')
+            choices = backend_candidates('vision', executable, rapid_python, runtime_dir)
+            self.executable = choices[0][1] if choices else None
             if not self.executable:
                 raise OCRFailure('缺少本地 Vision 可执行程序。用 swiftc scripts/scroll_vision.swift -o <仓库外路径> 编译后传 --ocr-executable；不自动安装或云回退。')
         elif engine == 'rapidocr':
             # Run in isolated Python process; disable old user-site leakage.
-            self.executable = sys.executable
+            self.executable = backend_candidates('rapidocr', executable, rapid_python, runtime_dir)[0][1]
         else:
             raise OCRFailure('未知引擎')
         if deny_network and not shutil.which('sandbox-exec'):

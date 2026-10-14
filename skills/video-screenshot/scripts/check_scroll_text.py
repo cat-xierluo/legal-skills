@@ -211,7 +211,7 @@ def cli_fixtures():
 def environment_fixtures():
     packages={'normal':{'PIL':'pillow','rapidocr_onnxruntime':'rapid','onnxruntime':'user-site/onnx'},
               'isolated':{'PIL':'pillow','rapidocr_onnxruntime':'rapid','onnxruntime':None}}
-    args=SimpleNamespace(engine='rapidocr',ocr_executable=None,deny_network=False,timeout=10)
+    args=SimpleNamespace(engine='rapidocr',ocr_executable=None,deny_network=False,timeout=10,rapid_python=None,runtime_dir='/__scroll_fixture_no_runtime__')
     with patch.object(env_probe,'package_visibility',return_value=(packages,None)), patch.object(env_probe.shutil,'which',return_value='/tool'):
         result=env_probe.diagnose(args)
     assert result['status']=='blocked' and result['code']=='USER_SITE_PACKAGES_HIDDEN'
@@ -239,6 +239,58 @@ def environment_fixtures():
     assert result['code']=='PYTHON_PROBE_FAILED'
 
 
+def runtime_fixtures():
+    import ocr_runtime as runtime
+    import prepare_ocr
+    from scroll_ocr import LocalOCR
+    with tempfile.TemporaryDirectory(prefix='scroll-runtime-contract-') as folder:
+        root=Path(folder).resolve()/'cache'
+        # Ordinary preparation never creates a venv or invokes package installation.
+        with patch.object(prepare_ocr.subprocess,'run',side_effect=AssertionError('implicit installation')):
+            result=prepare_ocr.prepare('rapidocr',root)
+        assert result['code']=='EXPLICIT_DEPENDENCY_PREPARATION_REQUIRED' and not root.exists()
+        # A wrong-architecture explicit interpreter must block before any writes.
+        mismatch={'version':[3,12],'architecture':'wrong-architecture'}
+        proc=SimpleNamespace(returncode=0,stdout=json.dumps(mismatch))
+        with patch.object(prepare_ocr.shutil,'which',return_value='/controlled-python'), patch.object(prepare_ocr.subprocess,'run',return_value=proc):
+            result=prepare_ocr.prepare('rapidocr',root,True,'explicit-python')
+        assert result['code']=='SUPPORTED_NATIVE_PYTHON_NOT_FOUND' and not root.exists()
+        assert result['rejected'][0]['reason']=='architecture_mismatch'
+        # Unknown/failed cache contents cannot be replaced by another preparation.
+        directory=root/runtime.component_key('vision');directory.mkdir(parents=True)
+        sentinel=directory/'unknown';sentinel.write_text('retain')
+        with patch.object(prepare_ocr.sys,'platform','darwin'), patch.object(prepare_ocr.shutil,'which',return_value='/controlled-swiftc'):
+            try:prepare_ocr.prepare('vision',root)
+            except FileExistsError:pass
+            else:raise AssertionError('unknown cache overwritten')
+        assert sentinel.read_text()=='retain'
+        # A ready marker must bind the executable bytes and contain only a local relative path.
+        executable=directory/'helper';executable.write_text('controlled-helper');executable.chmod(0o700)
+        marker={'status':'ready','component_key':runtime.component_key('vision'),'executable_relative':'helper',
+                'executable_sha256':sha256(executable.read_bytes()).hexdigest()}
+        path=directory/'runtime.json';path.write_text(json.dumps(marker))
+        assert runtime.prepared('vision',root)==str(executable)
+        executable.write_text('changed');assert runtime.prepared('vision',root) is None
+        marker['executable_relative']='../outside';path.write_text(json.dumps(marker))
+        assert runtime.prepared('vision',root) is None
+        with patch.object(runtime.platform,'machine',return_value='other-arch'):
+            assert runtime.component_key('vision')!=directory.name
+    # Failed preflight is allowed to try a second backend, but each try is real recognition.
+    def recognition(trial,paths):
+        trial.calls+=len(paths);trial.processes.append({'engine':trial.engine,'images':len(paths),'exit_code':0})
+        text='unrelated' if trial.engine=='vision' else 'LOCAL OCR PROBE 12345'
+        return [{'normalized_lines':[{'text':text}]}]
+    choices=lambda kind,*args: [('vision','/controlled-helper'),('rapidocr',sys.executable)] if kind=='auto' else [(kind,'/controlled-helper' if kind=='vision' else sys.executable)]
+    with patch('scroll_ocr.backend_candidates',side_effect=choices),patch.object(LocalOCR,'recognize',recognition):
+        engine=LocalOCR('auto')
+    assert engine.engine=='rapidocr' and engine.calls==0 and engine.processes==[]
+    assert len(engine.preflight_processes)==2 and engine.backend_selection_failures[0]['engine']=='vision'
+    with patch('scroll_ocr.backend_candidates',return_value=[]):
+        try:LocalOCR('auto')
+        except OCRFailure:pass
+        else:raise AssertionError('missing backends passed')
+
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--case', choices=['all','core','cli'],default='all');p.add_argument('--verify-output',type=Path)
     args=p.parse_args()
@@ -247,6 +299,7 @@ def main():
     if args.case in ('all','core'):
         fixtures()
         environment_fixtures()
+        runtime_fixtures()
     if args.case in ('all','cli'): cli_fixtures()
     print('SCROLL_DOMAIN_CHECKS_PASSED')
 

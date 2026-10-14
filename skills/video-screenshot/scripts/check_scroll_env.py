@@ -5,6 +5,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+from ocr_runtime import backend_candidates
 import shutil
 import subprocess
 import sys
@@ -45,7 +46,27 @@ def diagnose(args):
         return blocked('PYTHON_PROBE_FAILED', 'report_python_diagnostic', error)
     if not packages['normal'].get('PIL'):
         return blocked('PILLOW_NOT_VISIBLE', 'use_prepared_python', '当前Python看不到Pillow；使用已经准备好的Python环境，缺少时报告，不自行安装。')
+    if args.engine == 'auto':
+        try:
+            from scroll_ocr import LocalOCR
+            engine=LocalOCR('auto',args.ocr_executable,timeout=args.timeout,deny_network=args.deny_network,
+                            rapid_python=args.rapid_python,runtime_dir=args.runtime_dir)
+            report.update(status='ready',engine=engine.engine,code='LOCAL_OCR_PROBE_OK',next_action='run_scroll_text',
+                          message='本地后端已通过实际探测，统一入口将使用同一缓存/参数。',engine_probe='executed',
+                          engine_executable=engine.executable,backend_failures=engine.backend_selection_failures)
+            return report
+        except Exception as exc:
+            return blocked('NO_LOCAL_BACKEND_READY','prepare_local_backend',str(exc))
     if args.engine == 'rapidocr':
+        choices=backend_candidates('rapidocr',rapid_python=args.rapid_python,root=args.runtime_dir)
+        selected=choices[0][1]
+        if selected != sys.executable:
+            probe=subprocess.run([selected,'-s','-c',"import importlib.util,json; print(json.dumps({n:(s.origin if (s:=importlib.util.find_spec(n)) else None) for n in ['PIL','rapidocr_onnxruntime','onnxruntime']}))"],capture_output=True,text=True,timeout=15,check=False)
+            if probe.returncode:
+                return blocked('PYTHON_PROBE_FAILED','report_python_diagnostic',probe.stderr[-1000:])
+            packages={'normal':json.loads(probe.stdout),'isolated':json.loads(probe.stdout)}
+            report['packages']=packages
+            report['worker_python']=selected
         missing = [name for name in ('PIL', 'rapidocr_onnxruntime', 'onnxruntime') if not packages['isolated'].get(name)]
         hidden = [name for name in missing if packages['normal'].get(name)]
         report['missing_in_worker'] = missing
@@ -56,7 +77,7 @@ def diagnose(args):
         if missing:
             return blocked('RAPIDOCR_DEPENDENCIES_NOT_VISIBLE', 'use_prepared_python',
                            '当前OCR进程缺少可见依赖：'+', '.join(missing)+'；报告当前解释器与缺项，不自行安装。')
-    elif not shutil.which(args.ocr_executable or 'video-screenshot-vision'):
+    elif not backend_candidates('vision',args.ocr_executable,root=args.runtime_dir):
         report['swiftc'] = shutil.which('swiftc')
         return blocked('VISION_HELPER_MISSING', 'compile_helper_if_swiftc_available',
                        '本地Vision helper不可用。已有swiftc时按执行卡编译到仓库外工具目录；没有编译器则报告缺项，不自动安装。')
@@ -75,7 +96,7 @@ def diagnose(args):
             image = image.resize((1600, 480))
             image.save(image_path)
             engine = LocalOCR(args.engine, args.ocr_executable, batch_size=1,
-                              timeout=args.timeout, deny_network=args.deny_network)
+                              timeout=args.timeout, deny_network=args.deny_network,rapid_python=args.rapid_python,runtime_dir=args.runtime_dir)
             records = engine.recognize([image_path])
             report['engine_probe'] = 'executed'
             report['engine_executable'] = engine.executable
@@ -93,8 +114,10 @@ def diagnose(args):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--engine', choices=['vision','rapidocr'], default='vision')
+    p.add_argument('--engine', choices=['auto','vision','rapidocr'], default='auto')
     p.add_argument('--ocr-executable')
+    p.add_argument('--rapid-python')
+    p.add_argument('--runtime-dir')
     p.add_argument('--deny-network', action='store_true')
     p.add_argument('--timeout', type=int, default=90)
     args=p.parse_args()
