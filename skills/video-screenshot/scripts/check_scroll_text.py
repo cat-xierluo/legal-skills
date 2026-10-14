@@ -197,6 +197,26 @@ def cli_fixtures():
         assert (stage/'keep').read_text()=='payload' and list(concurrent.iterdir())==[]
         promoted=root/'promoted'; promote_new(stage,promoted)
         assert (promoted/'keep').read_text()=='payload'
+        # Real PNG-in-MOV strips expose minimum-axis rounding; inspect physical PNG pixels.
+        for kind, source_size in [('tall','2x10000'), ('wide','10000x2')]:
+            strip=root/(kind+'.mov')
+            subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=white:s='+source_size+':r=1:d=1',
+                            '-c:v','png','-pix_fmt','rgb24','-threads','1',str(strip)],check=True,capture_output=True)
+            output=root/(kind+'-output')
+            result=subprocess.run([sys.executable,str(script),'-i',str(strip),'-o',str(output),
+                                   '--engine','vision','--ocr-executable',str(helper),
+                                   '--max-pixels','10000','--max-frames','4'],capture_output=True,text=True)
+            assert result.returncode==0,(kind,result.stdout,result.stderr)
+            metadata=json.loads((output/'frames.json').read_text())
+            for entry in metadata['frames']:
+                with Image.open(output/entry['full']) as pixels:
+                    assert pixels.width*pixels.height<=10000,(kind,pixels.size)
+                    assert list(pixels.size)==entry['size']
+            verify_output(output)
+            bad_output=root/(kind+'-bad-budget')
+            result=subprocess.run([sys.executable,str(script),'-i',str(strip),'-o',str(bad_output),
+                                   '--max-pixels','9999'],capture_output=True,text=True)
+            assert result.returncode==2 and not bad_output.exists()
         # Bad input never touches existing output.
         bad_video=root/'bad.mp4';bad_video.write_text('not a video')
         p=subprocess.run([sys.executable,str(script),'-i',str(bad_video),'-o',str(root/'bad-output')],capture_output=True)

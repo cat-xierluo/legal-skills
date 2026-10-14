@@ -415,6 +415,15 @@ def run(args):
         (staging/'frames').mkdir(); (staging/'body').mkdir()
         scale = min(1., math.sqrt(args.max_pixels/(source_width*source_height)))
         width, height = max(2, int(source_width*scale)//2*2), max(2, int(source_height*scale)//2*2)
+        # A 2-pixel minimum can lift a tiny axis above its proportional scale.
+        # Re-cap the longer integer axis so actual output pixels never exceed the budget.
+        if width * height > args.max_pixels:
+            if width >= height:
+                width = max(2, (args.max_pixels // height) // 2 * 2)
+            else:
+                height = max(2, (args.max_pixels // width) // 2 * 2)
+        if width * height > args.max_pixels:
+            raise ValueError('无法在最小边长约束内满足像素预算')
         vf = f'fps=1/{args.interval},scale={width}:{height}'
         argv = [ffmpeg, '-v', 'error', '-nostdin', '-i', str(source), '-vf', vf, '-frames:v',
                 str(args.max_frames), '-threads', '1', str(staging/'frames'/'frame_%06d.png')]
