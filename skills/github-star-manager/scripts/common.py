@@ -55,3 +55,35 @@ def assess_value(repo: dict, value_config: dict = None) -> str:
     elif stars > cfg["medium_value_stars"] or 'Python' in language:
         return 'medium'
     return 'low'
+
+
+def match_categories(repo: dict, categories: list, min_score: int = 3) -> list:
+    """为仓库匹配多个分类（多标签模式，按分数降序）
+
+    统一实现（收敛审计「分类/导出分叉」）：quick_export.py 的多标签导出与
+    star_tracker._match_category 的在线单分类选择共用本评分规则——
+    关键词命中数×3 + 语言精确匹配 +2 + topic 精确匹配每个 +2。
+    """
+    if not categories:
+        return []
+
+    language = (repo.get('language') or '').lower()
+    description = (repo.get('description') or '').lower()
+    topics = [t.lower() for t in (repo.get('topics') or [])]
+    name = (repo.get('name') or '').lower()
+    full_name = (repo.get('full_name') or '').lower()
+    repo_text = f"{language} {description} {' '.join(topics)} {name} {full_name}"
+
+    matched = []
+    for cat in categories:
+        keywords = [str(kw).lower() for kw in cat.get('keywords', [])]
+        matched_keywords = sum(1 for kw in keywords if kw and kw in repo_text)
+        score = matched_keywords * 3
+        if language and language in keywords:
+            score += 2
+        score += 2 * sum(1 for topic in topics if topic in keywords)
+        if score >= min_score:
+            matched.append((cat, score))
+
+    matched.sort(key=lambda x: -x[1])
+    return [cat for cat, _ in matched]

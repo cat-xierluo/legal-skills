@@ -9,6 +9,7 @@
 ### 新增
 
 - **Agent 查询接口（批次 B，审计 §3 落地）**：新增 `scripts/star_query.py`，五个只读命令——`recent`（按真实 starred_at 时间窗列新关注，未知/非法时间单独归 unknown_time_items 不冒充）、`interests`（可比窗口的主题计数与 delta，无分类数据明确返回 needs_analysis 不暗中调模型）、`match`（项目需求关键词召回，分数只是召回依据）、`evidence`（单仓库缓存证据包，缺缓存显式 missing）、`research`（组装供 Agent 分析的最小候选+证据包）。统一 JSON envelope（schema_version/account_id/snapshot_id/status/coverage/warnings/errors），stdout 只写 JSON、日志走 stderr、失败非零、partial 显式标注
+- **显式联网取证 `evidence-fetch`（审计 §2「README 证据」回迁 / §3「取证与查询分离」）**：抓取仓库 meta/README/最新 Release 写入 `output/evidence/<owner>__<repo>/`——README 记录 blob sha 证据锚点、超限截断显式标记、原文权威不翻译；`evidence` 缓存导出升级为含 README 摘录/repo 元数据/Release/抓取时间/新鲜度（过期标 stale 并建议重取）
 - **机会卡与采用反馈（批次 C 核心，审计 §4 落地）**：新增 `scripts/opportunity.py`——机会卡七字段必答校验（signal/target/evidence/gap/hypothesis/experiment/decision）、decision 状态机（tested 必须带 run_evidence、adopted 必须再有 adoption_evidence，无证据只允许 researched/experiment_proposed）、gap 六值枚举（含「已有等价能力」合法结论）、反馈持久化到 output/feedback/、拒绝抑制查询（同候选同方向默认跳过，新 repo revision 允许重新评估）
 - **项目登记**：`output/projects/<id>.json`（project_id/capabilities/needs/constraints），match/research 对齐项目需求；未登记时 match 退化通用召回并警告
 
@@ -18,9 +19,14 @@
 - **interests 静默冒充**：分类文件不存在时此前回落内置默认分类继续计数（把「没有你自己的分类数据」伪装成分析结果）——现在明确返回 needs_analysis
 - **同秒反馈覆盖丢数据**：opportunity record 的文件名时间戳精确到秒，同候选同秒两次反馈互相覆盖——改毫秒时间戳+冲突递增序号
 
+### 改进
+
+- **分类匹配算法收敛（审计「分类/导出分叉」收口）**：`common.match_categories` 成为唯一评分实现，quick_export 多标签导出与 star_tracker 在线单分类选择（=多标签首个）共用同一规则——同一仓库两条路径不再可能评出不同分类
+
 ### 技术优化
 
-- 离线回归套件 `tests/test_batch_b.py`：48 用例覆盖五命令 envelope 合同、partial 警示、needs_analysis 拒绝、召回截断、证据缺失标记、未登记项目指路、机会卡全字段拒绝矩阵、tested/adopted 证据红线、拒绝抑制与 list 过滤；批次 A 套件 33 用例无回归
+- 离线回归套件 `tests/test_batch_b.py`：65 用例覆盖五命令 envelope 合同、partial 警示、needs_analysis 拒绝、召回截断、证据缺失标记、未登记项目指路、机会卡全字段拒绝矩阵、tested/adopted 证据红线、拒绝抑制与 list 过滤、evidence-fetch 取证闭环（mock 网络：blob_sha/截断/404 分支/陈旧缓存）、算法收敛对齐（单分类=多标签首个）；批次 A 套件 33 用例无回归
+- **真实 CLI 全链路验证（批次 A 验收标准「真实 CLI 正反例通过」）**：真实账户完整跑通 init（775 仓完整快照 complete=True）→ check（0 新增/33 更新/完整保存）→ recent（7 天窗 34 个）→ interests（30 天 142 vs 前 30 天 7，纯时间数据复算）→ match（5 命中+截断可见）→ evidence-fetch/evidence（blob_sha 锚点+新鲜度）→ research（code-video 需求召回 3 真实候选）→ opportunity validate/record/list/suppress 闭环
 
 ## [0.7.0] - 2026-10-15
 

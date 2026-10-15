@@ -247,9 +247,16 @@ python scripts/star_query.py match --project myproj --query "字幕 时间轴"
 # 单仓库缓存证据包（缺缓存显式标记 missing，不自动联网）
 python scripts/star_query.py evidence --repo owner/name
 
+# 显式联网取证（唯一联网命令）：抓 meta/README/Release 写缓存，README 记 blob sha 锚点
+python scripts/star_query.py evidence-fetch --repo owner/name
+
 # 组装供 Agent 分析的最小候选+证据包（项目必须已登记）
 python scripts/star_query.py research --project myproj --limit 5
 ```
+
+**evidence 证据缓存**：`evidence-fetch` 显式联网取证（与只读查询分离，审计 §3「取证与查询分离」），写入 `output/evidence/<owner>__<repo>/`（meta.json + readme.md），README 记录 blob sha 作为证据锚点、原文权威不翻译；`evidence` 只读缓存导出，含 README 摘录、repo 元数据、最新 Release、抓取时间与新鲜度（`--max-age-days` 过期阈值，过期标 stale 并建议重新取证）。
+
+**分类匹配统一**：`common.match_categories` 是唯一评分实现（关键词命中×3 + 语言精确 +2 + topic 精确 +2）——在线导出（单分类=多标签首个）与 quick_export（多标签）共用（收敛审计「分类/导出分叉」）。
 
 **项目登记**：`output/projects/<project_id>.json`，字段 `project_id/capabilities/needs/constraints`。match/research 读取它对齐项目需求；未登记时 match 退化为通用召回并警告。
 
