@@ -1,0 +1,24 @@
+{
+  "schema_version": "multi-agent-orchestration.runtime-observe-request.v1",
+  "binding": {
+    "path": "binding.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "commands": {
+    "run": {
+      "path": "run.command.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "tasks": {
+      "path": "tasks.command.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "worker": {
+      "path": "worker.command.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "lease_record": null,
+  "lease_release": null,
+  "observer_runtime_id": "runtime-current-001"
+}

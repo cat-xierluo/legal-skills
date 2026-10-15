@@ -72,6 +72,6 @@ Python 入口只依赖标准库，不需要 pip 安装。稀疏审计的 `du` / 
 
 ## 协作边界
 
-`git-batch-commit` 负责用户明确要求的提交拆分与说明生成，沿本 Skill 的身份/隐私与 Issue 关闭规则；项目任务源维护状态，`multi-agent-orchestration` 负责 worker 派发和会话，继续引用同一稀疏合同；`release-workflow` 负责发版与资产，本 Skill 负责日常 Git/CI 治理。
+`git-batch-commit` 负责用户明确要求的提交拆分与说明生成，沿本 Skill 的身份/隐私与 Issue 关闭规则；项目任务源维护状态，`multi-agent-orca` 负责 worker 派发和会话，继续引用同一稀疏合同；`release-workflow` 负责发版与资产，本 Skill 负责日常 Git/CI 治理。
 
 项目文档体检只在项目已有流程及授权内衔接；Git Workflow 不规定其阈值、目录、任务状态或维护 PR 副作用，也不因当前请求自动派发或发布维护任务。

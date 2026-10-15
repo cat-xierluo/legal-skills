@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
-description: 视频截图提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，用匿名标注私有语料建立脱敏双路径基线，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
-version: "0.9.1"
+description: 视频截图提取、滚动文字提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，用匿名标注私有语料建立脱敏双路径基线，再提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。显式滚动文字模式用本地 OCR 与保守正文裁区输出可复制 TXT/Markdown、原OCR和回源；该模式保存原文，与线索索引的隐私口径不同。抽帧、OCR与正文拼接由本地程序执行。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、截图审计、滚动文字提取、录屏转文字、转录页面提取。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
+version: "1.1.3"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -11,7 +11,45 @@ license: MIT
 
 从录屏中提取可追溯的证据截图。默认先在本地执行时间簇择优、内容增量精筛和高置信加载态过滤；只有当前模型支持图像输入且基础结果仍需精简时，才准备少量多模态审计材料。
 
-## 工作流
+按用户要的结果选择入口：
+
+| 目标 | 入口与结果 |
+|---|---|
+| 截图、证据截图、关键帧精筛 | 下述截图工作流，运行`extract.py`；生成图片与`_report.json`，可继续证据线索或视觉审计 |
+| 把录屏页面文字提取为TXT/Markdown | 显式使用`run_scroll.py`；生成原OCR、全页/裁图、正文与回源记录 |
+
+两条流程分别使用自己的输出目录和报告。只有用户需要可复制文字时才启动文字提取；日常截图仍按原截图入口执行。文字结果中的`receipt.json`不能代替证据线索/视觉审计需要的`_report.json`。
+
+## 滚动页面文字提取（显式模式）
+
+用户要求录屏内已有正文的可复制文字时，使用此入口。它会**保存 OCR 原文**、截图和来源路径；先选择私密、仓库外的新目录，与后述不保存原文的证据线索模式区分。
+
+阅读[滚动文字使用说明](references/scroll-text.md)：环境准备、命令、参数、错误处理和结果核查。Apple Vision与RapidOCR的实际适配、准备和选择逻辑由`scripts/`实现，reference说明如何调用。统一入口自动找到已准备的运行环境并选择可用后端。
+
+一次明确准备（已有 ffmpeg/ffprobe；Rapid需要已有、与运行进程架构一致的Python 3.10—3.12，Vision需要macOS已有Swift编译器）：
+
+```bash
+python3 scripts/prepare_ocr.py --engine both --install-deps
+```
+
+这条准备命令可从官方PyPI下载Rapid包/模型到Skill专属缓存独立venv，不改全局/user-site。未明确准备时不传`--install-deps`；正常诊断和提取不会安装。非macOS明确准备`--engine rapidocr --install-deps`。没有对应系统组件时报告缺项。
+
+```bash
+python3 scripts/run_scroll.py --check-env --deny-network
+python3 scripts/run_scroll.py -i /输入/录屏.mp4 -o /私有输出/全新目录 --deny-network
+```
+
+默认`auto`只在源OCR前用非敏感测试图选择真正可用的本地后端：Vision优先，失败后尝试已准备的RapidOCR，最多两次；都失败明确阻塞。显式`--engine vision|rapidocr`仍可用。`--deny-network`需要macOS的sandbox-exec；其他平台省略该选项并披露网络隔离未验证。后端选定后不在正文处理中静默切换。详细依赖、显式 ROI、预算和失败语义见 [滚动文字协议](references/scroll-text.md)。
+
+<!-- skill-lint:constraint SCROLL-TEXT-CONSERVATION -->
+保留全页与真实 OCR 来源，只缓存像素完全相同的输入；自动裁区证据不足时回退全页，不按近似图像吞正文，不按同文全局合并真实独立发言。用行块序列重叠拼接，保留读数变体/无法对齐片段，不凭常识改写原 ASR。
+
+<!-- skill-lint:constraint SCROLL-TEXT-LOCAL-BOUNDED -->
+限定帧数、像素、布局+正文 OCR 总数、批量与少量疑点复核预算；耗尽时保留部分/待核结果，失败不能冒成功，不覆盖已有结果。输出 TXT/MD、raw、provenance、全页/裁图、疑点和真实进程记录。页面时间与 fps 推导抽样秒数分开标注，不称整场全文。
+
+按固定分支运行：环境blocked报告缺项；提取partial保留部分/待核；不能读图保留not_reviewed；不扩大预算或语义修稿。检查 `receipt.json`、首尾和正文裁边，运行 `python3 scripts/check_scroll_text.py --verify-output <目录>`。按`review/INSTRUCTIONS.md`查看指定的相邻图；未实际查看的复核项保持`not_reviewed`。OCR 引擎零报错不证明文字全对或零遗漏。
+
+## 截图提取与精筛工作流
 
 ### 1. 确认输入与输出
 
@@ -86,7 +124,7 @@ uv run scripts/prepare_evidence_leads.py \
   -i <基础输出目录> --no-ocr
 ```
 
-脚本生成 `_evidence_leads/evidence_index.json`、最多 24 张线索组成的 4 页大图联系表，以及弱模型可直接填写的 `vision_template.json`。代码只记录主体/资质、商品/作品/服务、交易履行、沟通承诺、公开陈述、评论争议、传播时间线、文书记录等**类别和组合命中计数**；不保存 OCR 原文、企业名、商品名、价格或沟通正文。单个“商品”“消息”等宽泛词不得独立触发类别。
+脚本生成 `_evidence_leads/evidence_index.json`、最多 24 张线索组成的 4 页大图联系表，以及可直接填写的 `vision_template.json`。代码只记录主体/资质、商品/作品/服务、交易履行、沟通承诺、公开陈述、评论争议、传播时间线、文书记录等**类别和组合命中计数**；不保存 OCR 原文、企业名、商品名、价格或沟通正文。单个“商品”“消息”等宽泛词不得独立触发类别。
 
 <!-- skill-lint:constraint EVIDENCE-LEADS-NON-DESTRUCTIVE -->
 OCR 不是价值总开关。商品外观、包装/标识、作品画面、缺陷状态、经营场所和人物行为等少文字画面，仍通过连续图像主体面积进入线索排序；具体含义留给多模态或人工判断。证据线索阶段只做排序、分类和概括，绝不删除、替换或覆盖基础 `frame_*.jpg`，也不认定真实性、合法性、关联性或证明力。
@@ -99,7 +137,7 @@ python3 scripts/apply_evidence_review.py \
   -r <填写完成的 vision_template.json>
 ```
 
-应用器只接受封闭类别、可见事实和“可能用途”，拒绝“足以证明”等法律结论，并生成 `_evidence_leads/evidence_review.json`。能力较弱的模型使用默认 2 列大图，不扩大图片预算；不能读图时交付代码排序结果，并明确 `evidence_review` 未执行。详细合同见 `references/evidence-leads.md`。
+应用器只接受封闭类别、可见事实和“可能用途”，拒绝“足以证明”等法律结论，并生成 `_evidence_leads/evidence_review.json`。使用默认 2 列大图，保持图片预算；不能读图时交付代码排序结果，并明确 `evidence_review` 未执行。详细合同见 `references/evidence-leads.md`。
 
 ### 6. 按能力选择去重多模态分支
 
@@ -117,7 +155,7 @@ uv run scripts/prepare_vision_audit.py \
 <!-- skill-lint:constraint VISION-SUBTRACT-ONLY -->
 脚本先要求目标与至少一个上下文通过严格的近像素一致或高质量滚动重叠校验，再按风险分数与时间覆盖选择少量组，生成 `_vision_audit/audit_manifest.json` 与联系表。多模态层只做减法，不恢复基础层漏掉或已丢弃的图片；没有安全可删题时允许生成 0 组。按照 `references/vision-audit.md` 查看同组前后帧，输出 `_vision_review.json`。默认不得突破 8 组、24 张唯一图片；确需扩大时先向用户说明成本和隐私影响。
 
-模型视觉能力较弱或输出稳定性一般时，优先使用弱模型档位：
+需要每组只判断一个目标、默认6组/18张的小批量审计包时，使用现有`weak`配置：
 
 ```bash
 uv run scripts/prepare_vision_audit.py \
@@ -167,7 +205,7 @@ python3 scripts/apply_vision_review.py \
 - OCR 是可选增强，未安装时必须清晰提示并降级；它可能为保护新增金额或正文而比纯视觉模式多留少量帧，不能把“帧数更少”作为唯一目标。
 - `--keep-drop-candidates` 只用于人工排查基础层漏帧，不等于多模态审计；多模态生产路径不会补回这些图片。
 - 默认仅将 `_report.json` 与 `extraction_meta.json` 归档到 Skill `archive/`（不复刻截图与视频，避免重复占用磁盘）；批量回归或临时验证使用 `--no-archive`，不改变基础报告与原始输出目录。
-- 模型能力较弱时使用 `--profile weak`；不要通过放大审计组数弥补模型能力，优先保持小任务、高清目标和保守 no-op。
+- 使用 `--profile weak` 可生成每组单目标的小批量审计包；保持图片预算，对不能确认的删除选择保留。
 
 ## 依赖
 
@@ -176,6 +214,7 @@ python3 scripts/apply_vision_review.py \
 | 依赖 | 安装方式 |
 |---|---|
 | ffmpeg ≥ 5.0 | macOS: `brew install ffmpeg`<br>Linux: `sudo apt-get install ffmpeg` |
+| Swift 编译器（仅 Apple Vision helper） | 使用已安装的 macOS Command Line Tools；构建见滚动文字入口，不自动安装 |
 | Python ≥ 3.10 | macOS: `brew install python` |
 | uv | macOS: `brew install uv` |
 
@@ -188,8 +227,11 @@ python3 scripts/apply_vision_review.py \
 
 同一可选依赖也用于证据线索多锚点分类：`uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py -i <基础输出目录>`。缺失时清晰降级为视觉主体与时序排序，不影响基础抽帧。
 
+滚动文字统一入口自动使用本Skill准备的独立Python（含Pillow）；仅Vision环境则使用当前已配置Pillow的Python。固定Rapid依赖见`config/rapidocr-requirements.txt`，由上方明确准备命令一次安装到专属venv；不经uv隐式准备。Apple Vision底层由macOS提供，Swift适配源码在Skill内。第三方包/模型保留其许可证，不提交到本技能Git。
+
 ## 验收与安全边界
 
+- 新文字模式运行 `python3 scripts/run_scroll.py --verify-output <结果目录>` 做独立绑定检查；开发回归运行 `python3 scripts/check_scroll_text.py --case all`，再复查真实录屏输出；其自含夹具不替代 OCR 语义质量证明。
 - 运行 `uv run scripts/check_pipeline.py --case all`，要求全部领域回归通过并输出 `DOMAIN_CHECKS_PASSED`。
 - 评测底座可单独运行 `uv run scripts/check_pipeline.py --case benchmark`；该合成 CLI 回归只证明评测合同、FFmpeg 兼容和脱敏汇总可用，不证明真实截图准确率。
 - 输出事务可单独运行 `uv run scripts/check_pipeline.py --case transactional-output`，必须覆盖坏视频、非法参数、符号链接、未知文件、下游产物保护、成功替换和提交回滚。
@@ -200,6 +242,8 @@ python3 scripts/apply_vision_review.py \
 
 ## 所需权限与安全说明
 
+- **文字模式留存**：`scroll_text.py` 显式保存 raw/TXT/MD/来源/进程记录到仓库外新目录，仅缓存完全相同的像素。0700 staging 完整后用本机不覆盖原子提交；运行错误保留 staging/部分产物供核查。它不使用截图路径的旧目录替换/归档规则。
+- **环境与本地引擎**：OCR 子进程仅继承 PATH/HOME/TMPDIR/语言等运行环境，不传云凭据；macOS `--deny-network` 实际隔离 OCR。明确prepare --install-deps才会联网下载到专属venv，正常run入口不安装。Swift/helper 或 RapidOCR 属本地受信代码，使用系统重命名接口做原子提交。
 - **本地文件访问**：读取用户明确提供的视频；图片与复核 JSON 只写入显式输出目录，Skill `archive/` 仅写入 `_report.json` 与 `extraction_meta.json` 元数据副本；不扫描无关目录。
 - **本地进程执行**：以参数数组调用本机 `ffmpeg`、`ffprobe` 和 Python 脚本，不使用 shell 拼接执行用户输入。
 - **事务性替换**：新结果只写入目标同级 staging；成功提交前不改动旧目录。旧目录必须通过所有权标记，或通过旧版报告与实际帧清单一致性校验；若发现证据线索、视觉复核、精选结果、符号链接或未知文件，拒绝覆盖并提示改用新目录。

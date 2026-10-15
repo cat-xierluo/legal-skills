@@ -2,7 +2,7 @@
 name: dsh-plugin-dev
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.0"
+version: "0.6.2"
 license: MIT
 description: DeepSeek Harness（DSH）插件的设计、开发、装载验证、版本迁移与发布审查指引（版本感知）。在用户要为 DSH Desktop 开发插件、把 Pi/Hermes 插件迁移到 DSH、做隔离装载实验、排查插件在真实宿主的行为、跟进 DSH 版本升级适配，或在发布前做机械审查与验收（dsh.bundle / dsh.client 双面包工件契约、inject/external 对账、主题变量、类型化 locale）时使用。不要用于普通 npm 包审查或与 DSH 无关的 agent 项目。
 ---
@@ -45,7 +45,7 @@ harness 根解析优先级：`--harness-root` 参数 → `DSH_HARNESS_ROOT` 环�
 
 | 模式 | 时机 | 必做 |
 |---|---|---|
-| 设计预检 | 写代码前 | 过一遍 [development-standards](references/dsh-plugin-development-standards.md) 契约节 + 本 SKILL 踩坑；事件/slot 名先溯源 |
+| 设计预检 | 写代码前 | 过一遍 [development-standards](references/dsh-plugin-development-standards.md) 契约节 + 本 SKILL 踩坑；事件/slot 名先溯源；涉客户端界面/交互设计时先读 [ui-ux-workbench](references/ui-ux-workbench.md) |
 | 快速审查 | 第三方/草稿 | 机械 + 事实 + 契约；结论带 NOT_VERIFIED |
 | 正式验收 | 发布/声称完成前 | 全部 + 候选绑定证据（commit + 干净 profile 安装 + boot 无错 + 工具真实调用 + 浏览器渲染截图；缺任一 → NOT_VERIFIED） |
 
@@ -53,7 +53,7 @@ harness 根解析优先级：`--harness-root` 参数 → `DSH_HARNESS_ROOT` 环�
 
 ## 必须守住的边界
 
-- **版本匹配**：开发依据的源码/文档版本必须与本机 Desktop 内嵌运行时一致（npm `latest` = 内嵌版；`next` 是预发布无桌面内嵌）。错位研究必须按实物重核。
+- **版本匹配**：开发依据的源码/文档版本必须与本机 Desktop 内嵌运行时一致——**锚点是安装版实物**（安装包 manifest 直读），不是 npm channel（2026-09-30 实测 npm `latest` 与安装版不同步；「`next` 是预发布线、无桌面内嵌」是历史观察，每次以实物为准）。错位研究必须按实物重核。
 - **生产隔离**：实验只用 `DSH_HOME` 隔离目录 + 合成数据；不读生产 sessions/凭据/settings；动共享 userData 前快照后恢复；关生产实例前后向用户报备。
 - **退出时序**：SIGTERM 后**分步验证进程真正消失**再执行恢复命令——单例锁会把 premature 的 `open -a` 转发给未死尽的实验实例。
 - **不伪造验证**：mock 冒烟 ≠ 宿主验证 ≠ GUI 验证，三层分开陈述；宿主日志是 Host 半体权威证据；缺失标 NOT_VERIFIED。
@@ -71,13 +71,16 @@ harness 根解析优先级：`--harness-root` 参数 → `DSH_HARNESS_ROOT` 环�
 - [会话投影 Cookbook](references/session-projection-cookbook.md)：sessionProjections 契约、wire 通知、数字 turnId、水位与 fork。
 - [Desktop 装载与隔离实验](references/desktop-load-and-isolation.md)：profile 工作区、装载实证、DSH_HOME/单例锁/SIGTERM/向导状态/renderer 已知问题。
 - [0.1.7-rc.2 事实快照](references/harness-facts-017rc2.md)：版本矩阵、内嵌包速查、与 0.1.2 规范差异清单。
+- [插件工作台与运行视图设计](references/ui-ux-workbench.md)：新增可视化插件、重排主界面或用户反馈「能跑但不愿使用」时先读——真实入口观察、版式按产品任务选择、跨插件可复用经验与产品自有任务源的边界。
 - [踩坑日志](references/pitfalls-log.md)：按症状索引的实测坑（含出处），跨版本累积。
 - [0.1.2 开发规范（历史权威）](references/dsh-plugin-development-standards.md)：插件形态/分发/工具/事件/slot/client 工件契约/主题/locale 全量规范 + 14 条实测坑与 harness 参考文件索引。
 - 实证仓库：`maoscripts/dsh-plugins`（evidence 与 PR 审查修复记录，本 Skill 事实的原始出处）。
 
 ## 已知限制（继承 lint）
 
-- 正则级解析不构建 AST：复杂 patch 结构、嵌套词典转人工（WARN/NOT_VERIFIED，不出假 PASS）。
+- 词典平价为**静态叶路径解析**（嵌套对象按 `a.x` 完整路径比对；同文件 const 展开可解析合并，跨文件展开/计算键/方法简写转 NOT_VERIFIED），不执行词典代码。
+- patch 结构检查识别简单 insert/id/name 行；复杂 YAML 形态转人工（NOT_VERIFIED），不出假 PASS。
 - 产物 bare builtin require、JSX CJK 检测为启发式，需人工确认。
-- 平台模块表/纯度正则/主题变量集均为运行时从 `--harness-root` 读取的当前事实，不预置版本号。
+- client 源扫描范围固定 `src/client`（ts/tsx/js/mjs/jsx/css）；其他源布局（如 `lib/client`）不在机械覆盖内，0 文件时明示 WARN 转人工。
+- 平台模块表/纯度正则/主题变量集均为运行时从 `--harness-root` 读取的当前事实，不预置版本号；事实源缺失时对应检查降级 NOT_VERIFIED，不误报 FAIL。
 - 不自动执行目标仓库 build/test（报告应跑的命令）。

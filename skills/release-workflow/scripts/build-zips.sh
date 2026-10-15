@@ -25,6 +25,12 @@ for skill_dir in "$SKILLS_ROOT"/*/; do
 
     skill_name=$(basename "$skill_dir")
 
+    # Frozen legacy runtimes are not discoverable Skills and must not become new packages.
+    if [ ! -f "$skill_dir/SKILL.md" ]; then
+        echo "skip no-skill: $skill_name"
+        continue
+    fi
+
     # 注意: -L 对带尾斜杠的路径返回 false,要去掉斜杠再测
     if [ "$SKIP_SYMLINK" = 1 ] && [ -L "${skill_dir%/}" ]; then
         echo "skip symlink: $skill_name"

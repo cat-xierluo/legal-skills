@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+# test-render-runtime-profile.sh — renderer hook 契约确定性测试（v2.11.0 P0-② 后续修复）。
+#
+# 覆盖：
+#   1. settings / registry 两路 provider env isolation 默认渲染 hook-capable 命令（无 --bare），
+#      wrapper + --setting-sources project,local + --model 契约保留；
+#   2. --no-mcp 注入在两路默认路径下保留；
+#   3. --claude-bare 显式 opt-in：命令含 --bare，输出上下文标记 degraded/unhooked；
+#   4. --claude-bare 错用（非 claude-code / 非 provider 路径 / 关闭 env isolation）fail-closed exit 64；
+#   5. 标准 render 输出直接通过 spawn-worker 的 claude hook 检查（无需 PM 字符串 surgery）。
+#
+# 确定性：不启 tmux、不 spawn worker、不联网；registry/settings 用 config/ 下的 example 文件。
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+RENDERER="$SCRIPT_DIR/render-runtime-profile.sh"
+SPAWN_WORKER="$SCRIPT_DIR/spawn-worker.sh"
+SETTINGS_EXAMPLE="$SCRIPT_DIR/../config/claude-provider-settings.example.json"
+REGISTRY_EXAMPLE="$SCRIPT_DIR/../config/claude-provider-registry.example.json"
+TMP_ROOT=$(mktemp -d)
+trap 'rm -rf "$TMP_ROOT"' EXIT
+PROMPT_FILE="$TMP_ROOT/prompt.md"
+printf 'render runtime profile hook contract test\n' > "$PROMPT_FILE"
+
+passed=0
+failed=0
+
+ok() {
+  printf 'PASS: %s\n' "$1"
+  passed=$((passed + 1))
+}
+
+bad() {
+  printf 'FAIL: %s\n' "$1" >&2
+  failed=$((failed + 1))
+}
+
+assert_contains() {
+  local haystack="$1" needle="$2" label="$3"
+  if printf '%s' "$haystack" | grep -Fq -- "$needle"; then
+    ok "$label"
+  else
+    bad "$label (missing: ${needle})"
+  fi
+}
+
+assert_not_contains() {
+  local haystack="$1" needle="$2" label="$3"
+  if printf '%s' "$haystack" | grep -Fq -- "$needle"; then
+    bad "$label (unexpected: ${needle})"
+  else
+    ok "$label"
+  fi
+}
+
+assert_eq() {
+  local actual="$1" expected="$2" label="$3"
+  if [ "$actual" = "$expected" ]; then
+    ok "$label"
+  else
+    bad "$label (expected=${expected} actual=${actual})"
+  fi
+}
+
+# 渲染输出按 shell 安全引用（quote_words 的 %q 形态，逗号/空格等会被转义）；
+# 断言与 hook 检查前先解码回参数序列，避免对引用转义形态做脆弱断言。
+decode_command() {
+  local rendered="$1"
+  local -a decoded_words=()
+  eval "decoded_words=($rendered)"
+  local joined="" word first=1
+  for word in "${decoded_words[@]}"; do
+    if [ "$first" -eq 1 ]; then
+      joined="$word"
+      first=0
+    else
+      joined="$joined $word"
+    fi
+  done
+  printf '%s' "$joined"
+}
+
+render_command() {
+  local rendered
+  rendered=$(bash "$RENDERER" "$@" --output command)
+  decode_command "$rendered"
+}
+
+render_shell_context() {
+  # 输出 shell 格式并 eval 到全局（RENDERER 输出本就按 eval 设计，见 smoke-tmux-worker.sh）。
+  local shell_out
+  shell_out=$(bash "$RENDERER" "$@" --output shell)
+  eval "$shell_out"
+}
+
+render_prompt_context() {
+  bash "$RENDERER" "$@" --output prompt-context
+}
+
+SETTINGS_ARGS=(--backend claude-code --settings "$SETTINGS_EXAMPLE" --model glm53)
+REGISTRY_ARGS=(--backend claude-code --provider-registry "$REGISTRY_EXAMPLE" --api-provider glm --model glm52)
+
+echo "=== 1. settings / registry 默认渲染 hook-capable 命令（无 --bare） ==="
+settings_cmd=$(render_command "${SETTINGS_ARGS[@]}")
+assert_contains "$settings_cmd" "claude-provider-env.sh" "settings 默认走 provider env wrapper"
+assert_contains "$settings_cmd" "--setting-sources project,local" "settings 默认保留 project,local setting-sources"
+assert_contains "$settings_cmd" "--settings" "settings 默认透传 --settings"
+assert_not_contains "$settings_cmd" "--bare" "settings 默认无 --bare"
+
+registry_cmd=$(render_command "${REGISTRY_ARGS[@]}")
+assert_contains "$registry_cmd" "claude-provider-env.sh" "registry 默认走 provider env wrapper"
+assert_contains "$registry_cmd" "--setting-sources project,local" "registry 默认保留 project,local setting-sources"
+assert_contains "$registry_cmd" "--api-provider glm" "registry 默认透传 --api-provider"
+assert_contains "$registry_cmd" "glm-5.3" "registry 默认解析 model alias"
+assert_not_contains "$registry_cmd" "--bare" "registry 默认无 --bare"
+
+render_shell_context "${SETTINGS_ARGS[@]}"
+assert_eq "$PROVIDER_ENV_ISOLATION" "settings-env-wrapper(setting-sources=project,local)" \
+  "settings 默认 isolation 标签无 degraded 标记"
+render_shell_context "${REGISTRY_ARGS[@]}"
+assert_eq "$PROVIDER_ENV_ISOLATION" "registry-env-wrapper(provider=glm setting-sources=project,local)" \
+  "registry 默认 isolation 标签无 degraded 标记（smoke-tmux-worker 契约）"
+registry_ctx=$(render_prompt_context "${REGISTRY_ARGS[@]}")
+assert_contains "$registry_ctx" \
+  "Env Isolation: registry-env-wrapper(provider=glm setting-sources=project,local)" \
+  "registry prompt-context 默认 Env Isolation 行原样"
+
+echo "=== 2. --no-mcp 注入保留 ==="
+settings_no_mcp_cmd=$(render_command "${SETTINGS_ARGS[@]}" --no-mcp)
+assert_contains "$settings_no_mcp_cmd" "strict-mcp-config" "settings + --no-mcp 注入 strict-mcp-config"
+assert_contains "$settings_no_mcp_cmd" '--mcp-config {"mcpServers":{}}' "settings + --no-mcp 注入空 MCP config"
+assert_not_contains "$settings_no_mcp_cmd" "--bare" "settings + --no-mcp 仍默认无 --bare"
+registry_no_mcp_cmd=$(render_command "${REGISTRY_ARGS[@]}" --no-mcp)
+assert_contains "$registry_no_mcp_cmd" "strict-mcp-config" "registry + --no-mcp 注入 strict-mcp-config"
+assert_contains "$registry_no_mcp_cmd" '--mcp-config {"mcpServers":{}}' "registry + --no-mcp 注入空 MCP config"
+assert_not_contains "$registry_no_mcp_cmd" "--bare" "registry + --no-mcp 仍默认无 --bare"
+
+echo "=== 3. --claude-bare 显式 opt-in ==="
+settings_bare_cmd=$(render_command "${SETTINGS_ARGS[@]}" --claude-bare)
+assert_contains "$settings_bare_cmd" "--bare" "settings + --claude-bare 命令含 --bare"
+render_shell_context "${SETTINGS_ARGS[@]}" --claude-bare
+assert_eq "$PROVIDER_ENV_ISOLATION" \
+  "settings-env-wrapper(setting-sources=project,local)+bare(degraded/unhooked)" \
+  "settings bare opt-in 标记 degraded/unhooked"
+registry_bare_cmd=$(render_command "${REGISTRY_ARGS[@]}" --claude-bare)
+assert_contains "$registry_bare_cmd" "--bare" "registry + --claude-bare 命令含 --bare"
+registry_bare_ctx=$(render_prompt_context "${REGISTRY_ARGS[@]}" --claude-bare)
+assert_contains "$registry_bare_ctx" \
+  "Env Isolation: registry-env-wrapper(provider=glm setting-sources=project,local)+bare(degraded/unhooked)" \
+  "registry bare opt-in prompt-context 标记 degraded/unhooked"
+
+echo "=== 4. --claude-bare 错用 fail-closed ==="
+set +e
+misuse_oauth_out=$(bash "$RENDERER" --backend claude-oauth --claude-bare 2>&1)
+misuse_oauth_rc=$?
+misuse_nosettings_out=$(bash "$RENDERER" --backend claude-code --claude-bare 2>&1)
+misuse_nosettings_rc=$?
+misuse_noisolation_out=$(bash "$RENDERER" "${SETTINGS_ARGS[@]}" --no-provider-env-isolation --claude-bare 2>&1)
+misuse_noisolation_rc=$?
+set -e
+assert_eq "$misuse_oauth_rc" "64" "--claude-bare 拒绝 claude-oauth backend"
+assert_eq "$misuse_nosettings_rc" "64" "--claude-bare 拒绝无 settings/registry 的 claude-code"
+assert_eq "$misuse_noisolation_rc" "64" "--claude-bare 拒绝关闭 provider env isolation"
+assert_contains "$misuse_oauth_out$misuse_nosettings_out$misuse_noisolation_out" \
+  "--claude-bare only applies to claude-code provider workers" "错用报错保留诊断文本"
+
+echo "=== 5. 标准 render 输出直接过 spawn-worker hook 检查（无 PM 字符串 surgery） ==="
+# 从 spawn-worker.sh 机械提取真实检查函数（fail-closed 契约来源），避免测试内复刻逻辑漂移。
+hook_fn_source=$(sed -n '/^claude_hook_disable_reason() {$/,/^}$/p' "$SPAWN_WORKER")
+if [ -n "$hook_fn_source" ]; then
+  ok "spawn-worker hook 检查函数提取成功"
+  eval "$hook_fn_source"
+  for label_cmd in \
+    "settings interactive:$settings_cmd" \
+    "settings batch:$(render_command "${SETTINGS_ARGS[@]}" --mode batch --prompt-file "$PROMPT_FILE")" \
+    "registry interactive:$registry_cmd" \
+    "registry batch:$(render_command "${REGISTRY_ARGS[@]}" --mode batch --prompt-file "$PROMPT_FILE")" \
+    "settings no-mcp:$settings_no_mcp_cmd"; do
+    case_name=${label_cmd%%:*}
+    COMMAND=${label_cmd#*:}
+    hook_reason=$(claude_hook_disable_reason) && hook_blocked=1 || hook_blocked=0
+    if [ "$hook_blocked" -eq 0 ] && [ -z "$hook_reason" ]; then
+      ok "${case_name} 标准 render 通过 spawn-worker hook 检查"
+    else
+      bad "${case_name} 标准 render 被 spawn-worker hook 检查拒绝, reason=${hook_reason}"
+    fi
+  done
+  # 反向校验：bare opt-in 渲染必须仍被同一检查拦下（spawn-worker 侧还需显式授权）。
+  COMMAND=$settings_bare_cmd
+  bare_reason=$(claude_hook_disable_reason) && bare_blocked=1 || bare_blocked=0
+  if [ "$bare_blocked" -eq 1 ] && printf '%s' "$bare_reason" | grep -Fq -- '--bare'; then
+    ok "bare opt-in 渲染仍被 spawn-worker hook 检查拦截, reason 提及 --bare"
+  else
+    bad "bare opt-in 渲染未被 spawn-worker hook 检查拦截, blocked=${bare_blocked} reason=${bare_reason}"
+  fi
+else
+  bad "spawn-worker hook 检查函数提取失败, claude_hook_disable_reason 函数边界变化"
+fi
+
+echo "=== 6. 显式认证模式与 provider 名称无关（假凭证、离线子进程） ==="
+WRAPPER="$SCRIPT_DIR/claude-provider-env.sh"
+STUB_BIN="$TMP_ROOT/bin"
+mkdir -p "$STUB_BIN"
+cat > "$STUB_BIN/claude" <<'STUB'
+#!/usr/bin/env bash
+for key in ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY; do
+  state=unset
+  if [ "${!key+x}" = x ]; then
+    state=empty
+    [ -z "${!key}" ] || state=present
+  fi
+  printf '%s=%s\n' "$key" "$state"
+done
+if [ "${ANTHROPIC_AUTH_TOKEN:-}" = fake-profile-token ] || [ "${ANTHROPIC_API_KEY:-}" = fake-profile-token ]; then
+  echo PROFILE_CREDENTIAL=selected
+fi
+STUB
+chmod +x "$STUB_BIN/claude"
+AUTH_SETTINGS="$TMP_ROOT/minimax.settings.json"
+KEY_SETTINGS="$TMP_ROOT/key.settings.json"
+BOTH_SETTINGS="$TMP_ROOT/both.settings.json"
+jq -n '{env:{ANTHROPIC_BASE_URL:"https://minimax.example.invalid/anthropic",ANTHROPIC_AUTH_TOKEN:"fake-profile-token"}}' > "$AUTH_SETTINGS"
+jq -n '{env:{ANTHROPIC_BASE_URL:"https://gateway.example.invalid/anthropic",ANTHROPIC_API_KEY:"fake-profile-token"}}' > "$KEY_SETTINGS"
+jq '.env.ANTHROPIC_API_KEY="fake-second-credential"' "$AUTH_SETTINGS" > "$BOTH_SETTINGS"
+probe() {
+  local rendered
+  rendered=$(bash "$RENDERER" "$@" --output command) || return $?
+  ( export PATH="$STUB_BIN:$PATH" ANTHROPIC_AUTH_TOKEN=fake-parent-token ANTHROPIC_API_KEY=fake-parent-key
+    eval "$rendered" )
+}
+expect_auth_error() {
+  local actual=0
+  "$@" > "$TMP_ROOT/auth-error.out" 2>&1 || actual=$?
+  assert_eq "$actual" 64 "认证参数错误在执行前拒绝"
+}
+out=$(probe --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type auth_token)
+assert_contains "$out" ANTHROPIC_AUTH_TOKEN=present "settings 显式 token 保留 Bearer 凭证"
+assert_contains "$out" ANTHROPIC_API_KEY=unset "settings 显式 token 不回填 API key"
+assert_contains "$out" PROFILE_CREDENTIAL=selected "父进程凭证被选择的 profile 替换"
+out=$(probe --backend claude-code --settings "$KEY_SETTINGS" --model test --auth-type api_key)
+assert_contains "$out" ANTHROPIC_AUTH_TOKEN=unset "settings 显式 key 不回填 token"
+assert_contains "$out" ANTHROPIC_API_KEY=present "settings 显式 key 保留 API key"
+out=$(probe --backend claude-code --settings "$AUTH_SETTINGS" --model test)
+assert_contains "$out" ANTHROPIC_API_KEY=present "默认兼容 both，不凭 minimax 文件名或 URL 自动改单变量"
+expect_auth_error probe --backend claude-code --settings "$BOTH_SETTINGS" --model test --auth-type auth_token
+expect_auth_error probe --backend claude-code --settings "$BOTH_SETTINGS" --model test --auth-type api_key
+expect_auth_error probe --backend claude-code --settings "$BOTH_SETTINGS" --model test --auth-type auth_token_clear_api_key
+out=$(probe --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type auth_token_clear_api_key)
+assert_contains "$out" ANTHROPIC_API_KEY=empty "settings 显式清空模式保留空串语义"
+expect_auth_error bash "$RENDERER" --backend codex --model test --auth-type auth_token
+expect_auth_error bash "$RENDERER" --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type auth_token --no-provider-env-isolation
+expect_auth_error bash "$RENDERER" --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type unknown
+AUTH_REGISTRY="$TMP_ROOT/registry.json"
+for auth_mode in both auth_token api_key auth_token_clear_api_key; do
+  jq -n --arg mode "$auth_mode" '{providers:{minimax:{base_url:"https://minimax.example.invalid/anthropic",auth_type:$mode,auth_token:"fake-profile-token"}}}' > "$AUTH_REGISTRY"
+  out=$(probe --backend claude-code --provider-registry "$AUTH_REGISTRY" --api-provider minimax --model test)
+  case "$auth_mode" in
+    both) expected_token=present; expected_key=present ;;
+    auth_token) expected_token=present; expected_key=unset ;;
+    api_key) expected_token=unset; expected_key=present ;;
+    auth_token_clear_api_key) expected_token=present; expected_key=empty ;;
+  esac
+  assert_contains "$out" "ANTHROPIC_AUTH_TOKEN=$expected_token" "registry $auth_mode 的 token 状态"
+  assert_contains "$out" "ANTHROPIC_API_KEY=$expected_key" "registry $auth_mode 的 key 状态"
+done
+expect_auth_error bash "$RENDERER" --backend claude-code --provider-registry "$AUTH_REGISTRY" --api-provider minimax --model test --auth-type auth_token
+expect_auth_error bash "$WRAPPER" --provider-registry "$AUTH_REGISTRY" --api-provider minimax --model test --auth-type auth_token -- true
+summary=$(bash "$WRAPPER" --settings "$AUTH_SETTINGS" --model test --auth-type auth_token --print-env-summary -- true 2>&1)
+assert_contains "$summary" auth_token=present "summary 如实标注存在的 token"
+assert_contains "$summary" api_key=unset "summary 如实标注 unset 的 key"
+assert_not_contains "$summary" fake-profile-token "summary 不输出凭证值"
+
+echo "=== 7. settings.env 不能覆盖 wrapper 控制状态 ==="
+CONTROL_SETTINGS="$TMP_ROOT/control.settings.json"
+for control_key in AUTH_TYPE SETTINGS_AUTH_TYPE PROVIDER_REGISTRY API_PROVIDER MODEL MODEL_ALIAS RESOLVED_MODEL SETTINGS SETTING_SOURCES PRINT_ENV_SUMMARY NO_MCP SCRIPT_DIR_CPE; do
+  jq --arg key "$control_key" '.env[$key]="both"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+  expect_auth_error bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c 'exit 91'
+  diagnostic=$(< "$TMP_ROOT/auth-error.out")
+  assert_contains "$diagnostic" "reserved for wrapper control: $control_key" "保留控制变量 $control_key 在执行前拒绝"
+done
+# This would previously change branches after the settings single-auth check.
+jq --arg registry "$AUTH_REGISTRY" '.env.PROVIDER_REGISTRY=$registry | .env.API_PROVIDER="minimax"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+expect_auth_error bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c 'exit 91'
+# Multi-line custom values stay values, including assignment-looking text;
+# proxy and application env remain supported (no blanket env allowlist).
+jq '.env.CUSTOM_WORKER_NOTE="first\nAUTH_TYPE=both\nPROVIDER_REGISTRY=other.json" | .env.HTTPS_PROXY="http://proxy.example.invalid:8080"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+multiline_rc=0
+bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c '
+  [[ "$CUSTOM_WORKER_NOTE" == $'"'"'first\nAUTH_TYPE=both\nPROVIDER_REGISTRY=other.json'"'"' ]] &&
+  [[ "$HTTPS_PROXY" == http://proxy.example.invalid:8080 ]] &&
+  [[ "${ANTHROPIC_API_KEY+x}" != x ]] &&
+  [[ "$ANTHROPIC_AUTH_TOKEN" == fake-profile-token ]]
+' || multiline_rc=$?
+assert_eq "$multiline_rc" 0 "多行业务 env 与代理保留，显式单认证仍成立"
+jq '.env.CUSTOM_WORKER_NOTE="first\u0000AUTH_TYPE=both"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+expect_auth_error bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c 'exit 91'
+
+printf 'SUMMARY: pass=%d fail=%d\n' "$passed" "$failed"
+[ "$failed" -eq 0 ]

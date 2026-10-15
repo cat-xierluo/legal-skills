@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.2] - 2026-10-14
+
+### 修复（审计 DPD-AUDIT-001，F01–F08 逐项绑定最小反例入回归）
+
+- F02 lint §7：词典平价由正则键集改为**静态叶路径解析**——嵌套键路径错位（zh `a.x/b.y` vs en `a.y/b.x`）此前压扁成集合误报平价 PASS，现按完整路径比对报 FAIL；同文件 const 展开可解析（`{...base}` 缺键被抓），跨文件展开/计算键/方法简写转 NOT_VERIFIED 不出假 PASS；字符串值内花括号不再干扰解析。
+- F03 lint §2：patch 引用由文本 includes 改为结构核——纯注释 patch、包名仅在注释或非 id/name 值位置不再假 PASS（FAIL 或转人工），合法 insert 行 id/name 声明仍 PASS。
+- F01 lint §4/§5：harness 事实源缺失时相关检查**降级 NOT_VERIFIED 不误报 FAIL**——inject 目标 workspace 核验、产物 bare require 对账、构建 external 对账三处；自注入/非字符串等事实无关 FAIL 保留。
+- F04 lint §3：exports["."] 支持字符串、`exports` 顶层字符串与条件导出形态（default/node/import/require 优先序）——合法字符串 exports 不再误报入口不存在；无法解析的条件形态转 NOT_VERIFIED。
+- F05 lint §6/§7：client 源扫描扩展 **js/mjs/jsx** 并明示范围（0 文件时 WARN 未覆盖≠无违规）；locale 词典候选兼容 `locales.js` 与 `locales/zh.js` 布局。
+- F06 lint §5：`deps.alwaysBundle` 语义修正为**强制内联**（tsdown 语义），不再当 external 误报；新增 alwaysBundle × dsh.client.external 方向冲突 FAIL。
+- F07 入口：frontmatter 版本对齐（0.6.0 落后 CHANGELOG 两版 → 0.6.2）；ui-ux-workbench（0.6.1 新增）挂接入 SKILL.md 参考节与设计预检路径。
+- F08 porting-semantics 第 2 条事实勘误：JS `encodeURI` 对非 ASCII **同样**百分号编码（`encodeURI('中文')`=`%E4%B8%AD%E6%96%87`，emoji 同理，`%` 两边都编码为 `%25`）——真实差分在保留字符集：`encodeURI` 不编码 `? # & = + $ , ; : / @` 与 `! ' ( ) * - _ . ~`，Python `quote` 默认仅保留 `/`。quotePath safe 集对齐与跨语言差分对照的必要性不变（106 样本实证保留）。
+- 附带：pitfalls-log「mock 假体 per-open 隔离」与「域名仅下划线」两坑拆为独立两行（此前挤行把域名校验出处挤出列）。
+- test-lint 回归 23 → 41 项断言（每个修复绑定审计反例与合法对照）。
+
 ## [0.6.1] - 2026-10-12
 
 ### 新增

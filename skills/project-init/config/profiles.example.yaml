@@ -34,7 +34,7 @@ profiles:
         - git-batch-commit          # 智能 Git 批量提交
         - git-workflow              # Git 全生命周期工作流
         - release-workflow          # GitHub 发布工作流
-        - multi-agent-orchestration # 多 Agent 并行编排
+        - multi-agent-orca # 多 Agent 并行编排
         - cross-agent-coordination  # 跨平台 Agent 协调
         - agent-email               # Agent 邮件通信
     claude_md: development

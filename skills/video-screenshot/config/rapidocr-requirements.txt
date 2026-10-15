@@ -1,0 +1,5 @@
+# Dedicated Python 3.10-3.12 environment; do not install in global/user site.
+rapidocr-onnxruntime==1.4.4
+onnxruntime==1.23.2
+Pillow==12.3.0
+PyYAML==6.0.3

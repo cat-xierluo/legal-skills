@@ -67,7 +67,7 @@ Monorepo 按功能边界判断：同一模块的相关 PR 可共用功能线；�
 
 ## 4. 子 worker 与子 PR
 
-只有确需并行写入或独立子项交付时才开子 Worker 分支；单 Agent 不强制套两层 PR。刷新远端，从本波 origin/<integration_branch> 建短分支与隔离Worktree，核起点等于冻结integration_head_sha。通过multi-agent-orchestration派发时，从其真实安装路径定位scripts/spawn-worker.sh，显式传 --base-ref origin/<integration_branch> 与 --branch-lifecycle ephemeral-worker；launcher不属于git-workflow的scripts。承载功能线的受控会话声明long-lived。
+只有确需并行写入或独立子项交付时才开子 Worker 分支；单 Agent 不强制套两层 PR。刷新远端，从本波 origin/<integration_branch> 建短分支与隔离Worktree，核起点等于冻结integration_head_sha。通过multi-agent-orca派发时，从其真实安装路径定位scripts/spawn-worker.sh，显式传 --base-ref origin/<integration_branch> 与 --branch-lifecycle ephemeral-worker；launcher不属于git-workflow的scripts。承载功能线的受控会话声明long-lived。
 
 完整子PR range的身份/隐私base是真实功能线，PR base也须相同：
 

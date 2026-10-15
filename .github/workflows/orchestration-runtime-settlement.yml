@@ -3,12 +3,12 @@ name: Orchestration Runtime Settlement
 on:
   pull_request:
     paths:
-      - "skills/multi-agent-orchestration/**"
+      - "skills/multi-agent-orca/**"
       - ".github/workflows/orchestration-runtime-settlement.yml"
   push:
     branches: [main]
     paths:
-      - "skills/multi-agent-orchestration/**"
+      - "skills/multi-agent-orca/**"
       - ".github/workflows/orchestration-runtime-settlement.yml"
 
 permissions:
@@ -66,7 +66,7 @@ jobs:
           print(f"Node source mode={stat.S_IMODE(source_info.st_mode):04o}; private mode=0700; SHA256={copied}")
           PY_NODE
       - name: Validate runtime and lease evidence with isolated fixtures
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: |
           python3 scripts/test_runtime_settlement.py -v
           python3 scripts/test_provider_lease_runtime.py -v
@@ -76,10 +76,10 @@ jobs:
           bash scripts/test-settle-liveness.sh
           bash scripts/test-settle-command.sh
       - name: Capture and invalidate verification evidence with isolated fixtures
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: python3 -B scripts/test_verification_evidence.py -v
       - name: Exercise GUI evidence and handoff consumers with real sibling dependencies
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: |
           set -euo pipefail
           export ZCODE_GUI_COLLECTOR="$PWD/scripts/zcode-session-evidence.py"
@@ -95,19 +95,19 @@ jobs:
           python3 -B scripts/test-zcode-gui-artifacts-consumer.py
           python3 -B scripts/test-zcode-gui-default-consumer.py
       - name: Check changed entrypoint syntax
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: |
           bash -n scripts/pm-orchestrate.sh
           python3 -m py_compile scripts/runtime_settlement.py scripts/runtime-reconcile.py scripts/provider-lease.py
       - name: Check continuous Wave readiness before resource creation
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: |
           bash -n scripts/orca-wave-prepare.sh
           python3 -B scripts/test_continuation_readiness.py -v
           bash scripts/test-orca-wave-lifecycle.sh
           bash scripts/test-pm-monitor.sh
       - name: Check closed ZCode recovery and exact failed-attempt adoption
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: |
           env -u LD_LIBRARY_PATH python3 -B scripts/test_zcode_closed_recovery.py -v
           python3 -B scripts/test-zcode-orca-launcher.py
@@ -115,7 +115,7 @@ jobs:
           bash scripts/test-completion-authority.sh
           bash scripts/test-pm-reauthorize.sh
       - name: Check business artifact admission and actual file acceptance
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: |
           python3 scripts/test_business_artifact.py
           bash scripts/test-dispatch-value-gate.sh
@@ -123,7 +123,7 @@ jobs:
           bash scripts/test-review-acceptance-gate.sh
           bash scripts/test-spawn-worker-verification.sh
       - name: Check task memory profiles through the complete isolated spawn
-        working-directory: skills/multi-agent-orchestration
+        working-directory: skills/multi-agent-orca
         run: |
           env -u LD_LIBRARY_PATH python3 -c 'import sys; print(sys.version)'
           bash -n scripts/spawn-worker.sh

@@ -1,0 +1,1700 @@
+#!/usr/bin/env bash
+# spawn-worker.sh — create an isolated worktree and tmux session for one worker.
+#
+# PM 派活前必带 skill 路径清单（task #7 / §3.7）：
+#   非 Claude Code 的 worker（codebuddy / qoderwork / 跨工具 backend）跑在独立 cwd，
+#   默认看不到 Claude Code skills 目录。PM 在调本脚本 spawn 之前，应先收集本项目
+#   相关 sibling skill 的绝对路径，校验存在后追加到 --command 后的 worker prompt 的
+#   "Project Skills" 段（标准模板见 SKILL.md §3.7）：
+#     ls <project-root>/<sibling-skill>/SKILL.md   # 逐个校验路径存在
+#   任何涉及验证码的任务，PM 必须把 captcha-auto 的 SKILL.md 绝对路径写进该段——
+#   这是 §3.6「worker 必须自动调 captcha-auto、禁止用户手动输入」的前置条件。
+#   本脚本只负责隔离与启动，不自动探测/注入 skill 路径；路径收集是 PM 的派发前职责。
+#
+# Trust + permission dialog 兜底（v1.18.3 + v1.18.4）：
+#   - 启动后可能弹 trust dialog（选 1 = Trust folder only）：trust_auto() 同步处理 30s。
+#   - 即便 --permission-mode acceptEdits -y，每个工具调用仍弹 "Do you want to proceed?"：
+#     - permission_auto() 同步处理 60s（v1.18.3 起改用 `2 Enter` 数字键）。
+#     - permission_auto_bg() 后台 watcher 持续 7200s（disown 到后台），覆盖首次 dialog
+#       出现在 60s 之后的情况。
+#   - v1.18.4：默认行为按 backend 分支化（DEC-112）：
+#     * claude-code 实测 `--permission-mode auto --bare` 不弹 dialog，默认全关
+#       （spawn 秒级返回，避免 trust_auto 30s + permission_auto 60s 共 90s 空等，
+#       见 2026-07-10 某多 worker Wave 实战 follow-up + DEC-112）；
+#     * 其他白名单 backend（codebuddy / qoder-cn / codex）仍默认启
+#       （这些 backend 真弹 dialog）。
+#   - 6 个 --*/--no-* flag 均可 force override 默认值，详见 usage 段与 DEC-112。
+#   - v1.20.2（Task-019/020/021，2026-08-05 folia Wave-1 实战）：
+#     * Task-019：claude-code provider-isolation 默认 --bare（render-runtime-profile.sh）
+#       与 install-guard fail-closed 互斥。曾实现 --bare 自动降级 prompt-only
+#       （CLAUDE_CODE_BARE_AUTO_DEGRADE=1）；v2.11.0 复盘撤销：hook 不可证明时
+#       一律 fail-closed，只有显式 --allow-prompt-only-install-guard + 授权来源
+#       才可降级（自动降级会静默放弃机械安装门禁，见 CHANGELOG v2.11.0）。
+#     * Task-020：claude-code worker 首启弹 "external imports" dialog（CLAUDE.md @import 触发），
+#       v1.18.4 默认关 trust/permission 不覆盖此类。external_imports_auto() 单独监控（option 1 默认放行），
+#       claude-code 默认开（EXTERNAL_IMPORTS_AUTO=1，--no-external-imports-auto opt-out）。
+#     * Task-021：permission_auto_bg 启动改 setsid（macOS 无 setsid 时 fallback nohup+disown），
+#       spawn-worker 被 SIGTERM 时 watcher 尽量存活；codebuddy 同步监控逼近 PM Bash 2min timeout，
+#       文档建议 PM Bash timeout 调到 180s+（SKILL §6）。
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+
+# v2.0：PATH 注入 helper（2026-07-12 实战坑：claude 在 ~/.local/bin，wrapper 后
+# which 不到）。在 flag 解析之前注入，确保后续 tmux 内 wrapper 派 Claude Code
+# 也能复用同一 PATH。
+# shellcheck source=ensure-claude-path.sh
+source "$SCRIPT_DIR/ensure-claude-path.sh"
+ensure_claude_in_path
+# Orca 的当前 worktree RPC 是运行时事实来源；不要依赖 TERM_PROGRAM / ORCA_WORKTREE_ID
+# 是否被宿主传入。CLI 选择顺序与版本匹配的 orca-cli skill 保持一致。
+# shellcheck source=orca-runtime.sh
+source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=orca-coordinator.sh
+source "$SCRIPT_DIR/orca-coordinator.sh"
+# shellcheck source=harness-backend-policy.sh
+source "$SCRIPT_DIR/harness-backend-policy.sh"
+# v2.30.0：远程节点派发的一次性 receipt 模块（references/25；本地 spawn 不传
+# --remote-dispatch-receipt 时下面的 consume 分支不触发，行为逐字节不变）。
+# shellcheck source=remote-dispatch-receipt.sh
+source "$SCRIPT_DIR/remote-dispatch-receipt.sh"
+# shellcheck source=provider-lease-root.sh
+source "$SCRIPT_DIR/provider-lease-root.sh"
+# shellcheck source=spawn-worker-deps.sh
+source "$SCRIPT_DIR/spawn-worker-deps.sh"
+
+PROJECT_DIR=""
+BRANCH=""
+WORKTREE=""
+SESSION=""
+BASE_REF="main"
+BRANCH_LIFECYCLE="ephemeral-worker"
+COMMAND=""
+DRY_RUN=0
+WORKER_BACKEND=""
+WORKER_BACKEND_EXPLICIT=0
+PM_HARNESS_ASSERTION=""
+REMOTE_DISPATCH_RECEIPT=""
+PM_HARNESS=""
+PM_HARNESS_SOURCE=""
+PM_HARNESS_CHAIN_JSON="[]"
+PM_ALLOWED_WORKER_BACKENDS=""
+WORKER_BACKEND_CANONICAL=""
+WORKER_COMMAND_SHA256=""
+RUNTIME_PROFILE=""
+API_PROVIDER=""
+MODEL=""
+PROVIDER_SLOT=""
+PROVIDER_LEASE_FILE=""
+PROVIDER_LEASE_ROOT=""
+PROVIDER_LEASE_LIMIT=""
+PROVIDER_LEASE_KEY=""
+PROVIDER_LEASE_ACQUIRED=0
+PERSONAL_CONFIG_FILE="${MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG:-$(cd "$SCRIPT_DIR/.." && pwd -P)/config/orchestration-personal.json}"
+ENV_ISOLATION=""
+WAVE_ID=""
+WAVE_WORKER_ID=""
+VERIFY_COMMANDS=()
+VERIFY_COMMAND_SOURCE=""
+REQUIRE_VERIFICATION=0
+VERIFICATION_CONTRACT=""
+VERIFICATION_TASK_ID=""
+PROJECT_CONFIG_FILE=""
+WORKER_TYPE=""
+WITH_SENTINEL=0
+SENTINEL_POLL_INTERVAL=5
+SENTINEL_MAX_WAIT=7200
+KEEP_TMUX_ON_TERMINAL=0
+# v1.18.4：trust/permission dialog 监控默认值改 backend 分支化（DEC-112）
+# - *_OVERRIDE 标志在 flag 解析时被置 1，由 resolve_backend_defaults() 检查并跳过
+# - claude-code 默认全关：实测 --permission-mode auto + --bare 不弹 dialog，省 90s 空等
+# - 其他白名单 backend 默认全开：codebuddy/qoder-cn/codex 真弹 dialog
+TRUST_AUTO_OVERRIDE=0
+TRUST_AUTO=1
+PERMISSION_AUTO_OVERRIDE=0
+PERMISSION_AUTO=1
+PERMISSION_AUTO_BG_OVERRIDE=0
+PERMISSION_AUTO_BG=1  # v1.18.4：bg watcher 独立控制；与 sync permission_auto 解耦
+# v1.20.2 Task-020：external imports dialog 监控（claude-code CLAUDE.md @import 触发的第三类 dialog）。
+# claude-code 默认开（v1.18.4 关掉了 trust/permission，但 external imports 是 claude 特有的另一类）；
+# 其他 backend 无此 dialog，默认关省空等。
+EXTERNAL_IMPORTS_AUTO_OVERRIDE=0
+EXTERNAL_IMPORTS_AUTO=0
+# v2.11.0（2026-09 复盘修复）：配额预检门（P0-①）。quota_preflight.py 的结论
+# 与显式绕过通道的授权来源，写入 METADATA 与 authority receipt 供审计。
+QUOTA_PREFLIGHT_OVERRIDE=0
+QUOTA_PREFLIGHT_OVERRIDE_SOURCE=""
+QUOTA_PREFLIGHT_STATUS=""
+QUOTA_PREFLIGHT_LANE=""
+ADD_DIRS=()
+ALLOW_PATHS=()
+FROZEN_ALLOWED_WRITE_PATHS=()
+# v2.14.0：角色分离写范围纪律。reviewer 默认只写自身 Session Context；
+# 修复被审分支需要 --review-repair-grant 显式授权（任务合同）。
+ROLE="implementer"
+REVIEW_REPAIR_GRANT=""
+# v2.0：轻量模式（无 worktree）。默认 0 (走 worktree 隔离)；--no-worktree 显式置 1，
+# 或自动检测 --project 不是 git 仓时置 1 并打印 SPAWN_WORKER_LIGHTWEIGHT_AUTO。
+# 详见 SKILL.md §2.1.1 + references/10-parallel-lessons.md T6 实战坑。
+LIGHTWEIGHT_OVERRIDE=0
+LIGHTWEIGHT_MODE=0
+LIGHTWEIGHT_AUTO=0
+# v2.3：Orca 终端模式 auto-detect。detect_orca_mode() 输出：
+#   "auto"                    — worktree current 证明当前项目由 Orca 管理
+#   "force_tmux"              — --no-orca-mode 显式 opt-out / 非 ORCA 终端 / 跨 repo
+#   "lightweight_forces_tmux" --no-worktree 强制走 tmux（ORCA worktree 必须有 git 仓）
+#   "missing_orca"            — 已选择 Orca 路径但 CLI/runtime 不可用（fail-loud）
+ORCA_MODE=""
+ORCA_WORKTREE_ID="${ORCA_WORKTREE_ID:-}"  # 兼容旧调用方；命中 auto 后以 worktree current 为准
+ORCA_WORKTREE_PATH=""    # 仅 auto 时填（git rev-parse --show-toplevel）
+ORCA_PROJECT_TOPLEVEL="" # `orca worktree current` 已验证的 PROJECT_DIR git top
+ORCA_EXPECTED_REPO_ID="" # 从 current worktree id 冻结，create 后必须一致
+# Preserve only the caller's injected selector before this variable becomes the worker handle.
+ORCA_CALLER_TERMINAL_HANDLE="${ORCA_TERMINAL_HANDLE:-}"
+ORCA_TERMINAL_HANDLE=""  # 形如 "term_xxx"，仅 auto 时填
+ORCA_APP_VERSION=""      # 来自 orca status --json
+ORCA_CAPABILITIES_JSON=""  # 来自 orca status --json capabilities 数组
+ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
+ORCA_SETUP_MODE="skip"  # Repo Setup runs before MAO can install Session Context/guards.
+NO_ORCA_MODE=0
+DISPATCH_PROFILE_TRANSPORT="auto"
+DISPATCH_PROFILE_JSON="null"
+DISPATCH_LAUNCH_OUTCOME="planned"
+# v2.1.1（Task-033）：ORCA supervised 注册（run-create + task-create + worker-start --terminal）。
+# --orca-supervised 启用时，ORCA 模式 spawn 后把 worker terminal 纳入 supervised 体系。
+# worker 出现在 worker-list，绑定 task + worktree resource，可被 send/reply/inbox + gate 管理。
+ORCA_SUPERVISED=0
+TASK_SPEC=""
+TASK_TITLE=""
+ORCA_RUN_ID=""
+ORCA_TASK_ID=""
+ORCA_COORDINATOR_HANDLE=""
+ORCA_EXPECTED_RUNTIME_ID=""
+ORCA_ZCODE_NATIVE_REQUESTS=""
+BORROW_EXISTING_WORKTREE=""
+BORROWED_LOCK_ACQUIRED=0
+BORROWED_CONTRACT_SHA256=""
+ORCA_SUPERVISED_RUN_ID=""    # helper 输出，仅 --orca-supervised 时填
+ORCA_SUPERVISED_COORDINATOR_HANDLE=""  # Run 绑定的 PM terminal，用于 consumer fencing
+ORCA_SUPERVISED_TASK_ID=""   # helper 输出
+ORCA_SUPERVISED_DISPATCH_ID=""  # helper 输出（ctx_xxx）
+INSTALL_AUTHORIZATION_SOURCE=""
+AUTHORIZED_INSTALL_COMMANDS=()
+ALLOWED_SHELL_COMMANDS=()
+PYTHON_RUNTIME_SYMLINK=""
+# --deps-mode（FaroPDF 2026-08-30 连环坑）：node_modules 依赖补偿模式。
+# 默认 auto=现行为完全不变（无 --allow-install-command 时软链）；auto 推断 local、
+# 显式 symlink/local 的解析都在 spawn-worker-deps.sh 的 resolve_deps_mode 内完成。
+DEPS_MODE="auto"
+EFFECTIVE_ALLOWED_SHELL_COMMANDS=()
+ALLOW_PROMPT_ONLY_INSTALL_GUARD=0
+INSTALL_GUARD_DEGRADATION_SOURCE=""
+INSTALL_GUARD_MODE="hook"
+SHELL_POLICY="exact_allowlist"
+INSTALL_AUTH_JSON=""
+AUTHORITY_RECEIPT_FILE=""
+AUTHORITY_RECEIPT_SHA256=""
+AUTHORIZATION_SNAPSHOT_SHA256=""
+COMPLETION_AUTHORITY_FILE=""
+INSTALL_GUARD_SETTINGS_FILE=""
+GIT_EXPECTED_NAME=""
+GIT_EXPECTED_EMAIL=""
+GIT_INTEGRATION_BASE=""
+GIT_PUSH_REMOTE="origin"
+SAFE_PUSH_COMMAND=""
+GUARD_ATTESTATION_FILE=""
+
+# shellcheck source=spawn-worker-flags.sh
+source "$SCRIPT_DIR/spawn-worker-flags.sh"
+parse_spawn_worker_args "$@"
+
+[ -n "$PROJECT_DIR" ] || { usage; exit 64; }
+[ -n "$SESSION" ] || { usage; exit 64; }
+case "$BRANCH_LIFECYCLE" in
+  ephemeral-worker|long-lived) ;;
+  *) echo "ERROR: --branch-lifecycle must be ephemeral-worker or long-lived (got: $BRANCH_LIFECYCLE)" >&2; exit 64 ;;
+esac
+# v2.14.0：角色与 reviewer 修复授权校验（fail-closed，任何副作用之前）
+case "$ROLE" in
+  implementer|reviewer) ;;
+  *) echo "ERROR: --role must be implementer or reviewer (got: $ROLE)" >&2; exit 64 ;;
+esac
+if [ -n "$REVIEW_REPAIR_GRANT" ] && [ "$ROLE" != "reviewer" ]; then
+  echo "ERROR: --review-repair-grant requires --role reviewer" >&2
+  exit 64
+fi
+if [ "$ROLE" = "reviewer" ] && [ -z "$REVIEW_REPAIR_GRANT" ] && [ "${#ALLOW_PATHS[@]}" -gt 0 ]; then
+  echo "ERROR: --role reviewer without --review-repair-grant may only write its own" >&2
+  echo "       Session Context; drop --allow-paths or grant branch repair explicitly" >&2
+  exit 64
+fi
+# v2.14.0 R1 边角修复：reviewer 带修复授权却完全不带 --allow-paths 时，
+# scope_guard_setup 会因 ALLOW_PATHS 为空整体跳过（不注入 SCOPE_GUARD_* env、
+# 不装 PreToolUse hook），Session Context 约束与 config/*.local.yaml 永久拒绝
+# 在该次 spawn 全部失守。空写范围的修复授权是合同违规配置 → 在任何
+# worktree/terminal/lease 副作用之前 fail-closed，要求显式给出修复写范围。
+if [ "$ROLE" = "reviewer" ] && [ -n "$REVIEW_REPAIR_GRANT" ] && [ "${#ALLOW_PATHS[@]}" -eq 0 ]; then
+  echo "ERROR: --role reviewer with --review-repair-grant requires explicit --allow-paths" >&2
+  echo "       (empty allow paths would leave the reviewer scope guard uninstalled; fail-closed)" >&2
+  exit 64
+fi
+# Freeze task-authored write scope before any worktree/provider/terminal side
+# effect.  scope_guard_setup may later synthesize a reviewer Session Context
+# pattern; that runtime control path must never become tracked-file deletion
+# authority.  Exact git-rm authority consumes this independent snapshot.
+FROZEN_ALLOWED_WRITE_PATHS=("${ALLOW_PATHS[@]}")
+command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
+command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }
+
+# v2.27.3: --base-ref must be a ref name (main, origin/main, refs/heads/x).
+# A bare 40-hex sha (or 7-40 hex that resolves only as a commit) would be recorded
+# into METADATA.base_ref and later deadlock pm-cleanup-worker between
+# INTEGRATION_TARGET_MISMATCH (argument=main vs metadata=sha) and
+# PR_BASE_MISMATCH (expected=sha vs actual=main). Reject early, before any
+# worktree/provider/terminal/Dispatch side effect.
+# 字符类覆盖大小写十六进制（[0-9a-fA-F]）——先前 [0-9a-f] 让大写 sha
+# （如 96A304DF…）绕过守卫并原样写入 METADATA.base_ref，重现同款死锁。
+spawn_worker_check_base_ref_is_ref() {
+  local value="$1"
+  [ -n "$value" ] || return 0
+  if [[ "$value" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "ERROR: SPAWN_WORKER_BASE_REF_MUST_BE_REF: $value (--base-ref must be a ref name like 'main' or 'origin/<branch>'; pass a branch or remote-tracking ref, not a 40-character commit sha)" >&2
+    return 64
+  fi
+  if [[ "$value" =~ ^[0-9a-fA-F]{7,40}$ ]] \
+     && [ -d "$PROJECT_DIR" ] \
+     && git -C "$PROJECT_DIR" rev-parse --verify --quiet "$value^{commit}" >/dev/null 2>&1; then
+    # Resolves as a commit — only allow if it is also a real ref name.
+    # refs/heads|remotes|tags 查找本身大小写敏感：分支名恰为大写 hex 形态且
+    # 真实存在时（如 DEADBEEF2）仍放行，否则一律拒绝（包含大小写混合 sha）。
+    if ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$value" 2>/dev/null \
+       && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/$value" 2>/dev/null \
+       && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/tags/$value" 2>/dev/null; then
+      echo "ERROR: SPAWN_WORKER_BASE_REF_MUST_BE_REF: $value (--base-ref must be a ref name like 'main' or 'origin/<branch>'; pass a branch or remote-tracking ref, not a commit-ish)" >&2
+      return 64
+    fi
+  fi
+  return 0
+}
+spawn_worker_check_base_ref_is_ref "$BASE_REF" || exit $?
+
+DETECTED_PM_HARNESS=""
+if [ -n "$REMOTE_DISPATCH_RECEIPT" ]; then
+  # v2.30.0 远程节点派发（references/25）：PM 本机已验证的 harness 事实经一次性
+  # receipt 传输到本节点，替代本机无法证明的 ssh 进程祖先链。authority 不放大：
+  # 载明的 harness/chain 随后仍走原版 enforce_harness_backend_policy_chain 交集。
+  if [ -n "$PM_HARNESS_ASSERTION" ]; then
+    echo "ERROR: --remote-dispatch-receipt and --pm-harness are mutually exclusive (fail-closed)" >&2
+    exit 64
+  fi
+  remote_receipt_consume --file "$REMOTE_DISPATCH_RECEIPT" \
+    --expect-worker-backend "$WORKER_BACKEND" \
+    --expect-branch "$BRANCH" \
+    --expect-session "$SESSION" || exit $?
+  DETECTED_PM_HARNESS="$REMOTE_DISPATCH_RECEIPT_PM_HARNESS"
+  PM_HARNESS_CHAIN_JSON="$REMOTE_DISPATCH_RECEIPT_PM_HARNESS_CHAIN_JSON"
+  PM_HARNESS_SOURCE="remote_dispatch_receipt"
+  detected_pm_harness="$DETECTED_PM_HARNESS"
+else
+  detect_pm_harness "$PROJECT_DIR" || exit $?
+  detected_pm_harness="$DETECTED_PM_HARNESS"
+fi
+if [ -n "$PM_HARNESS_ASSERTION" ]; then
+  asserted_pm_harness=$(canonical_harness_backend "$PM_HARNESS_ASSERTION") || {
+    echo "ERROR: unsupported --pm-harness: $PM_HARNESS_ASSERTION (fail-closed)" >&2
+    exit 64
+  }
+  if [ "$asserted_pm_harness" != "$detected_pm_harness" ]; then
+    echo "ERROR: --pm-harness=$asserted_pm_harness conflicts with detected harness=$detected_pm_harness; assertion cannot elevate authority (fail-closed)" >&2
+    exit 64
+  fi
+fi
+enforce_harness_backend_policy_chain \
+  "$detected_pm_harness" "$PM_HARNESS_CHAIN_JSON" "$WORKER_BACKEND" || exit $?
+WORKER_BACKEND="$WORKER_BACKEND_CANONICAL"
+PM_HARNESS_SOURCE=${PM_HARNESS_SOURCE:-verified_runtime}
+printf 'SPAWN_WORKER_HARNESS_POLICY: pm=%s worker=%s allowed=%s chain=%s source=%s\n' \
+  "$PM_HARNESS" "$WORKER_BACKEND_CANONICAL" "$PM_ALLOWED_WORKER_BACKENDS" \
+  "$PM_HARNESS_CHAIN_JSON" "$PM_HARNESS_SOURCE"
+
+if [ "${#AUTHORIZED_INSTALL_COMMANDS[@]}" -gt 0 ] && [ -z "$INSTALL_AUTHORIZATION_SOURCE" ]; then
+  echo "ERROR: --allow-install-command requires --install-authorization-source (fail-closed)" >&2
+  exit 64
+fi
+if [ "${#AUTHORIZED_INSTALL_COMMANDS[@]}" -eq 0 ] && [ -n "$INSTALL_AUTHORIZATION_SOURCE" ]; then
+  echo "ERROR: --install-authorization-source requires at least one --allow-install-command" >&2
+  exit 64
+fi
+for install_command in "${AUTHORIZED_INSTALL_COMMANDS[@]}"; do
+  [ -n "$install_command" ] || { echo "ERROR: --allow-install-command cannot be empty" >&2; exit 64; }
+done
+for shell_command in "${ALLOWED_SHELL_COMMANDS[@]}"; do
+  [ -n "$shell_command" ] || { echo "ERROR: --allow-shell-command cannot be empty" >&2; exit 64; }
+done
+for verify_command in "${VERIFY_COMMANDS[@]}"; do
+  if python3 "$SCRIPT_DIR/dependency-install-guard.py" --classify-install "$verify_command"; then
+    echo "ERROR: --verify-cmd may acquire/install dependencies and cannot receive implicit Shell authority: $verify_command; use a separate explicitly authorized install step (fail-closed)" >&2
+    exit 64
+  fi
+done
+if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -eq 1 ] && [ -z "$INSTALL_GUARD_DEGRADATION_SOURCE" ]; then
+  echo "ERROR: --allow-prompt-only-install-guard requires a non-empty authorization source" >&2
+  exit 64
+fi
+git_identity_field_count=0
+[ -n "$GIT_EXPECTED_NAME" ] && git_identity_field_count=$((git_identity_field_count + 1))
+[ -n "$GIT_EXPECTED_EMAIL" ] && git_identity_field_count=$((git_identity_field_count + 1))
+[ -n "$GIT_INTEGRATION_BASE" ] && git_identity_field_count=$((git_identity_field_count + 1))
+if [ "$git_identity_field_count" -ne 0 ] && [ "$git_identity_field_count" -ne 3 ]; then
+  echo "ERROR: --git-expected-name, --git-expected-email and --git-integration-base must be provided together (fail-closed)" >&2
+  exit 64
+fi
+
+case "$WORKER_BACKEND" in
+  claude-code|claude_code|codebuddy)
+    INSTALL_GUARD_MODE="hook"
+    ;;
+  codex|zcode|zcode-cli|minimax-code|mcode|qoder-cn|qoderclicn|qwenwork-cn)
+    if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
+      echo "ERROR: backend $WORKER_BACKEND has no configured PreToolUse install guard; explicit --allow-prompt-only-install-guard is required (fail-closed)" >&2
+      exit 64
+    fi
+    INSTALL_GUARD_MODE="prompt_only_degraded"
+    ;;
+  *)
+    echo "ERROR: unknown backend cannot prove dependency-install enforcement: $WORKER_BACKEND" >&2
+    exit 64
+    ;;
+esac
+
+PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd -P)
+
+# Resolve the task's verification contract before Orca detection, provider lease,
+# worktree creation, terminal creation, Task/Dispatch registration, or prompt
+# injection. The resulting strings are the exact Shell authority; they are never
+# tokenized, normalized, or converted into install authorization.
+resolve_verification_commands || exit $?
+validate_verification_commands || exit $?
+
+# v2.0：轻量模式判定（SKILL §2.1.1）。
+# 1. --no-worktree 显式：LIGHTWEIGHT_MODE=1，BRANCH 不必填。
+# 2. --project 不是 git 仓 且用户没显式 --worktree/--branch：自动切轻量并打印
+#    SPAWN_WORKER_LIGHTWEIGHT_AUTO（向后兼容 SKILL 文档承诺，不破老调用）。
+# 3. --project 是 git 仓 且用户没 --no-worktree：保持默认 worktree 模式，BRANCH 必填。
+PROJECT_IS_GIT=0
+if git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  PROJECT_IS_GIT=1
+fi
+if [ "$LIGHTWEIGHT_OVERRIDE" -eq 0 ] && [ "$PROJECT_IS_GIT" -eq 0 ] && [ -z "$WORKTREE" ] && [ -z "$BRANCH" ]; then
+  LIGHTWEIGHT_MODE=1
+  LIGHTWEIGHT_AUTO=1
+  echo "SPAWN_WORKER_LIGHTWEIGHT_AUTO: $PROJECT_DIR is not a git work tree, switching to lightweight mode"
+fi
+
+if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+  # 轻量模式：清空 branch，把 worker cwd 直接指向 project_dir；--worktree 可显式覆盖子目录
+  BRANCH=""
+  if [ -z "$WORKTREE" ]; then
+    WORKTREE="$PROJECT_DIR"
+  fi
+else
+  # 默认 worktree 模式：--branch 必填
+  [ -n "$BRANCH" ] || { echo "ERROR: --branch is required in worktree mode (or pass --no-worktree for lightweight)" >&2; usage; exit 64; }
+fi
+
+safe_branch=$(printf '%s' "$BRANCH" | tr '/[:space:]' '-' | tr -cd 'A-Za-z0-9._-')
+if [ -z "$WORKTREE" ]; then
+  WORKTREE=".claude/worktrees/tmux-$safe_branch"
+fi
+case "$WORKTREE" in
+  /*) ;;
+  *) WORKTREE="$PROJECT_DIR/$WORKTREE" ;;
+esac
+
+SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
+if [ -z "$COMMAND" ]; then
+  case "$WORKER_BACKEND_CANONICAL" in
+    claude-code) COMMAND="claude --permission-mode auto" ;;
+    codex) COMMAND="codex" ;;
+    codebuddy) COMMAND="codebuddy" ;;
+    qoder-cn) COMMAND="qoderclicn --permission-mode auto" ;;
+    zcode-cli) COMMAND="zcode --mode yolo" ;;
+    minimax-code) COMMAND="mcode" ;;
+    qwenwork-cn)
+      echo "ERROR: qwenwork-cn requires an explicit rendered --command with a dedicated --config-dir; see references/27-qwenwork-cli-worker.md" >&2
+      exit 64 ;;
+    zcode) COMMAND="python3 '$SCRIPT_DIR/zcode-worker-driver.py'" ;;
+    *) echo "ERROR: no default command for backend=$WORKER_BACKEND_CANONICAL" >&2; exit 64 ;;
+  esac
+  # v2.9.4：标记命令来自 backend 默认值（用户未显式 --command）——route_suggest
+  # 自动补选 provider 后据此决定是否安全地包装 provider env（见
+  # spawn-worker-route-suggest.sh route_suggest_wrap_command）。
+  COMMAND_WAS_DEFAULT=1
+  echo "SPAWN_WORKER_COMMAND_DEFAULT: backend=$WORKER_BACKEND_CANONICAL command=$COMMAND"
+fi
+
+# Bind the declared backend to the executable that will actually be launched.
+# This identity gate is independent of the dependency install guard: degrading
+# hooks to prompt-only can never authorize a differently labelled executable.
+validate_worker_command_backend() {
+  python3 "$SCRIPT_DIR/validate-worker-command.py" \
+    --backend "$WORKER_BACKEND_CANONICAL" \
+    --command "$COMMAND" \
+    --trusted-claude-wrapper "$SCRIPT_DIR/claude-provider-env.sh" \
+    --trusted-zcode-driver "$SCRIPT_DIR/zcode-worker-driver.py"
+}
+
+if ! WORKER_COMMAND_SHA256=$(validate_worker_command_backend); then
+  echo "ERROR: worker backend/command identity mismatch: $WORKER_COMMAND_SHA256 (fail-closed)" >&2
+  exit 64
+fi
+printf 'SPAWN_WORKER_COMMAND_POLICY: backend=%s command_sha256=%s\n' \
+  "$WORKER_BACKEND_CANONICAL" "$WORKER_COMMAND_SHA256"
+
+# Explicit opt-in only. Bind actual launcher before quota/lease/worktree effects;
+# this never grants existing-session reuse or a zero incremental budget.
+MEMORY_TASK_PROFILE="${SPAWN_WORKER_MEMORY_TASK_PROFILE:-}"
+MEMORY_TASK_HEAP_MB=""
+MEMORY_TASK_ORIGINAL_COMMAND="$COMMAND"
+MEMORY_TASK_BINDING_B64=""
+if [ -n "$MEMORY_TASK_PROFILE" ]; then
+  if ! memory_task_binding=$(python3 "$SCRIPT_DIR/memory_task_admission.py" bind-spawn \
+      --profile "$MEMORY_TASK_PROFILE" --command "$COMMAND" --backend "$WORKER_BACKEND_CANONICAL"); then
+    echo "ERROR: task memory profile/actual Node binding refused before resources" >&2
+    exit 64
+  fi
+  MEMORY_TASK_HEAP_MB=$(printf '%s' "$memory_task_binding" | jq -r '.heap_mb // empty')
+  MEMORY_TASK_BINDING_B64=$(printf '%s' "$memory_task_binding" | python3 -c 'import sys,json,base64; print(base64.urlsafe_b64encode(json.dumps(json.load(sys.stdin),sort_keys=True,separators=(",",":")).encode()).decode())')
+fi
+
+# Resolve the actual COMMAND only after the verified PM policy chain. This
+# plans dispatch; it does not replace any quota, authority or runtime gate.
+if [ "$NO_ORCA_MODE" -eq 1 ]; then
+  [ "$DISPATCH_PROFILE_TRANSPORT" = "auto" ] || { echo "ERROR: dispatch profile conflicts with --no-orca-mode" >&2; exit 64; }
+  DISPATCH_PROFILE_TRANSPORT="direct"
+fi
+profile_input=$(python3 - "$WORKER_BACKEND_CANONICAL" "$PM_HARNESS_CHAIN_JSON" "$DISPATCH_PROFILE_TRANSPORT" "$ORCA_SUPERVISED" "$ORCA_ZCODE_NATIVE_REQUESTS" "$COMMAND" "$WORKER_BACKEND_EXPLICIT" <<'PROFILE_REQUEST'
+import json,sys
+backend,chain,transport,supervised,root,command,explicit=sys.argv[1:]
+request={"backend":backend,"harness_chain":json.loads(chain),"transport":transport,
+         "explicit_selection":explicit=="1","supervised":supervised=="1"}
+if root: request["native_requests_root"]=root
+print(json.dumps({"request":request,"command":command}))
+PROFILE_REQUEST
+) || exit 64
+DISPATCH_PROFILE_JSON=$(printf '%s' "$profile_input" | python3 "$SCRIPT_DIR/dispatch-profile-adapter.py" \
+  --skill-root "$(cd "$SCRIPT_DIR/.." && pwd -P)" --personal-config "$PERSONAL_CONFIG_FILE") || exit 64
+if [ "$(printf '%s' "$DISPATCH_PROFILE_JSON" | jq -r '.transport')" = "orca-native-supervised" ]; then
+  ORCA_SUPERVISED=1
+  ORCA_ZCODE_NATIVE_REQUESTS=$(printf '%s' "$DISPATCH_PROFILE_JSON" | jq -er '.required_spawn_flags | index("--orca-zcode-native-requests") as $i | .[$i+1]') || exit 64
+  [ "$LIGHTWEIGHT_MODE" -eq 0 ] || { echo "ERROR: native dispatch requires isolated Orca worktree mode" >&2; exit 64; }
+  [ -n "$TASK_SPEC" ] || [ -n "$ORCA_TASK_ID" ] || { echo "ERROR: native dispatch requires --task-spec or --orca-task-id" >&2; exit 64; }
+fi
+printf 'SPAWN_WORKER_DISPATCH_PROFILE: %s\n' "$(printf '%s' "$DISPATCH_PROFILE_JSON" | jq -r '.profile')"
+
+# MiniMax batch owns its original input; reject incompatible lifecycle before
+# route/provider/worktree/Session Context/terminal side effects.
+if [ "$WORKER_BACKEND_CANONICAL" = "minimax-code" ]; then
+  MINIMAX_STARTUP_MODE=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input \
+    --supervised "$ORCA_SUPERVISED" --task-id "${ORCA_TASK_ID:-}") || exit 64
+  if [ "$MINIMAX_STARTUP_MODE" = "batch" ]; then
+    # Native exec has no TUI input channel; even explicitly requested UI-auto
+    # watchers must not send keys or a second task into its bootstrap stream.
+    TRUST_AUTO=0; TRUST_AUTO_OVERRIDE=1
+    PERMISSION_AUTO=0; PERMISSION_AUTO_OVERRIDE=1
+    PERMISSION_AUTO_BG=0; PERMISSION_AUTO_BG_OVERRIDE=1
+    EXTERNAL_IMPORTS_AUTO=0; EXTERNAL_IMPORTS_AUTO_OVERRIDE=1
+    echo "SPAWN_WORKER_MINIMAX_BATCH_UI_INPUT_DISABLED: native bootstrap owns task input"
+  fi
+fi
+
+# shellcheck source=spawn-worker-route-suggest.sh
+source "$SCRIPT_DIR/spawn-worker-route-suggest.sh"
+
+# v2.x：--api-provider 缺省且个人配置启用 quota_aware_routing 时，在 provider
+# lease 消费 API_PROVIDER 之前自动补选（fail-open：route_suggest 任何失败不
+# 改道、不阻断 spawn；显式 --api-provider 永远优先）。
+route_suggest_autofill_provider
+# v2.9.4：补选出的 provider 注入运行 env（仅默认命令时包装，显式 --command
+# 的 env 由 PM 的 runtime profile 负责，不重复注入）。
+route_suggest_wrap_command
+
+# shellcheck source=spawn-worker-orca.sh
+source "$SCRIPT_DIR/spawn-worker-orca.sh"
+
+# v2.1（DEC-114）：ORCA 终端模式 auto-detect。必须在 detect_orca_mode / orca_worktree_create /
+# orca_terminal_create_and_send 三个 helper 定义之后调用（bash 函数先定义后调用）。
+# v2.16.0（Task-116）：整块检测提前到 quota preflight / provider lease 之前——既有
+# Worktree 预门禁（EXISTING_WORKTREE_REQUIRES_RECOVERY）必须在任何 provider lease /
+# Orca worktree create / Session Context / terminal / dispatch 副作用之前判定，
+# 而 detect_orca_mode 的 runtime 事实是门禁只命中 ORCA auto 模式的前提。
+# 命中 auto 时：
+#   - ORCA_MODE=auto
+#   - ORCA_WORKTREE_PATH = PROJECT_DIR 的 git toplevel
+#   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充（worktree 创建阶段）
+#   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充（tmux 启动阶段）
+#   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
+# Native version/root gating must precede detector auto-registration as well.
+if [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_SUPERVISED" -eq 1 ] || {
+    echo "ERROR: native requests require zcode-cli + supervised" >&2; exit 64;
+  }
+  orca_runtime_init || exit 64
+  native_status=$(orca_cli status --json) || exit 64
+  native_version=$(printf '%s' "$native_status" | jq -er 'select(.ok == true) | .result.runtime | select(.reachable == true) | .appVersion') || exit 64
+  python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$ORCA_ZCODE_NATIVE_REQUESTS" --app-version "$native_version" >/dev/null || exit 64
+fi
+if [ -n "$BORROW_EXISTING_WORKTREE" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_SUPERVISED" -eq 1 ] && [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ] && [ "$NO_ORCA_MODE" -eq 0 ] && [ "$LIGHTWEIGHT_MODE" -eq 0 ] || {
+    echo "BORROWED_WORKTREE_REQUIRES_NATIVE_ZCODE: explicit native supervised worktree entry only" >&2; exit 64;
+  }
+  spawn_worker_borrowed_initial
+else
+detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
+fi
+spawn_worker_require_backend_orca || exit $?
+if [ "$DISPATCH_PROFILE_TRANSPORT" = "orca-generic" ] && [ "$ORCA_MODE" != "auto" ]; then
+  echo "ERROR: explicit orca-generic dispatch profile requires current Orca mode" >&2
+  exit 64
+fi
+if [ "$ORCA_MODE" = "missing_orca" ]; then
+  exit 64
+fi
+if [ "$ORCA_MODE" = "auto" ] && [ "$ORCA_SETUP_MODE" != "skip" ]; then
+  echo "ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT: mode=$ORCA_SETUP_MODE is rejected before worktree/provider/terminal/dispatch side effects; repo Setup runs before MAO guards and is not authorized by --allow-install-command" >&2
+  exit 64
+fi
+if [ -n "$ORCA_EXPECTED_RUNTIME_ID" ] && { [ "$ORCA_MODE" != "auto" ] || [ -z "$ORCA_COORDINATOR_HANDLE" ]; }; then
+  echo "ERROR: --orca-runtime-id requires Orca mode and --orca-coordinator-handle" >&2
+  exit 64
+fi
+if [ "$ORCA_MODE" = "auto" ] && [ -n "$ORCA_COORDINATOR_HANDLE" ]; then
+  orca_runtime_require_identity "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
+fi
+if [ "$ORCA_SUPERVISED" -eq 1 ]; then
+  [ -n "$TASK_SPEC" ] || [ -n "$ORCA_TASK_ID" ] || { echo "ERROR: --orca-supervised requires --task-spec or --orca-task-id" >&2; exit 64; }
+  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_RUN_ID" ] || { echo "ERROR: --orca-task-id requires --orca-run-id" >&2; exit 64; }
+  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_COORDINATOR_HANDLE" ] || { echo "ERROR: --orca-task-id requires --orca-coordinator-handle from the Wave receipt" >&2; exit 64; }
+  [ "$ORCA_MODE" = "auto" ] || { echo "ERROR: --orca-supervised requires a current Orca-managed project" >&2; exit 64; }
+  has_orchestration=$(printf '%s' "$ORCA_CAPABILITIES_JSON" | jq -r 'any(. == "orchestration.contract.v1")' 2>/dev/null)
+  [ "$has_orchestration" = "true" ] || { echo "ERROR: Orca runtime lacks orchestration.contract.v1" >&2; exit 64; }
+fi
+if [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_MODE" = "auto" ] && [ "$ORCA_SUPERVISED" -eq 1 ] || {
+    echo "ERROR: --orca-zcode-native-requests requires zcode-cli + Orca supervised" >&2; exit 64;
+  }
+  python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$ORCA_ZCODE_NATIVE_REQUESTS" --app-version "$ORCA_APP_VERSION" >/dev/null || exit 64
+fi
+if [ "$ORCA_MODE" != "auto" ] && ! command -v tmux >/dev/null 2>&1; then
+  echo "ERROR: tmux is required outside Orca terminal mode" >&2
+  exit 64
+fi
+
+# Task-116（Badminton Lab 实测事故②）：既有 Worktree 预门禁。exact branch/路径已被
+# 同 repo worktree 占用（或本地分支已存在，Orca 将生成 -2 后缀）时，在任何 provider
+# lease / Orca worktree create / Session Context / terminal / dispatch 之前稳定拒绝
+# （exit 3 + EXISTING_WORKTREE_REQUIRES_RECOVERY，零副作用）；路径不存在的新建流程
+# 零变化。仅命中 ORCA auto 模式，tmux 路径语义不变。
+spawn_worker_existing_worktree_pregate
+
+# v2.11.0（P0-①，2026-09 复盘修复）：配额预检门。自动补选与显式 --api-provider
+# 一律在任何 worktree/terminal/lease/dispatch 副作用之前通过 quota_preflight.py；
+# summary 缺失/不可读/过期/低于判停线/provider-lane 不匹配/claude-code 未解析出
+# provider 全部 fail-closed（exit 3）。绕过通道只有显式 --quota-preflight-override
+# + 非空授权来源（写入 METADATA 与 authority receipt）；默认不存在人工锁定直通。
+quota_preflight_run() {
+  local gate_out gate_status gate_lane
+  set +e
+  gate_out=$(python3 "$SCRIPT_DIR/quota_preflight.py" \
+    --config "$PERSONAL_CONFIG_FILE" \
+    --provider "$API_PROVIDER" \
+    --backend "$WORKER_BACKEND_CANONICAL")
+  local gate_rc=$?
+  set -e
+  gate_status=$(printf '%s' "$gate_out" | jq -r '.status // "gate_error"' 2>/dev/null) || gate_status="gate_error"
+  gate_lane=$(printf '%s' "$gate_out" | jq -r '.lane // ""' 2>/dev/null) || gate_lane=""
+  if [ "$gate_rc" -eq 0 ]; then
+    QUOTA_PREFLIGHT_STATUS="$gate_status"
+    QUOTA_PREFLIGHT_LANE="$gate_lane"
+    printf 'SPAWN_WORKER_QUOTA_PREFLIGHT: status=%s provider=%s lane=%s\n' \
+      "$gate_status" "${API_PROVIDER:-<none>}" "${gate_lane:-<none>}"
+    return 0
+  fi
+  if [ "$gate_rc" -eq 3 ] && [ "$QUOTA_PREFLIGHT_OVERRIDE" -eq 1 ] && [ -n "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" ]; then
+    QUOTA_PREFLIGHT_STATUS="override:${gate_status}"
+    QUOTA_PREFLIGHT_LANE="$gate_lane"
+    printf 'SPAWN_WORKER_QUOTA_PREFLIGHT_OVERRIDE: denied_status=%s provider=%s authorization_source=%s（显式人工授权放行，已记入 METADATA/receipt）\n' \
+      "$gate_status" "${API_PROVIDER:-<none>}" "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" >&2
+    return 0
+  fi
+  if [ "$gate_rc" -eq 3 ]; then
+    printf 'ERROR: quota preflight denied before any worktree/terminal/lease/dispatch side effect: %s (pass --quota-preflight-override with an authorization source to override explicitly; fail-closed)\n' \
+      "$gate_out" >&2
+    exit 3
+  fi
+  printf 'ERROR: quota preflight gate crashed (rc=%s): %s; a broken gate can never pass (fail-closed)\n' \
+    "$gate_rc" "$gate_out" >&2
+  exit 3
+}
+quota_preflight_run
+
+# v2.21.0（2026-09-06）：物理内存预算预检门（mem budget lane）。quota preflight 管
+# API 配额维度，本门管物理内存维度：现场探测 hw.memsize / vm_stat / memory_pressure /
+# vm.swapusage，按 per-worker 预算（默认 3GiB，SPAWN_WORKER_MEM_BUDGET_BYTES 可调）折算
+# 还能安全承诺几个 worker。额度为 0 → exit 4（专用退出码）+ SPAWN_WORKER_MEM_BUDGET_DENIED，
+# PM 不 spawn、按 §5 排队规则记 PARKED_FOR_MEMORY 下一轮巡检重试；probe 读失败同样
+# fail-closed 拒绝（坏门永远不放行）。SPAWN_WORKER_MEM_BUDGET_BYTES=0 显式关闭整道门
+# （与 NODE_OPTIONS 堆顶的 opt-out 风格一致）。每次 spawn 都现场探测、不缓存——同一任务
+# OOM 退避后 PM 重拉天然重跑 probe（§5）。数据源与推导权威：references/22-mem-budget-lane.md。
+mem_budget_gate_run() {
+  local probe_out probe_rc probe_status probe_reason
+  set +e
+  local memory_profile_args=()
+  if [ -n "$MEMORY_TASK_PROFILE" ]; then
+    if [ "$COMMAND" != "$MEMORY_TASK_ORIGINAL_COMMAND" ]; then
+      echo "ERROR: memory profile cannot prove provider shell wrapper; refusing before resources" >&2
+      exit 4
+    fi
+    memory_profile_args=(--task-profile "$MEMORY_TASK_PROFILE" --task-command "$MEMORY_TASK_ORIGINAL_COMMAND" --task-backend "$WORKER_BACKEND_CANONICAL" --task-binding-b64 "$MEMORY_TASK_BINDING_B64")
+  fi
+  probe_out=$(python3 "$SCRIPT_DIR/mem_budget_probe.py" --json "${memory_profile_args[@]}")
+  probe_rc=$?
+  set -e
+  probe_status=$(printf '%s' "$probe_out" | jq -r '.status // "unprobeable"' 2>/dev/null) || probe_status="unprobeable"
+  if [ "$probe_rc" -eq 0 ] && [ "$probe_status" = "ok" ]; then
+    printf 'SPAWN_WORKER_MEM_BUDGET: available=%s budget=%s slots=%s pressure=%s\n' \
+      "$(printf '%s' "$probe_out" | jq -r '.safe_available_bytes')" \
+      "$(printf '%s' "$probe_out" | jq -r '.budget_bytes')" \
+      "$(printf '%s' "$probe_out" | jq -r '.slots')" \
+      "$(printf '%s' "$probe_out" | jq -r '.pressure.level')"
+    return 0
+  fi
+  if [ "$probe_rc" -eq 0 ] && [ "$probe_status" = "disabled" ]; then
+    echo "SPAWN_WORKER_MEM_BUDGET: disabled (SPAWN_WORKER_MEM_BUDGET_BYTES=0)"
+    return 0
+  fi
+  probe_reason=$(printf '%s' "$probe_out" | jq -r '.reason // "probe produced no reason"' 2>/dev/null) || probe_reason="probe produced no reason"
+  if [ "$probe_status" = "denied" ]; then
+    printf 'ERROR: memory budget gate denied before any worktree/terminal/lease/dispatch side effect: %s\n' "$probe_reason" >&2
+    echo "SPAWN_WORKER_MEM_BUDGET_DENIED: 本轮不 spawn，任务记 PARKED_FOR_MEMORY 下一轮巡检重试（SKILL §5 排队规则）" >&2
+  else
+    printf 'ERROR: memory budget probe failed (rc=%s status=%s): %s; a broken gate can never pass (fail-closed)\n' \
+      "$probe_rc" "$probe_status" "$probe_reason" >&2
+    echo "SPAWN_WORKER_MEM_BUDGET_PROBE_FAILED: 内存现场不可探测，本轮不 spawn（fail-closed）" >&2
+  fi
+  exit 4
+}
+mem_budget_gate_run
+
+# Prove the PM sender and Run before acquiring a lease or creating worker resources.
+# Existing Wave receipts stay read-only; single-worker callers may still create one Run.
+if [ "$ORCA_MODE" = auto ] && { [ "$ORCA_SUPERVISED" -eq 1 ] || [ -n "$ORCA_TASK_ID" ]; }; then
+  spawn_sender="$ORCA_COORDINATOR_HANDLE"
+  if [ -z "$spawn_sender" ] && [ -z "$ORCA_RUN_ID" ]; then
+    spawn_sender="$ORCA_CALLER_TERMINAL_HANDLE"
+  fi
+  orca_coordinator_select "$spawn_sender" "" 0 || exit $?
+  if [ "$DRY_RUN" -eq 1 ]; then
+    orca_coordinator_probe "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
+    if [ -n "$ORCA_RUN_ID" ]; then
+      orca_coordinator_current "$ORCA_RUN_ID" || exit $?
+    fi
+    echo "ORCA_RUN: sender verified; prepare Run before worker resources (dry-run, no binding)"
+  elif [ -n "$ORCA_RUN_ID" ]; then
+    orca_coordinator_prepare verify "$ORCA_RUN_ID" "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
+    if [ -z "$ORCA_EXPECTED_RUNTIME_ID" ]; then
+      echo "SPAWN_COORDINATOR_RUNTIME_REVERIFIED: current binding verified; historical continuity NOT_VERIFIED" >&2
+    fi
+  else
+    orca_coordinator_prepare create "" "$ORCA_EXPECTED_RUNTIME_ID" "$TASK_SPEC" || exit $?
+    ORCA_RUN_ID="$ORCA_PM_RUN_ID"
+  fi
+  ORCA_COORDINATOR_HANDLE="$ORCA_PM_SENDER"
+  ORCA_EXPECTED_RUNTIME_ID="$ORCA_PM_RUNTIME_ID"
+fi
+
+# shellcheck source=spawn-worker-provider-lease.sh
+source "$SCRIPT_DIR/spawn-worker-provider-lease.sh"
+
+# Must happen before any branch/worktree/session side effect. EXIT releases only
+# the provisional lease; a successful launch finalizes it and disables the trap.
+acquire_provider_lease
+if [ "$PROVIDER_LEASE_ACQUIRED" -eq 1 ]; then
+  trap release_provisional_provider_lease EXIT
+fi
+
+# Claude Code 的 minimal/safe/config-source 模式可能跳过 local PreToolUse hook。
+# 用 shlex 解析 wrapper 后的完整 command；无法证明含 claude 或 local settings 也 fail-closed。
+claude_hook_disable_reason() {
+  python3 - "$COMMAND" <<'PY'
+import os, shlex, sys
+command = sys.argv[1]
+try:
+    tokens = shlex.split(command, posix=True)
+except ValueError as exc:
+    print(f"unparseable command: {exc}")
+    raise SystemExit(0)
+if not any(os.path.basename(token) == "claude" for token in tokens):
+    print("command does not expose a claude executable token")
+    raise SystemExit(0)
+for flag in ("--bare", "--safe-mode"):
+    if flag in tokens:
+        print(f"{flag} skips or may skip hooks")
+        raise SystemExit(0)
+if "CLAUDE_CODE_SIMPLE=1" in tokens:
+    print("CLAUDE_CODE_SIMPLE=1 skips hooks")
+    raise SystemExit(0)
+sources = None
+for index, token in enumerate(tokens):
+    if token == "--setting-sources":
+        if index + 1 >= len(tokens):
+            print("--setting-sources is missing its value")
+            raise SystemExit(0)
+        sources = tokens[index + 1]
+    elif token.startswith("--setting-sources="):
+        sources = token.split("=", 1)[1]
+if sources is not None and "local" not in {item.strip() for item in sources.split(",")}:
+    print(f"--setting-sources excludes local ({sources})")
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+# v2.11.0（P0-②，2026-09 复盘修复）：撤销 v1.20.2 Task-019 的 --bare 自动降级。
+# hook 不可证明（--bare/--safe-mode/--setting-sources 排除 local/CLAUDE_CODE_SIMPLE/
+# 缺 claude token）时默认一律 fail-closed；唯一降级通道是显式且可审计的
+# --allow-prompt-only-install-guard + 非空授权来源（codex/zcode 等无 hook backend
+# 的既有要求保持不变）。自动降级会静默放弃机械安装门禁，不再允许。
+if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
+   { [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; } && \
+   hook_disable_reason=$(claude_hook_disable_reason); then
+  if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -eq 1 ]; then
+    INSTALL_GUARD_MODE="prompt_only_degraded"
+    echo "SPAWN_WORKER_INSTALL_GUARD_DEGRADED_EXPLICIT: claude-code hook unprovable ($hook_disable_reason); explicit --allow-prompt-only-install-guard accepted (source recorded)"
+  else
+    echo "ERROR: Claude Code command cannot prove local PreToolUse hook enforcement: $hook_disable_reason; fix the command or pass explicit --allow-prompt-only-install-guard with an authorization source (v2.11.0: --bare auto-degrade removed, fail-closed)" >&2
+    exit 64
+  fi
+fi
+
+# A Claude Code worker explicitly launched in auto mode delegates ordinary Bash
+# decisions to Claude's native classifier and settings.  Keep this mode tied to
+# the actual command and a live local hook; all other backends/modes retain the
+# exact Shell allowlist.  The authorization snapshot freezes the selected mode.
+claude_command_uses_auto_mode() {
+  python3 - "$COMMAND" <<'PY'
+import os, shlex, sys
+try:
+    tokens = shlex.split(sys.argv[1], posix=True)
+except ValueError:
+    raise SystemExit(1)
+claude_positions = [index for index, token in enumerate(tokens)
+                    if os.path.basename(token) == "claude"]
+if len(claude_positions) != 1:
+    raise SystemExit(1)
+modes = []
+for position in range(claude_positions[0] + 1, len(tokens)):
+    value = tokens[position]
+    if value == "--permission-mode" and position + 1 < len(tokens):
+        modes.append(tokens[position + 1])
+    elif value.startswith("--permission-mode="):
+        modes.append(value.split("=", 1)[1])
+raise SystemExit(0 if modes == ["auto"] else 1)
+PY
+}
+if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
+   { [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; } && \
+   claude_command_uses_auto_mode; then
+  SHELL_POLICY="claude_auto"
+fi
+printf 'SPAWN_WORKER_SHELL_POLICY: %s\n' "$SHELL_POLICY"
+
+run() {
+  printf 'SPAWN_WORKER_RUN: %s\n' "$*"
+  [ "$DRY_RUN" -eq 1 ] || "$@"
+}
+
+array_to_json() {
+  if [ "$#" -eq 0 ]; then
+    printf '[]\n'
+  else
+    printf '%s\n' "$@" | jq -R . | jq -s .
+  fi
+}
+
+# v1.18.4：backend 分支化 trust/permission dialog 监控默认值（DEC-112）。
+# 仅在 *_OVERRIDE 标志为 0 时（即用户没显式传 flag）才按 backend 默认。
+# claude-code backend 默认全关，省 trust_auto 30s + permission_auto 60s 共 90s 空等；
+# 其他 backend 默认全开。
+resolve_backend_defaults() {
+  if [ "$TRUST_AUTO_OVERRIDE" -eq 0 ]; then
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code|zcode|zcode-cli|minimax-code|qoder-cn|qwenwork-cn) TRUST_AUTO=0 ;;
+      *) TRUST_AUTO=1 ;;
+    esac
+  fi
+  if [ "$PERMISSION_AUTO_OVERRIDE" -eq 0 ]; then
+    # v1.20.3 Task-026：codebuddy/qoder-cn/qoderclicn 默认 PERMISSION_AUTO=0（只 bg 不 sync）。
+    # acceptEdits 仍弹 dialog（references/08 §14.1），同步监控空等浪费 + spawn-worker 主进程撞 PM Bash 2min timeout
+    # （v1.20.2 W2 实战：trust_auto 30s + permission_auto 60s + checkout ~30s ≈ 120s 撞 120s，被 SIGTERM 后
+    # bg 段未启 → dialog 卡死）。bg 段（permission_auto_bg setsid）独立处理 dialog，不依赖 sync。
+    # zcode：无 TUI 无任何 dialog（driver 渲染纯文本），同步监控必然空等 → 一律关。
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code|codebuddy|qoder-cn|qoderclicn|zcode|zcode-cli|minimax-code|qwenwork-cn) PERMISSION_AUTO=0 ;;
+      *) PERMISSION_AUTO=1 ;;
+    esac
+  fi
+  if [ "$PERMISSION_AUTO_BG_OVERRIDE" -eq 0 ]; then
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code|zcode|zcode-cli|minimax-code|qoder-cn|qwenwork-cn) PERMISSION_AUTO_BG=0 ;;
+      *) PERMISSION_AUTO_BG=1 ;;
+    esac
+  fi
+  # v1.20.2 Task-020：external imports dialog 是 claude-code 特有（CLAUDE.md @import 触发），
+  # 其他 backend 无此 dialog。claude-code 默认开（即使 trust/permission 关），其他默认关。
+  if [ "$EXTERNAL_IMPORTS_AUTO_OVERRIDE" -eq 0 ]; then
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code) EXTERNAL_IMPORTS_AUTO=1 ;;
+      *) EXTERNAL_IMPORTS_AUTO=0 ;;
+    esac
+  fi
+}
+resolve_backend_defaults
+
+# install-guard 的 authority receipt 依赖 git_common_dir，仅在 git 仓（worktree 模式）下计算。
+# 轻量模式（非 git 项目）无 git 可绑：AUTHORITY_RECEIPT_FILE 留空，write_authority_receipt 自动跳过。
+# git 仓判定由下方 worktree-setup 的 else 分支（PROJECT_IS_GIT 检查）兜底，此处不再重复 exit。
+if [ "$PROJECT_IS_GIT" -eq 1 ]; then
+  git_common_dir=$(git -C "$PROJECT_DIR" rev-parse --git-common-dir)
+  case "$git_common_dir" in
+    /*) ;;
+    *) git_common_dir="$PROJECT_DIR/$git_common_dir" ;;
+  esac
+  git_common_dir=$(cd "$git_common_dir" && pwd -P)
+  AUTHORITY_RECEIPT_FILE="$git_common_dir/agent-authority/$SESSION.json"
+  COMPLETION_AUTHORITY_FILE="$git_common_dir/agent-authority/$SESSION.completion.json"
+  if [ "$INSTALL_GUARD_MODE" = "hook" ]; then
+    GUARD_ATTESTATION_FILE="$git_common_dir/agent-authority/$SESSION.hook-attested.json"
+  fi
+fi
+if [ "$ORCA_MODE" != "auto" ] && tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "ERROR: tmux session already exists: $SESSION" >&2
+  exit 1
+fi
+
+if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+  # 轻量模式（SKILL §2.1.1）：不建 worktree、不切分支、不验 base ref；
+  # WORKTREE 已指向 PROJECT_DIR（或 --worktree 覆盖的子目录）。
+  BASE_SHA=""
+  echo "SPAWN_WORKER_LIGHTWEIGHT: skip git worktree setup, worker cwd=$WORKTREE"
+elif [ -n "$BORROW_EXISTING_WORKTREE" ]; then
+  spawn_worker_borrowed_recheck
+  [ "$DRY_RUN" -eq 1 ] || [ -n "$PROVIDER_LEASE_FILE" ] || { echo "BORROWED_WORKTREE_LEASE_REQUIRED: configure a real provider concurrency lease" >&2; exit 64; }
+  BASE_SHA="$BORROWED_HEAD"
+  echo "SPAWN_WORKER_BORROWED_WORKTREE: external tree/branch retained; new MAO Session"
+elif [ "$ORCA_MODE" = "auto" ]; then
+  # v2.1（DEC-114）：ORCA 终端模式。每次都新建独立 ORCA worktree（--no-parent），
+  # 不复用 git worktree（ORCA worktree 是独立概念，由 ORCA 桌面端跟踪）。
+  # ORCA worktree 的 git branch 名不能含 '/'（ORCA --name 既作显示名又作 branch 名），
+  # 必须用 safe_branch（BRANCH 的 safe 化版本）。把 BRANCH 统一设成 safe_branch，
+  # 让下游 Isolation Gate / METADATA / orca --name 全部一致。
+  BRANCH="$safe_branch"
+  orca_base="$BASE_REF"
+  if git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null \
+     || git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; then
+    orca_base="$BRANCH"
+  fi
+  ORCA_WORKTREE_ID=$(orca_worktree_create "$BRANCH" "$orca_base" "$ORCA_SETUP_MODE")
+  # ORCA worktree create 后实际 path 可能不是 PROJECT_DIR（ORCA 默认放 ~/orca/workspaces/<name>）；
+  # 用 ORCA_WORKTREE_ID 解析的真实 path 覆盖 WORKTREE + ORCA_WORKTREE_PATH。
+  if [ -n "$ORCA_WORKTREE_ID" ] && [ "$ORCA_WORKTREE_ID" != "orca_worktree_id_placeholder" ]; then
+    orca_actual_path="${ORCA_WORKTREE_ID#*::}"
+    if [ -n "$orca_actual_path" ] && [ -d "$orca_actual_path" ]; then
+      WORKTREE="$orca_actual_path"
+      ORCA_WORKTREE_PATH="$orca_actual_path"
+    fi
+  fi
+  SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+  METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+  INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
+  BASE_SHA=$(git -C "$WORKTREE" rev-parse HEAD 2>/dev/null || echo "")
+  echo "SPAWN_WORKER_ORCA_WORKTREE: id=$ORCA_WORKTREE_ID path=$WORKTREE"
+else
+  # 默认 worktree 模式：--project 必须是 git 仓，base ref / 分支都参与
+  if [ "$PROJECT_IS_GIT" -eq 0 ]; then
+    echo "ERROR: --project is not a git work tree: $PROJECT_DIR (pass --no-worktree for lightweight mode)" >&2
+    exit 64
+  fi
+  if ! git -C "$PROJECT_DIR" rev-parse --verify --quiet "$BASE_REF^{commit}" >/dev/null; then
+    echo "ERROR: base ref not found: $BASE_REF" >&2
+    exit 1
+  fi
+  BASE_SHA=$(git -C "$PROJECT_DIR" rev-parse "$BASE_REF^{commit}")
+
+  existing_wt=$(git -C "$PROJECT_DIR" worktree list --porcelain | awk -v target="refs/heads/$BRANCH" '
+    /^worktree / { wt = substr($0, 10) }
+    /^branch / {
+      if (substr($0, 8) == target) {
+        print wt
+        exit
+      }
+    }
+  ')
+
+  if [ -n "$existing_wt" ]; then
+    WORKTREE="$existing_wt"
+    SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+    METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+    echo "SPAWN_WORKER_REUSE_WORKTREE: $WORKTREE"
+  elif [ -d "$WORKTREE" ]; then
+    echo "ERROR: worktree path exists but is not registered for branch $BRANCH: $WORKTREE" >&2
+    exit 1
+  elif git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    run git -C "$PROJECT_DIR" worktree add "$WORKTREE" "$BRANCH"
+  else
+    run git -C "$PROJECT_DIR" worktree add "$WORKTREE" -b "$BRANCH" "$BASE_REF"
+  fi
+fi
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  WORKTREE=$(cd "$WORKTREE" && pwd -P)
+  SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+  METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+  INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
+fi
+
+# Isolation pre-gate（partial dispatch 修复）：cwd/branch/HEAD 在 worktree 落盘后即可
+# 判定，必须在任何 terminal/worker-start/任务注入副作用之前判定。实测事故：PM 请求
+# 复用已有 worktree/branch，Orca 自动改用 -2 后缀分支建新 worktree；旧顺序里
+# supervised register/worker-start 已注入任务，final SPAWN_WORKER_GATE 才发现
+# actual branch != expected 而 exit 2，留下带任务的半活 Dispatch。此处 mismatch 时
+# worktree 保留供 PM 精确清理，但不会产生任何 worker-start/dispatch partial effect。
+if [ "$DRY_RUN" -eq 0 ] && [ "$LIGHTWEIGHT_MODE" -eq 0 ]; then
+  pregate_branch=$(git -C "$WORKTREE" branch --show-current 2>/dev/null || echo "")
+  pregate_head=$(git -C "$WORKTREE" rev-parse HEAD 2>/dev/null || echo "")
+  pregate_common=$(git -C "$WORKTREE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "")
+  echo "SPAWN_WORKER_ISOLATION_PREGATE: cwd=$WORKTREE branch=$pregate_branch expected_branch=$BRANCH head=${pregate_head:-unresolvable}"
+  if [ ! -d "$WORKTREE" ] || [ -z "$pregate_head" ] || [ "$pregate_branch" != "$BRANCH" ]; then
+    echo "ERROR: isolation pre-gate failed before any terminal/worker-start/dispatch side effect: actual_branch=$pregate_branch expected_branch=$BRANCH head=${pregate_head:-unresolvable}（实测：复用已有 worktree/branch 时 Orca 可能已自动改用 -2 后缀分支；worktree 保留供 PM 清理，本次未注入任何任务）" >&2
+    echo "SPAWN_WORKER_ISOLATION_PREGATE_FAILED" >&2
+    exit 2
+  fi
+fi
+
+# Task-045 / G31：worktree 创建并真实化后，按项目类型补偿依赖。
+# Orca worktree 落在 ~/orca/workspaces/（独立路径树，不在主仓父链）→ Node 项目软链
+# 主仓 node_modules，否则 npm/vitest/tsc 向上解析找不到依赖、worker 无法自验。
+[ -n "$BORROW_EXISTING_WORKTREE" ] || ensure_worktree_deps
+
+run mkdir -p "$SESSION_CONTEXT"
+
+if [ "$git_identity_field_count" -eq 3 ]; then
+  safe_push_script="$SCRIPT_DIR/../../git-workflow/scripts/safe-push.sh"
+  [ -x "$safe_push_script" ] || {
+    echo "ERROR: identity-bound safe-push script is missing or not executable: $safe_push_script" >&2
+    exit 64
+  }
+  printf -v SAFE_PUSH_COMMAND 'bash %q --repo %q --base %q --remote %q --branch %q --expected-name %q --expected-email %q' \
+    "$safe_push_script" "$WORKTREE" "$GIT_INTEGRATION_BASE" "$GIT_PUSH_REMOTE" "$BRANCH" \
+    "$GIT_EXPECTED_NAME" "$GIT_EXPECTED_EMAIL"
+else
+  # v2.22.0：无 identity 四件套时 push 不再无路可走——guard 段级安全类默认放行
+  # 本分支裸 push（拒 force/主干/远端删除）。safe-push 仍是 OID 全链核验的强化路径。
+  echo "SPAWN_WORKER_PUSH_PATH: raw-safe (guard safe-class allows plain branch push; force/protected-branch/delete denied; identity quadruple recommended for OID-verified delivery)"
+fi
+
+write_install_authorization() {
+  local commands_json shell_commands_json write_paths_json
+  commands_json=$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")
+  EFFECTIVE_ALLOWED_SHELL_COMMANDS=(
+    "pwd"
+    "git branch --show-current"
+    "git status --short"
+  )
+  [ -z "$SAFE_PUSH_COMMAND" ] || EFFECTIVE_ALLOWED_SHELL_COMMANDS+=("$SAFE_PUSH_COMMAND")
+  EFFECTIVE_ALLOWED_SHELL_COMMANDS+=("${VERIFY_COMMANDS[@]}" "${ALLOWED_SHELL_COMMANDS[@]}")
+  shell_commands_json=$(array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" | jq 'unique')
+  write_paths_json=$(array_to_json "${FROZEN_ALLOWED_WRITE_PATHS[@]}")
+  INSTALL_AUTH_JSON=$(jq -cn \
+    --arg schema "multi-agent-orchestration.install-authorization.v1" \
+    --arg policy "deny_by_default" \
+    --arg shell_policy "$SHELL_POLICY" \
+    --arg source "$INSTALL_AUTHORIZATION_SOURCE" \
+    --arg verification_source "$VERIFY_COMMAND_SOURCE" \
+    --argjson verification_required "$REQUIRE_VERIFICATION" \
+    --argjson verification_commands "$(array_to_json "${VERIFY_COMMANDS[@]}")" \
+    --argjson commands "$commands_json" \
+    --argjson shell_commands "$shell_commands_json" \
+    --argjson write_paths "$write_paths_json" \
+    '{
+      schema: $schema,
+      policy: $policy,
+      shell_policy: $shell_policy,
+      authorization_source: $source,
+      authorized_commands: $commands,
+      allowed_shell_commands: $shell_commands,
+      allowed_write_paths: $write_paths,
+      verification: {
+        required: ($verification_required == 1),
+        source: $verification_source,
+        commands: $verification_commands
+      }
+    }')
+  echo "SPAWN_WORKER_INSTALL_AUTH: $INSTALL_AUTH_FILE mode=$INSTALL_GUARD_MODE"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    return 0
+  fi
+  printf '%s\n' "$INSTALL_AUTH_JSON" > "$INSTALL_AUTH_FILE"
+}
+
+write_install_authorization
+
+write_authority_receipt() {
+  local receipt_dir receipt_tmp created_at
+  AUTHORIZATION_SNAPSHOT_SHA256=$(printf '%s' "$INSTALL_AUTH_JSON" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')
+  echo "SPAWN_WORKER_AUTHORITY_RECEIPT: $AUTHORITY_RECEIPT_FILE authorization_snapshot_sha256=$AUTHORIZATION_SNAPSHOT_SHA256"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    return 0
+  fi
+  receipt_dir=$(dirname "$AUTHORITY_RECEIPT_FILE")
+  mkdir -p "$receipt_dir"
+  [ ! -e "$AUTHORITY_RECEIPT_FILE" ] || {
+    echo "ERROR: PM authority receipt already exists for session $SESSION; choose a unique session id (fail-closed)" >&2
+    return 1
+  }
+  created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+  receipt_tmp="$AUTHORITY_RECEIPT_FILE.tmp.$$"
+  umask 077
+  jq -n \
+    --arg schema "multi-agent-orchestration.authority-receipt.v1" \
+    --arg created_at "$created_at" \
+    --arg session "$SESSION" \
+    --arg worktree "$WORKTREE" \
+    --arg branch "$BRANCH" \
+    --arg mode "$INSTALL_GUARD_MODE" \
+    --arg degradation_source "$INSTALL_GUARD_DEGRADATION_SOURCE" \
+    --arg authorization_sha256 "$AUTHORIZATION_SNAPSHOT_SHA256" \
+    --argjson authorization "$INSTALL_AUTH_JSON" \
+    --arg verification_source "$VERIFY_COMMAND_SOURCE" \
+    --argjson verification_required "$REQUIRE_VERIFICATION" \
+    --argjson verification_commands "$(array_to_json "${VERIFY_COMMANDS[@]}")" \
+    --arg quota_preflight_status "$QUOTA_PREFLIGHT_STATUS" \
+    --arg quota_preflight_lane "$QUOTA_PREFLIGHT_LANE" \
+    --argjson quota_preflight_override "$QUOTA_PREFLIGHT_OVERRIDE" \
+    --arg quota_preflight_override_source "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" \
+    '{
+      schema: $schema,
+      created_at: $created_at,
+      session: $session,
+      worktree: $worktree,
+      branch: $branch,
+      install_guard_mode: $mode,
+      degradation_source: $degradation_source,
+      authorization_sha256: $authorization_sha256,
+      authorization_snapshot: $authorization,
+      verification: {
+        required: ($verification_required == 1),
+        source: $verification_source,
+        commands: $verification_commands
+      },
+      quota_preflight: {
+        status: $quota_preflight_status,
+        lane: $quota_preflight_lane,
+        override_used: $quota_preflight_override,
+        override_authorization_source: $quota_preflight_override_source
+      }
+    }' > "$receipt_tmp"
+  if ! ln "$receipt_tmp" "$AUTHORITY_RECEIPT_FILE" 2>/dev/null; then
+    rm -f "$receipt_tmp"
+    echo "ERROR: could not atomically create PM authority receipt: $AUTHORITY_RECEIPT_FILE" >&2
+    return 1
+  fi
+  rm -f "$receipt_tmp"
+  AUTHORITY_RECEIPT_SHA256=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; print(load_authority(sys.argv[2])[1])' "$SCRIPT_DIR" "$AUTHORITY_RECEIPT_FILE") || return 1
+  echo "SPAWN_WORKER_AUTHORITY_RECEIPT_CONTENT: $AUTHORITY_RECEIPT_FILE sha256=$AUTHORITY_RECEIPT_SHA256"
+}
+
+# authority receipt 仅在 git 仓（worktree 模式）下生成；轻量模式 AUTHORITY_RECEIPT_FILE 为空，跳过。
+if [ -n "$AUTHORITY_RECEIPT_FILE" ]; then
+  write_authority_receipt
+fi
+
+# shellcheck source=spawn-worker-metadata.sh
+source "$SCRIPT_DIR/spawn-worker-metadata.sh"
+
+# Read/send one worker TUI through the active control plane. Orca external CLI
+# terminals do not inherit tmux watchers, so CodeBuddy/Qoder confirmation dialogs
+# must be observed and answered through terminal read/send.
+worker_session_content() {
+  local session="$1"
+  if [ "$ORCA_MODE" = "auto" ]; then
+    [ -n "$ORCA_TERMINAL_HANDLE" ] || return 1
+    orca_cli terminal read --terminal "$ORCA_TERMINAL_HANDLE" --limit 50 --json 2>/dev/null \
+      | jq -r '(.result.terminal.tail // .result.tail // []) | .[]? // empty' 2>/dev/null
+  else
+    tmux has-session -t "$session" 2>/dev/null || return 1
+    tmux capture-pane -t "$session" -p -S -50 2>/dev/null
+  fi
+}
+
+worker_session_send_choice() {
+  local session="$1" choice="$2"
+  if [ "$ORCA_MODE" = "auto" ]; then
+    orca_cli terminal send --terminal "$ORCA_TERMINAL_HANDLE" --text "$choice" --enter --json >/dev/null
+  else
+    tmux send-keys -t "$session" "$choice"
+  fi
+}
+
+worker_session_send_enter() {
+  local session="$1"
+  if [ "$ORCA_MODE" = "auto" ]; then
+    orca_cli terminal send --terminal "$ORCA_TERMINAL_HANDLE" --text "" --enter --json >/dev/null
+  else
+    tmux send-keys -t "$session" Enter
+  fi
+}
+
+# Trust folder auto-accept for interactive codebuddy/qoder CLI workers.
+# Default: auto-select "Trust folder and all subdirectories" (option 3) to
+# avoid both the initial trust prompt AND subsequent subdir trust prompts.
+# Polls the tmux pane for trust dialog text, then sends Down×3+Enter.
+trust_auto() {
+  local session="$1"
+  local max_wait=30
+  # v1.20.3 Task-026：codebuddy/qoder-cn/qoderclicn 缩短 trust_auto timeout（acceptEdits 不弹 trust dialog，30s 空等浪费）
+  case "$WORKER_BACKEND" in
+    codebuddy|qoder-cn|qoderclicn) max_wait=15 ;;
+  esac
+  local poll_interval=1
+  local waited=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! content=$(worker_session_content "$session"); then
+      return 1  # session died, trust-auto skipped
+    fi
+
+    # codebuddy trust dialog:
+    #   Do you want to proceed?
+    #   1. Trust folder only / 2. Trust parent folder / 3. Trust folder and all subdirectories / 4. No, exit
+    if echo "$content" | grep -q "Trust folder and all subdirectories"; then
+      echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected, selecting Trust folder and all subdirectories (option 3)"
+      if [ "$ORCA_MODE" = "auto" ]; then
+        worker_session_send_choice "$session" "3"
+      else
+        tmux send-keys -t "$session" Down Down Down Enter
+      fi
+      sleep 2  # wait for trust to take effect
+      return 0
+    fi
+
+    # Generic fallback: match other trust/Do you trust dialogs（v1.20.4 Task-031：backend-specific 选项处理）
+    # codebuddy 4 选项 dialog 已被上面专门 match（"Trust folder and all subdirectories"）捕获；
+    # 这里捕获 qoderclicn 等 2 选项 dialog（1=Trust folder / 2=Don't trust and exit，默认高亮 option 2 Don't trust）。
+    if echo "$content" | grep -qE "Trust folder|Do you trust" 2>/dev/null; then
+      case "$WORKER_BACKEND" in
+        qoder-cn|qoderclicn)
+          # qoderclicn 2 选项 dialog：发数字键 "1" 选 Trust folder（默认高亮 option 2 Don't trust，不能 Enter；与 permission_auto "2" 同数字键模式）
+          echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected (qoder 2-option), selecting option 1 Trust folder (key '1')"
+          worker_session_send_choice "$session" "1"
+          ;;
+        *)
+          # 其他 backend 保守沿用 Down×3+Enter（codebuddy 4 选项选 option 3 的旧行为；新 backend 真机验证后按需加 case）
+          echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected (generic), selecting last trust option (Down×3+Enter)"
+          if [ "$ORCA_MODE" = "auto" ]; then
+            worker_session_send_choice "$session" "3"
+          else
+            tmux send-keys -t "$session" Down Down Down Enter
+          fi
+          ;;
+      esac
+      sleep 2
+      return 0
+    fi
+
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+
+  echo "SPAWN_WORKER_TRUST_AUTO: no trust dialog seen within ${max_wait}s, continuing"
+  return 0
+}
+
+# Permission auto-accept for runtime "Do you want to proceed?" prompts.
+# v1.18.3 关键修复：旧版用 Down Enter（按箭头 + Enter 选 option 2），在某些 TUI 状态
+# 不稳。PM 2026-07-08 wave-1 实测：直接发数字键 `2` 选 option 2 (Yes, and don't ask
+# again for this session) 稳定 work。改用 `2` 数字键（不再 Down Enter）。
+# Polls the tmux pane for the runtime permission prompt (appears when codebuddy
+# tries to access files outside the worktree) and auto-selects option 2.
+# Runs with a longer timeout (60s) since runtime prompts appear later.
+# opt-out: --no-permission-auto (v1.18.3 精细 opt-out) 或共享 --no-trust-auto。
+permission_auto() {
+  local session="$1"
+  local max_wait=60
+  local poll_interval=2
+  local waited=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! content=$(worker_session_content "$session"); then
+      return 1  # session died, permission-auto skipped
+    fi
+
+    # Match "Do you want to proceed?" dialog with session-allow option:
+    #   Do you want to proceed?
+    #     1. Yes
+    #   > 2. Yes, and don't ask again for session (shift + tab)
+    #     3. No, and tell CodeBuddy what to do differently (escape)
+    if echo "$content" | grep -q "Do you want to proceed"; then
+      echo "SPAWN_WORKER_PERMISSION_AUTO: 'Do you want to proceed' dialog detected, selecting session-allow (option 2, key '2')"
+      worker_session_send_choice "$session" "2"
+      sleep 2
+      return 0
+    fi
+
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+
+  echo "SPAWN_WORKER_PERMISSION_AUTO: no runtime permission prompt seen within ${max_wait}s, continuing"
+  return 0
+}
+
+# v1.18.3 新加：后台 watcher 持续监控 + 自动按 2 兜底，覆盖同步 60s 窗口外的 dialog。
+# 由 spawn-worker.sh 主流程 `permission_auto_bg &` 启 disown，7200s 自动退出。
+# 实现：每 SPAWN_PERMISSION_BG_POLL 秒 (默认 5) capture pane 检测 "Do you want to proceed"，
+# 命中发数字键 2；如 spawn-worker.sh 退出，watcher 独立继续到 max_wait。
+permission_auto_bg() {
+  local session="$1"
+  local max_wait="${SPAWN_PERMISSION_BG_MAX_WAIT:-7200}"  # 默认 2h，与 sentinel --max-wait 对齐
+  local poll_interval="${SPAWN_PERMISSION_BG_POLL:-5}"
+  local waited=0
+  local hits=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! content=$(worker_session_content "$session"); then
+      echo "SPAWN_WORKER_PERMISSION_BG: session $session ended after ${waited}s, watcher exits (hits=$hits)"
+      return 0
+    fi
+
+    if echo "$content" | grep -q "Do you want to proceed"; then
+      hits=$((hits + 1))
+      echo "SPAWN_WORKER_PERMISSION_BG: 'Do you want to proceed' detected (hit $hits at ${waited}s), sending '2'"
+      worker_session_send_choice "$session" "2"
+      sleep 2  # 让 dialog 关闭
+    fi
+
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+
+  echo "SPAWN_WORKER_PERMISSION_BG: max_wait ${max_wait}s reached, watcher exits (hits=$hits)"
+  return 0
+}
+
+# v1.20.2 Task-020：监控 claude-code worker 首启的 "external imports" dialog。
+# CLAUDE.md 用 @import 引外部文件时，claude 首启弹 "Yes allow external imports" dialog（option 1 默认选中）。
+# v1.18.4 默认关 trust/permission 不覆盖此类；本函数独立监控，option 1 放行
+# （用户已在 CLAUDE.md @import = 已认可的全局规则；不自动 allow 未审视的运行期 import）。
+# 默认只 claude-code 启用（resolve_backend_defaults）；--no-external-imports-auto opt-out。
+external_imports_auto() {
+  local session="$1"
+  local max_wait="${EXTERNAL_IMPORTS_MAX_WAIT:-120}"
+  local poll_interval=2
+  local waited=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! content=$(worker_session_content "$session"); then
+      return 1  # session died, external-imports-auto skipped
+    fi
+    if echo "$content" | grep -qiE "allow external import|external import"; then
+      echo "SPAWN_WORKER_EXTERNAL_IMPORTS_AUTO: 'external imports' dialog detected, selecting option 1 (Yes allow, default)"
+      worker_session_send_enter "$session"
+      sleep 2
+      return 0
+    fi
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+  echo "SPAWN_WORKER_EXTERNAL_IMPORTS_AUTO: no external imports dialog within ${max_wait}s, continuing"
+  return 0
+}
+
+# 将一个 PreToolUse command hook 合并进现有 settings.local.json，不覆盖项目已有 hooks。
+merge_pretool_hook() {
+  local settings_file="$1"
+  local matcher="$2"
+  local hook_command="$3"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "SPAWN_WORKER_HOOK_DRY_RUN: file=$settings_file matcher=$matcher command=$hook_command"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$settings_file")"
+  local input_file="$settings_file"
+  local empty_file=""
+  if [ ! -f "$input_file" ]; then
+    empty_file=$(mktemp "${TMPDIR:-/tmp}/worker-settings.XXXXXX")
+    printf '{}\n' > "$empty_file"
+    input_file="$empty_file"
+  fi
+
+  local tmp_file="${settings_file}.tmp.$$"
+  if ! jq \
+    --arg matcher "$matcher" \
+    --arg command "$hook_command" \
+    '(.hooks.PreToolUse // []) as $existing
+    | .hooks = (.hooks // {})
+    | .hooks.PreToolUse = (
+        ($existing
+          | map(.hooks = ((.hooks // []) | map(select(.command != $command))))
+          | map(select((.hooks | length) > 0)))
+        + [{matcher: $matcher, hooks: [{type: "command", command: $command}]}]
+      )' "$input_file" > "$tmp_file"; then
+    rm -f "$tmp_file"
+    [ -z "$empty_file" ] || rm -f "$empty_file"
+    echo "ERROR: invalid settings JSON; refusing to install worker guard: $settings_file" >&2
+    return 1
+  fi
+  mv "$tmp_file" "$settings_file"
+  [ -z "$empty_file" ] || rm -f "$empty_file"
+  echo "SPAWN_WORKER_HOOK_SETTINGS: $settings_file matcher=$matcher"
+}
+
+# 默认安装依赖安装/环境写入硬门禁。精确命令只有同时带可审计授权来源才放行。
+dependency_install_guard_setup() {
+  if [ "$INSTALL_GUARD_MODE" = "prompt_only_degraded" ]; then
+    echo "SPAWN_WORKER_INSTALL_GUARD_DEGRADED: backend=$WORKER_BACKEND source=$INSTALL_GUARD_DEGRADATION_SOURCE" >&2
+    return 0
+  fi
+
+  local guard_hook="$SCRIPT_DIR/dependency-install-guard-hook.sh"
+  local guard_py="$SCRIPT_DIR/dependency-install-guard.py"
+  if [ ! -f "$guard_hook" ] || [ ! -f "$guard_py" ]; then
+    echo "ERROR: dependency install guard files are missing (fail-closed)" >&2
+    return 1
+  fi
+
+  local auth_q auth_b64 auth_b64_q backend_q receipt_q completion_q settings_q attestation_q receipt_content_sha receipt_sha_q orca_cli_q
+  case "$WORKER_BACKEND" in
+    claude-code|claude_code) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.claude/settings.local.json" ;;
+    codebuddy) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.codebuddy/settings.local.json" ;;
+    qoder-cn|qoderclicn) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.qoder/settings.local.json" ;;
+    *)
+      echo "ERROR: backend lost dependency install guard routing: $WORKER_BACKEND" >&2
+      return 1
+      ;;
+  esac
+  printf -v auth_q '%q' "$INSTALL_AUTH_FILE"
+  auth_b64=$(printf '%s' "$INSTALL_AUTH_JSON" | base64 | tr -d '\r\n')
+  printf -v auth_b64_q '%q' "$auth_b64"
+  printf -v backend_q '%q' "${WORKER_BACKEND:-claude-code}"
+  printf -v receipt_q '%q' "$AUTHORITY_RECEIPT_FILE"
+  receipt_content_sha=""
+  if [ -n "$AUTHORITY_RECEIPT_FILE" ] && [ "$DRY_RUN" -eq 0 ]; then
+    receipt_content_sha=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; print(load_authority(sys.argv[2])[1])' "$SCRIPT_DIR" "$AUTHORITY_RECEIPT_FILE") || return 1
+    if [ -z "$AUTHORITY_RECEIPT_SHA256" ] || [ "$receipt_content_sha" != "$AUTHORITY_RECEIPT_SHA256" ]; then
+      echo "ERROR: PM authority receipt content hash drifted before guard launch" >&2
+      return 1
+    fi
+  fi
+  printf -v receipt_sha_q '%q' "$receipt_content_sha"
+  printf -v orca_cli_q '%q' "${ORCA_CLI_BIN:-}"
+  printf -v completion_q '%q' "$COMPLETION_AUTHORITY_FILE"
+  printf -v settings_q '%q' "$INSTALL_GUARD_SETTINGS_FILE"
+  printf -v attestation_q '%q' "$GUARD_ATTESTATION_FILE"
+  COMMAND="env WORKER_INSTALL_AUTH_FILE=$auth_q WORKER_INSTALL_AUTH_B64=$auth_b64_q WORKER_AUTHORITY_RECEIPT_FILE=$receipt_q WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256=$receipt_sha_q WORKER_COMPLETION_AUTHORITY_FILE=$completion_q WORKER_ORCA_CLI_BIN=$orca_cli_q WORKER_GUARD_SETTINGS_FILE=$settings_q WORKER_GUARD_ATTESTATION_FILE=$attestation_q WORKER_GUARD_BACKEND=$backend_q $COMMAND"
+  if [ -n "$GIT_EXPECTED_NAME" ]; then
+    local git_name_q git_email_q
+    printf -v git_name_q '%q' "$GIT_EXPECTED_NAME"
+    printf -v git_email_q '%q' "$GIT_EXPECTED_EMAIL"
+    COMMAND="env GIT_AUTHOR_NAME=$git_name_q GIT_AUTHOR_EMAIL=$git_email_q GIT_COMMITTER_NAME=$git_name_q GIT_COMMITTER_EMAIL=$git_email_q $COMMAND"
+  fi
+
+  local hook_command
+  printf -v hook_command "bash '%s'" "$guard_hook"
+  case "$WORKER_BACKEND" in
+    claude-code|claude_code)
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
+      ;;
+    codebuddy)
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
+      ;;
+    qoder-cn|qoderclicn)
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
+      ;;
+    *)
+      echo "ERROR: backend lost dependency install guard routing: $WORKER_BACKEND" >&2
+      return 1
+      ;;
+  esac
+  echo "SPAWN_WORKER_INSTALL_GUARD: mode=hook policy=deny_by_default"
+}
+
+# Scope guard setup: write settings.local.json with PreToolUse hook + inject
+# SCOPE_GUARD_ALLOW env var into the tmux command so scope-guard.py can enforce
+# write-path whitelist even under -y/--dangerously-skip-permissions.
+# Based on ref 07 §9 (qoder PreToolUse hook unbypassable) and ref 08 §12
+# (codebuddy PreToolUse hook semantic parity expected).
+# Only active when --allow-paths is set; otherwise no-op (backward compatible).
+scope_guard_setup() {
+  # v2.14.0：reviewer 角色写范围纪律（角色分离验收波的强制默认）。
+  # reviewer 默认可写范围只有自身 Session Context；写被审分支必须由任务
+  # 合同显式授予修复权（--review-repair-grant）。无授权时 PM 传的任何
+  # --allow-paths 都是合同违规 → fail-closed 拒绝 spawn（不静默收窄）。
+  # config/*.local.yaml 的硬拒绝在 scope-guard.py 内生效，与授权无关。
+  if [ "$ROLE" = "reviewer" ]; then
+    if [ -z "$REVIEW_REPAIR_GRANT" ]; then
+      if [ "${#ALLOW_PATHS[@]}" -gt 0 ]; then
+        echo "ERROR: --role reviewer without --review-repair-grant may only write its own" >&2
+        echo "       Session Context; drop --allow-paths or grant branch repair explicitly" >&2
+        return 1
+      fi
+      ALLOW_PATHS=(".claude/agent-sessions/${SESSION}/**")
+      echo "SPAWN_WORKER_REVIEWER_SCOPE: session-context-only (no repair grant)"
+    else
+      echo "SPAWN_WORKER_REVIEWER_SCOPE: branch repair granted by task contract (${REVIEW_REPAIR_GRANT})"
+    fi
+  fi
+
+  if [ "${#ALLOW_PATHS[@]}" -eq 0 ]; then
+    return 0  # no scope guard
+  fi
+
+  case "$WORKER_BACKEND" in
+    zcode-cli|minimax-code|qoder-cn|qwenwork-cn)
+      echo "SPAWN_WORKER_SCOPE_GUARD_DEGRADED: backend=$WORKER_BACKEND prompt-only; no verified hook integration" >&2
+      return 0
+      ;;
+  esac
+
+  # Find scope-guard-hook.sh (wrapper) + scope-guard.py (in skill scripts dir)
+  # wrapper 必需:codebuddy/qoder 直接调 `python3 scope-guard.py` 时 stdin 不传
+  # (实测 2026-07-05 stdin 丢失 → scope-guard no-op → 越界不拦);wrapper 用 cat 中转 stdin。
+  local scope_guard_hook="$SCRIPT_DIR/scope-guard-hook.sh"
+  local scope_guard_py="$SCRIPT_DIR/scope-guard.py"
+  if [ ! -f "$scope_guard_hook" ] || [ ! -f "$scope_guard_py" ]; then
+    echo "SPAWN_WORKER_SCOPE_GUARD_WARN: scope-guard-hook.sh or scope-guard.py not found, skipping" >&2
+    return 1
+  fi
+
+  # Build SCOPE_GUARD_ALLOW env var (: separated glob list)
+  local scope_env
+  scope_env=$(IFS=:; echo "${ALLOW_PATHS[*]}")
+  export SCOPE_GUARD_ALLOW="$scope_env"
+  echo "SPAWN_WORKER_SCOPE_GUARD_ALLOW: $SCOPE_GUARD_ALLOW"
+
+  # Inject SCOPE_GUARD_ALLOW + reviewer role discipline into the tmux command
+  # via wrapper (v2.14.0: role env drives the reviewer layer in scope-guard.py;
+  # grant flag is 1 only for reviewer with an explicit task-contract grant)
+  local review_grant_env=0
+  if [ "$ROLE" = "reviewer" ] && [ -n "$REVIEW_REPAIR_GRANT" ]; then
+    review_grant_env=1
+  fi
+  COMMAND="env SCOPE_GUARD_ALLOW='$SCOPE_GUARD_ALLOW' SCOPE_GUARD_ROLE='$ROLE' SCOPE_GUARD_SESSION_ROOT='$SESSION_CONTEXT' SCOPE_GUARD_REVIEW_REPAIR_GRANT='$review_grant_env' $COMMAND"
+
+  local hook_command
+  printf -v hook_command "bash '%s'" "$scope_guard_hook"
+
+  # Write to claude-code settings（Task-114：事故后端 bl114-review-glm53flash）。
+  # claude-code 的文件编辑工具名为 Update；matcher 不含 Update 时 hook 根本不
+  # 触发，而旧实现只注入 SCOPE_GUARD_* env、不装 hook——Session Context 约束
+  # 在该后端完全不生效。必须与其他 backend 一样安装 scope-guard hook。
+  if [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; then
+    merge_pretool_hook "$WORKTREE/.claude/settings.local.json" \
+      "Edit|Write|NotebookEdit|Update" "$hook_command"
+  fi
+
+  # Write to codebuddy settings if backend is codebuddy or unspecified
+  if [ "$WORKER_BACKEND" = "codebuddy" ] || [ -z "$WORKER_BACKEND" ]; then
+    merge_pretool_hook "$WORKTREE/.codebuddy/settings.local.json" \
+      "Edit|Write|NotebookEdit|Update" "$hook_command"
+  fi
+
+  return 0
+}
+
+# v2.20.0：worker node 堆上限（2026-09-05 OOM 崩溃循环事故止血）。
+# 事故：多 worker 长输出场景下，会话内 node 进程（claude CLI / vitest / 测试脚本）
+# V8 堆无界增长 → FatalProcessOutOfMemory SIGABRT，PM 周期性重拉形成崩溃循环，
+# 极端时整机内存挤压触发 shutdown_stall 强制重启。注入 NODE_OPTIONS old-space
+# 上限：worker 到限自身退出（sentinel 记 failed，PM 按 §5 OOM 规则退避），不再拖垮系统。
+# 与 scope_guard 的 env 包装同模式（tmux new-session / Orca terminal 均经 shell 解析 COMMAND）。
+# 默认 2048MB；SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0 显式关闭；环境已有 NODE_OPTIONS
+# 时跳过（不覆盖用户显式配置，只打印提示）。
+node_mem_cap_setup() {
+  local cap_mb="${SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB:-2048}"
+  if [ -n "${MEMORY_TASK_PROFILE:-}" ]; then
+    # Recheck the same complete early binding, even for heavy profiles. Never
+    # infer late authorization from a cached heap/kind field.
+    if [ -z "${MEMORY_TASK_BINDING_B64:-}" ] || [ -z "${MEMORY_TASK_ORIGINAL_COMMAND:-}" ]; then
+      echo "ERROR: task memory launch missing early binding" >&2
+      exit 64
+    fi
+    MEMORY_TASK_RENDER_OUTER_COMMAND="$COMMAND"
+    if ! COMMAND=$(python3 "$SCRIPT_DIR/memory_task_admission.py" render-launch \
+        --profile "$MEMORY_TASK_PROFILE" --command "$MEMORY_TASK_ORIGINAL_COMMAND" \
+        --backend "$WORKER_BACKEND_CANONICAL" --binding-b64 "$MEMORY_TASK_BINDING_B64" \
+        --outer-command "$COMMAND" --execution-cwd "$WORKTREE" --pregate-branch "${pregate_branch:-}" \
+        --pregate-head "${pregate_head:-}" --pregate-common "${pregate_common:-}"); then
+      echo "ERROR: task memory profile/entry/interpreter drift at late launch boundary" >&2
+      exit 64
+    fi
+    MEMORY_TASK_RENDERED_COMMAND="$COMMAND"
+    local verified_memory_kind
+    # render-launch has just compared the complete binding against the live
+    # profile. This label consumes that verified kind; it grants no permission.
+    verified_memory_kind=$(printf '%s' "$MEMORY_TASK_BINDING_B64" | python3 -c 'import sys,json,base64; print(json.loads(base64.urlsafe_b64decode(sys.stdin.read()))["kind"])')
+    case "$verified_memory_kind" in
+      light_node) echo "SPAWN_WORKER_NODE_MEM_CAP: bound canonical execution guard; light total<=512MiB old-space=480MB semi-space=1MB" ;;
+      bounded_minimax_unmeasured) echo "SPAWN_WORKER_NODE_MEM_CAP: bound canonical MiniMax old-space=2048MB semi-space=1MB; whole-worker budget>=3GiB; RSS not_measured, not a hard RSS cap" ;;
+      *) echo "SPAWN_WORKER_NODE_MEM_CAP: bound canonical execution guard; workload-specific heap and whole-worker budget in binding receipt" ;;
+    esac
+    return 0
+  fi
+  if [ "$cap_mb" = "0" ]; then
+    echo "SPAWN_WORKER_NODE_MEM_CAP: disabled (SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0)"
+    return 0
+  fi
+  if [ -n "${NODE_OPTIONS:-}" ]; then
+    echo "SPAWN_WORKER_NODE_MEM_CAP: skipped, NODE_OPTIONS already set by caller: $NODE_OPTIONS"
+    return 0
+  fi
+  COMMAND="env NODE_OPTIONS=--max-old-space-size=${cap_mb} $COMMAND"
+  echo "SPAWN_WORKER_NODE_MEM_CAP: --max-old-space-size=${cap_mb}MB (opt-out: SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0)"
+}
+
+dependency_install_guard_setup
+scope_guard_setup
+# Session Context location is independent of install/scope guard activation.
+# This locator grants no authority and must agree with any existing guard binding.
+printf -v session_context_q '%q' "$SESSION_CONTEXT"
+COMMAND="env WORKER_SESSION_CONTEXT=$session_context_q $COMMAND"
+node_mem_cap_setup
+write_metadata
+
+exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude 2>/dev/null || echo "")
+if [ "$DRY_RUN" -eq 0 ] && [ -n "$exclude_file" ] && [ -f "$exclude_file" ] && ! grep -qxF ".claude/agent-sessions/" "$exclude_file" 2>/dev/null; then
+  printf '\n.claude/agent-sessions/\n' >> "$exclude_file"
+fi
+
+# shellcheck source=spawn-worker-launch.sh
+source "$SCRIPT_DIR/spawn-worker-launch.sh"
+launch_worker_session
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  finalize_provider_lease
+fi
+
+# Trust-auto + Permission-auto: headless CLI workers need trust-folder permission
+# and runtime permission prompts auto-accepted.
+# trust_auto: Selects "Trust folder and all subdirectories" (option 3) to avoid
+# both the initial trust prompt and subsequent subdir trust prompts.
+# permission_auto: Selects "Yes, and don't ask again for session" (option 2)
+# for "Do you want to proceed?" runtime prompts (cross-directory access).
+# permission_auto_bg (v1.18.3): 后台 watcher 持续 7200s，覆盖同步 60s 窗口外的 dialog。
+# v1.18.4: 默认值按 backend 分支（resolve_backend_defaults），claude-code 默认全关省 90s 空等；
+# 其他 backend 默认全开。flag --*/--no-* 均可 force override 默认值（详见 usage）。
+# Orca external argv terminals仍会出现 CLI 自己的 trust/permission 对话框；上述 watcher
+# 用 terminal read/send 处理。tmux 路径继续使用 capture-pane/send-keys。
+if [ "$DRY_RUN" -eq 0 ] && [ "$TRUST_AUTO" -eq 1 ]; then
+  trust_auto "$SESSION"
+fi
+if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO" -eq 1 ]; then
+  permission_auto "$SESSION"
+fi
+if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO_BG" -eq 1 ]; then
+  # v1.20.3.1 hotfix（接 v1.20.2 Task-021）：v1.20.2 用 nohup/setsid（外部 binary）调用
+  # permission_auto_bg（spawn-worker.sh bash 函数）是 bug — nohup/setsid 子进程找不到父 shell 函数，
+  # 报 command not found，bg watcher 从未启（W2 真机撞坑 + v1.20.3 真机 throwaway 复测 ps 都空）。
+  # 修复：v1.18.3 subshell 继承函数模式（subshell fork 继承父 shell 函数定义，能跑）。
+  # 已知限制：spawn-worker SIGTERM 时同进程组 bg 会死（v1.18.3 限制）；mitigation = Task-026 让
+  # spawn-worker 主进程 < 60s exit，bg 有时间跑（dialog 通常 30s 内弹，bg 60s max-wait 足够）。
+  # 未来 Linux 装 util-linux（setsid）时：可用 `setsid bash -c "$(declare -f permission_auto_bg); permission_auto_bg '$SESSION'"` 真正脱离进程组。
+  ( permission_auto_bg "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &
+  echo "SPAWN_WORKER_PERMISSION_BG: launched (subshell inherit function v1.18.3 模式；v1.20.2 setsid/nohup bug hotfix)"
+fi
+if [ "$DRY_RUN" -eq 0 ] && [ "$EXTERNAL_IMPORTS_AUTO" -eq 1 ]; then
+  # v1.20.3.1 hotfix（接 v1.20.2 Task-020）：同上 v1.20.2 setsid/nohup + 函数 bug 修复。
+  ( external_imports_auto "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &
+fi
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  if [ "$ORCA_MODE" = "auto" ]; then
+    # v2.1（DEC-114）：ORCA 模式。orca terminal create --worktree id:X 默认 cwd = worktree
+    # 根；物理路径也相同（ORCA worktree 本身不解析 symlink）。
+    pane_cwd="$ORCA_WORKTREE_PATH"
+    pane_cwd_physical="$ORCA_WORKTREE_PATH"
+  else
+    pane_cwd=$(tmux display-message -p -t "$SESSION" '#{pane_current_path}' 2>/dev/null || echo "")
+    pane_cwd_physical="$pane_cwd"
+    if [ -n "$pane_cwd" ] && [ -d "$pane_cwd" ]; then
+      pane_cwd_physical=$(cd "$pane_cwd" && pwd -P)
+    fi
+  fi
+  if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+    # v2.0：轻量模式隔离门禁只验 cwd == 目标文件夹，不验 branch
+    current_branch=""
+    expected_branch="-"
+    expected_cwd="$WORKTREE"
+  else
+    current_branch=$(git -C "$WORKTREE" branch --show-current 2>/dev/null || echo "")
+    expected_branch="$BRANCH"
+    expected_cwd="$WORKTREE"
+  fi
+  echo "SPAWN_WORKER_SESSION: $SESSION"
+  echo "SPAWN_WORKER_WORKTREE: $WORKTREE"
+  echo "SPAWN_WORKER_CONTEXT: $SESSION_CONTEXT"
+  echo "SPAWN_WORKER_ISOLATION_MODE: $isolation_mode_value"
+  # final gate 只保留 launch 后才能观察的事实（terminal pane cwd）。branch/HEAD 已由
+  # 上方 isolation pre-gate 在任何 terminal/worker-start 副作用之前判定完毕。
+  echo "SPAWN_WORKER_GATE: cwd=$pane_cwd_physical branch=$current_branch expected_cwd=$expected_cwd expected_branch=$expected_branch"
+  if [ "$pane_cwd_physical" != "$expected_cwd" ] || [ "$current_branch" != "$expected_branch" ]; then
+    echo "SPAWN_WORKER_GATE_FAILED" >&2
+    exit 2
+  fi
+fi
+
+# One initial instruction, derived from the actual launch boundary outcome.
+# This cannot upgrade input to accepted/started/done; official Orca projection
+# remains the later lifecycle authority.
+DISPATCH_LAUNCH_GUIDANCE=$(printf '%s' "$DISPATCH_PROFILE_JSON" | python3 "$SCRIPT_DIR/dispatch-profile-adapter.py" \
+  --launch-outcome "$DISPATCH_LAUNCH_OUTCOME") || exit 64
+if [ "$DRY_RUN" -eq 0 ] && [ -f "$METADATA_FILE" ]; then
+  tmp_profile_meta=$(mktemp)
+  jq --argjson launch "$DISPATCH_LAUNCH_GUIDANCE" --arg mode "$ORCA_MODE" \
+    '.runtime.dispatch_profile.launch = $launch | .runtime.dispatch_profile.transport_runtime_mode = $mode' \
+    "$METADATA_FILE" > "$tmp_profile_meta" && mv "$tmp_profile_meta" "$METADATA_FILE"
+fi
+printf 'SPAWN_WORKER_NEXT: %s; input_state=draft; acceptance/completion unverified; inspect %s/STATUS.json\n' \
+  "$(printf '%s' "$DISPATCH_LAUNCH_GUIDANCE" | jq -r '.next_action.kind')" "$SESSION_CONTEXT"
+
+if [ "$WITH_SENTINEL" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
+  SENTINEL_SCRIPT="$SCRIPT_DIR/sentinel.sh"
+  if [ "$ORCA_MODE" = "auto" ]; then
+    # v2.1（DEC-114）：ORCA 模式 sentinel 用 terminal-handle + worktree-id 路径；
+    # sentinel.sh 收到后走 orca terminal read / orca terminal close / orca worktree set 路径。
+    SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --terminal-handle $ORCA_TERMINAL_HANDLE --worktree-id $ORCA_WORKTREE_ID --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+    # supervised 时传 dispatch-id；sentinel 只观察/唤醒，不据 STATUS 结算生命周期。
+    if [ -n "$ORCA_SUPERVISED_DISPATCH_ID" ]; then
+      SENTINEL_CMD="$SENTINEL_CMD --dispatch-id $ORCA_SUPERVISED_DISPATCH_ID"
+    fi
+    # ORCA 模式下立即给 ORCA UI 设 in-progress（sentinel 终态会覆盖到 completed/failed）。
+    if [ "$DRY_RUN" -eq 0 ]; then
+      orca_cli worktree set --worktree "id:$ORCA_WORKTREE_ID" \
+        --workspace-status in-progress \
+        --comment "spawn-worker.sh ORCA mode: worker command launched, waiting STATUS.json" \
+        --json >/dev/null 2>&1 || true
+    fi
+  else
+    SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --tmux-session $SESSION --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+  fi
+  if [ "$KEEP_TMUX_ON_TERMINAL" -eq 1 ]; then
+    SENTINEL_CMD="$SENTINEL_CMD --keep-tmux-on-terminal"
+  fi
+  echo "SPAWN_WORKER_SENTINEL_CMD: $SENTINEL_CMD"
+  echo "SPAWN_WORKER_RECOMMENDED_NEXT: run the above command with Bash run_in_background=true (NOT from inside spawn-worker). Sentinel exit triggers harness task-notification and wakes PM."
+fi

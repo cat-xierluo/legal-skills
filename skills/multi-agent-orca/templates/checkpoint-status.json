@@ -1,0 +1,110 @@
+{
+  "status": "running",
+  "phase": "bootstrap",
+  "progress": "0/5",
+  "updated_at": "{{iso_timestamp}}",
+  "heartbeat_interval_seconds": 300,
+  "task_source": {
+    "type": "{{task_source_type}}",
+    "id": "{{issue_id}}",
+    "title": "{{task_title}}"
+  },
+  "orchestration_goal": {
+    "id": "{{goal_id}}",
+    "loop_iteration": "{{loop_iteration}}"
+  },
+  "wave": {
+    "id": "{{wave_id}}",
+    "worker_id": "{{wave_worker_id}}",
+    "role": "{{wave_role}}",
+    "exit_criteria": "{{wave_exit_criteria}}",
+    "exit_state": ""
+  },
+  "branch": "{{branch_name}}",
+  "worktree": "{{worktree_path}}",
+  "session_id": "{{session_id}}",
+  "session_context": "{{session_context_path}}",
+  "pm_host": "{{pm_host}}",
+  "worker_backend": "{{worker_backend}}",
+  "runtime_profile": "{{runtime_profile}}",
+  "worker_class": {
+    "type": "{{worker_type}}",
+    "risk": "{{risk_low_medium_high}}",
+    "shared_risk_notes": "{{shared_risk_notes}}"
+  },
+  "orchestration_gate": {
+    "required": true,
+    "session_verified": false,
+    "cwd_matches_worktree": false,
+    "branch_matches_expected": false,
+    "worktree_isolated": false,
+    "degraded": false,
+    "degrade_reason": "",
+    "escape_attempted": false
+  },
+  "runtime": {
+    "cwd": "{{worktree_path}}",
+    "settings_profile_path": "{{settings_or_profile_path}}",
+    "api_provider": "{{api_provider}}",
+    "model": "{{model_name}}",
+    "provider_slot": "{{provider_slot}}",
+    "tools": [
+      {
+        "name": "{{tool_name}}",
+        "path": "{{tool_path}}",
+        "version": "{{tool_version}}"
+      }
+    ]
+  },
+  "scope": {
+    "allowed_files": [],
+    "forbidden_files": []
+  },
+  "execution_authority": {
+    "environment_mutation_policy": "deny_by_default",
+    "install_guard_mode": "{{hook_or_prompt_only_degraded}}",
+    "install_authorization_source": "{{source_or_empty}}",
+    "authorized_install_commands": [],
+    "allowed_shell_commands": [],
+    "authority_receipt_file": "{{pm_receipt_path_or_empty}}",
+    "enforcement_source": "{{pretool_hook_settings_wired_process_snapshot_runtime_unproven_or_prompt_only_no_mechanical_enforcement}}",
+    "runtime_hook_attestation_file": "{{pm_side_attestation_path_or_empty}}",
+    "runtime_hook_attested": false,
+    "safe_push_command": "{{exact_safe_push_command_or_empty}}",
+    "missing_dependencies": [],
+    "environment_changes": []
+  },
+  "current_action": "bootstrap checkpoint",
+  "next_action": "{{next_action}}",
+  "git": {
+    "base_ref": "{{base_ref}}",
+    "head_ref": "{{branch_name}}",
+    "last_commit_sha": "",
+    "last_commit_at": "",
+    "commits_since_base": 0,
+    "pr_number": null,
+    "pr_url": ""
+  },
+  "files_touched": [],
+  "tests": [],
+  "needs_input": false,
+  "pm_action_required": false,
+  "blocker": "",
+  "issues": [],
+  "risks": [],
+  "model_evaluation": {
+    "isolation_gate_followed": null,
+    "status_heartbeat_followed": null,
+    "commit_cadence_followed": null,
+    "scope_followed": null,
+    "verification_passed": null,
+    "review_fix_count": 0,
+    "quality_notes": "",
+    "failure_modes": []
+  },
+  "last_pm_correction": {
+    "received_at": "",
+    "summary": "",
+    "status": "none"
+  }
+}

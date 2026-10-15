@@ -1,0 +1,14 @@
+{
+  "schema": "multi-agent-orchestration.continuation.v1",
+  "project_root": "/path/to/control-project",
+  "task_source": "/path/to/control-project/TASKS.md",
+  "pm_thread_id": "original-project-pm-thread-id",
+  "authorization_ref": "task:original-task-with-continuous-policy",
+  "automation_id": "existing-project-heartbeat-id",
+  "max_interval_seconds": 1200,
+  "on_worker_return": [
+    "independent_review",
+    "task_writeback",
+    "repair_or_next_ready"
+  ]
+}

@@ -153,11 +153,12 @@ function loadPurityPatterns(root) {
 
 const PLATFORM_DIR = path.join('packages', 'client')
 
-/** harness workspace 内声明了 dsh.client 的包名 → manifest 映射（供 inject 目标核对）。 */
+/** harness workspace 内声明了 dsh.client 的包名 → manifest 映射（供 inject 目标核对）。
+ *  packages/ 目录缺失时返回 undefined（区别于空索引）——调用方须降级为 NOT_VERIFIED 而非 FAIL。 */
 function loadClientPackageIndex(root) {
   const index = new Map()
   const packagesDir = path.join(root, 'packages')
-  if (!existsSync(packagesDir)) return index
+  if (!existsSync(packagesDir)) return undefined
   const walk = (current, depth) => {
     if (depth > 4) return
     let entries
@@ -190,7 +191,7 @@ function loadClientPackageIndex(root) {
 
 const platform = harnessAvailable ? loadPlatformModules(harness.root) : undefined
 const purity = harnessAvailable ? loadPurityPatterns(harness.root) : undefined
-const clientPackages = harnessAvailable ? loadClientPackageIndex(harness.root) : new Map()
+const clientPackages = harnessAvailable ? loadClientPackageIndex(harness.root) : undefined
 
 const harnessProvenance = { root: harness.root, source: harness.source, version: undefined, binVersion: undefined, commit: undefined }
 if (harnessAvailable) {
@@ -330,23 +331,162 @@ function findHardcodedCopy(tsx) {
   return { literals, jsxTexts, attrTexts }
 }
 
-/** 从 locale 词典源码提取导出对象键集（zh/en 平价校验用）。 */
-function extractDictKeys(source, constName) {
+/**
+ * 从 locale 词典源码静态解析导出对象的完整叶路径集（zh/en 平价校验用；不执行词典代码）。
+ * 嵌套对象按 `a.x` 完整路径计入；同文件 const 展开可解析合并；跨文件展开/计算键/
+ * 方法简写等不可静态确定形态记入 unsupported——调用方须转 NOT_VERIFIED，不出假 PASS。
+ */
+function parseDictPaths(source, constName) {
   const code = stripJsComments(source)
-  const start = code.match(new RegExp(`(?:export )?const ${constName}\\s*=\\s*\\{`))
-  if (start === undefined) return undefined
-  const open = start.index + start[0].length
-  let depth = 1
-  let i = open
-  while (i < code.length && depth > 0) {
-    if (code[i] === '{') depth += 1
-    else if (code[i] === '}') depth -= 1
-    i += 1
+  const startMatch = code.match(new RegExp(`(?:export\\s+)?const\\s+${constName}\\s*(?::[^=\\n]+)?=\\s*\\{`))
+  if (startMatch === null) return undefined
+  const unsupported = []
+  let cursor = startMatch.index + startMatch[0].length
+
+  const skipStringAt = (quote) => {
+    cursor += 1
+    while (cursor < code.length) {
+      const c = code[cursor]
+      if (c === '\\') { cursor += 2; continue }
+      cursor += 1
+      if (c === quote || c === '\n') return
+    }
   }
-  const body = code.slice(open, i - 1)
-  const keys = new Set()
-  for (const m of body.matchAll(/['"]?([A-Za-z0-9_.-]+)['"]?\s*:/g)) keys.add(m[1])
-  return keys
+  const skipTemplateAt = () => {
+    cursor += 1
+    let depth = 0
+    while (cursor < code.length) {
+      const c = code[cursor]
+      if (c === '\\') { cursor += 2; continue }
+      if (c === '`' && depth === 0) { cursor += 1; return }
+      if (c === '$' && code[cursor + 1] === '{') { depth += 1; cursor += 2; continue }
+      if (c === '}' && depth > 0) { depth -= 1; cursor += 1; continue }
+      if (depth > 0 && (c === '"' || c === "'")) { skipStringAt(c); continue }
+      cursor += 1
+    }
+  }
+  const skipBalancedAt = (open, close) => {
+    let depth = 0
+    while (cursor < code.length) {
+      const c = code[cursor]
+      if (c === '"' || c === "'") { skipStringAt(c); continue }
+      if (c === '`') { skipTemplateAt(); continue }
+      if (c === open) depth += 1
+      else if (c === close) {
+        depth -= 1
+        if (depth === 0) { cursor += 1; return }
+      }
+      cursor += 1
+    }
+  }
+  const skipValueAt = () => {
+    let depth = 0
+    while (cursor < code.length) {
+      const c = code[cursor]
+      if (c === '"' || c === "'") { skipStringAt(c); continue }
+      if (c === '`') { skipTemplateAt(); continue }
+      if (c === '(' || c === '[' || c === '{') { depth += 1; cursor += 1; continue }
+      if (c === ')' || c === ']') { depth -= 1; cursor += 1; continue }
+      if (c === '}') { if (depth === 0) return; depth -= 1; cursor += 1; continue }
+      if (c === ',' && depth === 0) return
+      cursor += 1
+    }
+  }
+
+  /** 解析 code[cursor-1] === '{' 起的对象体，返回 { paths, spreads, closed }。 */
+  const parseObject = () => {
+    const paths = new Set()
+    const spreads = []
+    while (cursor < code.length) {
+      while (cursor < code.length && /[\s,]/.test(code[cursor])) cursor += 1
+      if (cursor >= code.length) break
+      const c = code[cursor]
+      if (c === '}') { cursor += 1; return { paths, spreads, closed: true } }
+      if (code.startsWith('...', cursor)) {
+        cursor += 3
+        while (cursor < code.length && /\s/.test(code[cursor])) cursor += 1
+        const m = /^[A-Za-z_$][\w$]*/.exec(code.slice(cursor))
+        if (m === null) { unsupported.push('展开目标不可解析'); skipValueAt(); continue }
+        cursor += m[0].length
+        if (cursor < code.length && /[.(]/.test(code[cursor])) {
+          unsupported.push('展开源为成员表达式/调用，不可静态解析')
+          skipValueAt()
+          continue
+        }
+        spreads.push(m[0])
+        continue
+      }
+      if (c === '[') { unsupported.push('计算键'); skipBalancedAt('[', ']'); skipValueAt(); continue }
+      let key = null
+      if (c === '"' || c === "'") {
+        const start = cursor
+        skipStringAt(c)
+        key = code.slice(start + 1, cursor - 1)
+      } else {
+        const m = /^[A-Za-z_$][\w$]*|^\d[\d.]*/.exec(code.slice(cursor))
+        if (m === null) {
+          unsupported.push(`条目起点不可解析: ${JSON.stringify(code.slice(cursor, cursor + 10))}`)
+          skipValueAt()
+          continue
+        }
+        key = m[0]
+        cursor += m[0].length
+      }
+      while (cursor < code.length && /\s/.test(code[cursor])) cursor += 1
+      if (code[cursor] !== ':') { unsupported.push(`键 ${key} 非简单键值形态（方法简写/getter 等）`); skipValueAt(); continue }
+      cursor += 1
+      while (cursor < code.length && /\s/.test(code[cursor])) cursor += 1
+      if (code[cursor] === '{') {
+        cursor += 1
+        const sub = parseObject()
+        if (!sub.closed) unsupported.push('嵌套对象未闭合')
+        if (sub.paths.size === 0) paths.add(key)
+        else for (const p of sub.paths) paths.add(`${key}.${p}`)
+        spreads.push(...sub.spreads)
+      } else {
+        paths.add(key)
+        skipValueAt()
+      }
+    }
+    unsupported.push('对象未闭合')
+    return { paths, spreads, closed: false }
+  }
+
+  const root = parseObject()
+  // 同文件 const 展开源解析（带循环引用防护）
+  const resolved = new Map()
+  const resolving = new Set()
+  const resolveSpread = (name) => {
+    if (resolved.has(name)) return resolved.get(name)
+    if (resolving.has(name)) {
+      unsupported.push(`展开源 ${name} 循环引用`)
+      return { paths: new Set(), spreads: [] }
+    }
+    resolving.add(name)
+    let result = { paths: new Set(), spreads: [] }
+    const m = code.match(new RegExp(`(?:export\\s+)?const\\s+${name}\\s*(?::[^=\\n]+)?=\\s*\\{`))
+    if (m === null) unsupported.push(`展开源 ${name} 不在同文件（import/运行时构造），键集不完整`)
+    else {
+      const saved = cursor
+      cursor = m.index + m[0].length
+      const obj = parseObject()
+      if (!obj.closed) unsupported.push(`展开源 ${name} 对象未闭合`)
+      for (const s of obj.spreads) {
+        const sub = resolveSpread(s)
+        for (const p of sub.paths) obj.paths.add(p)
+      }
+      result = { paths: obj.paths, spreads: [] }
+      cursor = saved
+    }
+    resolving.delete(name)
+    resolved.set(name, result)
+    return result
+  }
+  for (const name of root.spreads) {
+    const sub = resolveSpread(name)
+    for (const p of sub.paths) root.paths.add(p)
+  }
+  return { paths: root.paths, unsupported }
 }
 
 function listClientSourceFiles(rootDir) {
@@ -357,7 +497,7 @@ function listClientSourceFiles(rootDir) {
     for (const entry of readdirSync(current)) {
       const full = path.join(current, entry)
       if (statSync(full).isDirectory()) walk(full)
-      else if (/\.(ts|tsx|css)$/.test(entry)) files.push(full)
+      else if (/\.(ts|tsx|js|mjs|jsx|css)$/.test(entry)) files.push(full)
     }
   }
   walk(clientDir)
@@ -393,6 +533,7 @@ if (!harnessAvailable) {
   if (platform === undefined) unverifiable('无法从 packages/client/web/src/platform.ts 解析平台模块表——基线对账类检查降级')
   else pass(`平台模块表 ${platform.baseline.length} 项（${path.relative(harness.root, platform.file)}）`)
   if (purity === undefined) unverifiable('无法从 packages/client/tsdown.client.ts 解析内联安全正则——纯度复核降级')
+  if (clientPackages === undefined) unverifiable('harness packages/ 目录不可读——inject 目标 workspace 侧核验降级')
   if (harness.baseline !== undefined && harnessProvenance.dshVersion !== undefined && harness.baseline !== harnessProvenance.dshVersion) {
     warn(`config 声明的基线版本 ${harness.baseline} 与当前 harness 版本 ${harnessProvenance.dshVersion} 不一致——先复核规范再审查`)
   }
@@ -433,8 +574,22 @@ if (typeof bundlePatch === 'string') {
   if (existsSync(patchFile)) {
     pass(`patch 文件存在: ${bundlePatch}`)
     const patchText = readFileSync(patchFile, 'utf8')
-    if (patchText.includes(pkg.name)) pass(`patch row 引用了 ${pkg.name}`)
-    else fail(`cordis.patch.yml 中未找到包名 ${pkg.name}（row name 不一致则 Loader 解析不到）`)
+    // 区分文本出现与有效声明：剥除注释行与空行后，核 id/name 声明值（结构不可辨时转人工，不出假 PASS）
+    const nonComment = patchText.split('\n').filter(line => !/^\s*(?:#.*)?$/.test(line)).join('\n')
+    const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const nameValueRe = new RegExp(`(?:^|\\n)[ \\t]*(?:id|name)[ \\t]*:[ \\t]*['"]?${escapeRe(pkg.name)}['"]?[ \\t]*(?:$|\\n|#)`)
+    const rowStartRe = /^\s*-\s*\w|^\s*\w+\s*:/m
+    if (!nonComment.trim()) {
+      fail(`cordis.patch.yml 无有效声明行（仅注释/空行）——宿主不会装载 ${pkg.name}`)
+    } else if (nameValueRe.test(nonComment)) {
+      pass(`patch row 引用了 ${pkg.name}（id/name 声明值）`)
+    } else if (!rowStartRe.test(nonComment)) {
+      unverifiable(`patch 结构无法机械解析（未识别到 insert/键值行）——转人工核对 ${pkg.name} 的 row 声明`)
+    } else if (nonComment.includes(pkg.name)) {
+      unverifiable(`包名 ${pkg.name} 出现在非 id/name 声明位置——转人工核对 patch row`)
+    } else {
+      fail(`cordis.patch.yml 中未找到 ${pkg.name} 的有效声明行（row name 不一致则 Loader 解析不到）`)
+    }
   } else fail(`dsh.bundle.patch 指向的文件不存在: ${bundlePatch}`)
 } else {
   warn('无 dsh.bundle 声明（纯库可忽略；插件必须有）')
@@ -442,10 +597,54 @@ if (typeof bundlePatch === 'string') {
 
 // ══ §3 exports["."] ═══════════════════════════════════════════════════════
 console.log('\n§ 3 exports["."]')
-const mainExport = pkg.exports?.['.']?.default ?? pkg.main
-if (typeof mainExport === 'string' && existsSync(path.join(dir, mainExport))) {
+/** 按 Node 语义解析 exports["."]：字符串 / default / node>import>require>default 条件 / fallback 数组。
+ *  无法机械解析的条件形态返回 undefined——调用方转 NOT_VERIFIED，不误判 FAIL 也不出假 PASS。 */
+function resolveDotExportValue(spec, depth = 0) {
+  if (depth > 6 || spec === null || spec === undefined) return undefined
+  if (typeof spec === 'string') return spec
+  if (Array.isArray(spec)) {
+    for (const item of spec) {
+      const r = resolveDotExportValue(item, depth + 1)
+      if (r !== undefined) return r
+    }
+    return undefined
+  }
+  if (typeof spec === 'object') {
+    if (Object.prototype.hasOwnProperty.call(spec, 'default')) {
+      const r = resolveDotExportValue(spec.default, depth + 1)
+      if (r !== undefined) return r
+    }
+    for (const cond of ['node', 'import', 'require', 'default']) {
+      if (cond !== 'default' && Object.prototype.hasOwnProperty.call(spec, cond)) {
+        const r = resolveDotExportValue(spec[cond], depth + 1)
+        if (r !== undefined) return r
+      }
+    }
+    return undefined
+  }
+  return undefined
+}
+const dotExportRaw = typeof pkg.exports === 'string'
+  ? pkg.exports
+  : (pkg.exports !== null && typeof pkg.exports === 'object' && !Array.isArray(pkg.exports) ? pkg.exports['.'] : undefined)
+let mainExport
+if (dotExportRaw !== undefined) {
+  const resolvedEntry = resolveDotExportValue(dotExportRaw)
+  if (typeof resolvedEntry === 'string') mainExport = resolvedEntry
+  else {
+    unverifiable('exports["."] 为无法机械解析的条件导出形态——入口转人工（可 node --input-type=module -e \'import("<pkg>").then(...)\' 验证）')
+    mainExport = undefined
+  }
+} else {
+  mainExport = pkg.main
+}
+if (mainExport === undefined && dotExportRaw !== undefined) {
+  // 已转 NOT_VERIFIED，跳过存在性判定
+} else if (typeof mainExport === 'string' && existsSync(path.join(dir, mainExport))) {
   pass(`node half 入口存在: ${mainExport}`)
-} else fail(`exports["."].default / main 指向的文件不存在: ${String(mainExport)}`)
+} else {
+  fail(`exports["."].default / main 指向的文件不存在: ${String(mainExport)}`)
+}
 
 // ══ §4 dsh.client + inject/external 对账 ══════════════════════════════════
 console.log('\n§ 4 dsh.client（inject/external 对账）')
@@ -465,10 +664,12 @@ if (clientDecl === undefined) {
       continue
     }
     if (entry === pkg.name) fail('dsh.client.inject 声明了自身包名（自注入边）')
-    const inHarness = clientPackages.has(entry)
+    const inHarness = clientPackages !== undefined && clientPackages.has(entry)
     const localManifest = readJsonSafe(path.join(dir, 'node_modules', entry, 'package.json'))
     if (inHarness || localManifest?.dsh?.client !== undefined) {
       pass(`inject 目标声明了 dsh.client: ${entry}${inHarness ? '（harness workspace）' : '（本地 node_modules）'}`)
+    } else if (clientPackages === undefined) {
+      unverifiable(`inject 目标 ${entry} 无法核验——harness workspace 包索引不可用（本地 node_modules 亦未见 dsh.client 声明）`)
     } else {
       fail(`inject 目标 ${entry} 在 harness workspace 与本地 node_modules 均未声明 dsh.client——该边永远等不到工厂`)
     }
@@ -526,6 +727,7 @@ if (clientDecl !== undefined) {
       const builtins = []
       let externalsOk = 0
       const unknowns = []
+      const unknownNeedsPlatform = []
       const impure = []
       for (const spec of bare) {
         if (isBuiltin(spec) || spec.startsWith('node:')) { builtins.push(spec); continue }
@@ -539,12 +741,18 @@ if (clientDecl !== undefined) {
           purity !== undefined
           && ((purity.inlineSafe?.test(spec) ?? false) || (purity.vendored?.test(spec) ?? false) || (purity.generatedRemote?.test(spec) ?? false))
         ) { impure.push(spec); continue }
-        unknowns.push(spec)
+        if (platform === undefined) unknownNeedsPlatform.push(spec)
+        else unknowns.push(spec)
       }
       if (externalsOk > 0) pass(`bare require 与模块表对账通过 ${externalsOk} 项`)
       if (unknowns.length > 0) {
         for (const spec of unknowns) {
           fail(`产物 bare require("${spec}") 不在平台基线也不在 dsh.client.external——模块表无法应答，浏览器端必抛`)
+        }
+      }
+      if (unknownNeedsPlatform.length > 0) {
+        for (const spec of unknownNeedsPlatform) {
+          unverifiable(`平台模块表不可用——bare require("${spec}") 无法与基线/声明对账（不判 FAIL，补 --harness-root 后重跑）`)
         }
       }
       if (impure.length > 0) {
@@ -570,16 +778,19 @@ const buildConfigFile = ['tsdown.client.config.ts', 'tsdown.config.ts', 'tsdown.
   .find(file => existsSync(file))
 if (clientDecl !== undefined && buildConfigFile !== undefined) {
   const configText = readTextSafe(buildConfigFile) ?? ''
-  // 只取 externals 语义的声明体：*external*/EXTERNAL 命名的 Set/数组字面量，或 neverBundle/alwaysBundle 的内联数组。
+  // 只取 externals 语义的声明体：*external*/EXTERNAL 命名的 Set/数组字面量，或 neverBundle/external 的内联数组。
+  // deps.alwaysBundle 是强制内联（tsdown 语义，与 external 方向相反），单独收集，不入 external 集。
   const bodies = []
   for (const m of configText.matchAll(/[\w$]*external[\w$]*\s*(?::[^=\n]*)?=\s*(?:new\s+Set\s*\(\s*)?\[([^\]]*)\]/gi)) bodies.push(m[1])
-  for (const m of configText.matchAll(/\b(?:neverBundle|alwaysBundle|external)\s*:\s*\[([^\]]*)\]/g)) bodies.push(m[1])
-  const configExternals = new Set()
-  for (const body of bodies) {
-    for (const m of body.matchAll(/['"]([^'"]+)['"]/g)) {
-      const spec = m[1]
-      if (/\.(ts|tsx|js|mjs|cjs|css|json|yml|yaml)$/.test(spec)) continue
-      configExternals.add(spec)
+  for (const m of configText.matchAll(/\b(?:neverBundle|external)\s*:\s*\[([^\]]*)\]/g)) bodies.push(m[1])
+  const stringSpecs = (body) => [...body.matchAll(/['"]([^'"]+)['"]/g)]
+    .map(m => m[1])
+    .filter(spec => !/\.(ts|tsx|js|mjs|cjs|css|json|yml|yaml)$/.test(spec))
+  const configExternals = new Set(bodies.flatMap(stringSpecs))
+  const alwaysBundleSpecs = new Set([...configText.matchAll(/\balwaysBundle\s*:\s*\[([^\]]*)\]/g)].flatMap(m => stringSpecs(m[1])))
+  for (const spec of alwaysBundleSpecs) {
+    if (declaredExternal.has(spec) || declaredExternal.has(stripClientSuffix(spec))) {
+      fail(`构建配置把 "${spec}" 声明为 alwaysBundle 强制内联，dsh.client.external 又声明为外置——方向冲突，运行时模块表与产物必不一致`)
     }
   }
   if (bodies.length === 0) {
@@ -589,7 +800,12 @@ if (clientDecl !== undefined && buildConfigFile !== undefined) {
       !isBuiltin(spec)
       && !(platform !== undefined && (platform.baseline.includes(spec) || platform.baseline.includes(stripClientSuffix(spec))))
       && !declaredExternal.has(spec) && !declaredExternal.has(stripClientSuffix(spec)))
-    if (unknown.length > 0) {
+    if (platform === undefined) {
+      for (const spec of unknown) {
+        unverifiable(`平台模块表不可用——构建配置标为 external 的 "${spec}" 无法判定是否基线项，转人工`)
+      }
+      if (unknown.length === 0) pass(`构建配置 external 集 ⊆ dsh.client.external（${path.basename(buildConfigFile)}，${configExternals.size} 项；平台基线不可用未参与判定）`)
+    } else if (unknown.length > 0) {
       for (const spec of unknown) {
         fail(`构建配置 ${path.basename(buildConfigFile)} 把 "${spec}" 标为 external，但既非平台基线也未声明 dsh.client.external——运行时模块表无法应答`)
       }
@@ -615,6 +831,11 @@ if (harnessThemeDir !== undefined && existsSync(harnessThemeDir)) {
 }
 
 const pluginFiles = listClientSourceFiles(dir)
+if (pluginFiles.length > 0) {
+  pass(`client 源扫描: ${pluginFiles.length} 文件（范围 src/client，扩展名 ts/tsx/js/mjs/jsx/css）`)
+} else {
+  warn('src/client 未发现 ts/tsx/js/mjs/jsx/css 源——其他源布局（如 lib/client）不在机械扫描范围：主题变量/文案/locale 检查未覆盖（不等于无违规），转人工')
+}
 const pluginDeclared = new Set()
 const pluginUsed = new Map()
 for (const file of pluginFiles) {
@@ -645,7 +866,7 @@ console.log('\n§ 7 文案与类型化 locale')
 const isExempt = (file) => {
   const base = path.basename(file)
   const relPath = rel(file)
-  return /(^|[/.])locales?[/.]/.test(relPath) || /locales\.ts$/.test(base) || /\.(spec|test)\./.test(base)
+  return /(^|[/.])locales?[/.]/.test(relPath) || /locales\.(ts|tsx|js|mjs)$/.test(base) || /\.(spec|test)\./.test(base)
 }
 const copyFiles = pluginFiles.filter(file => !isExempt(file))
 const cjkFiles = []
@@ -666,31 +887,37 @@ for (const { file, samples, count } of cjkFiles) {
   warn(`源码含 CJK 字符串字面量 ${count} 处（若渲染为产品文案需迁入 locale 词典）: ${rel(file)} — 例: ${JSON.stringify(samples[0])}`)
 }
 
-// zh/en 词典平价（类型化 locale 所有权正向检查）
+// zh/en 词典平价（类型化 locale 所有权正向检查；按完整叶路径比较，不可静态解析形态转人工）
 const dictCandidates = [
   path.join(dir, 'src', 'client', 'locales.ts'),
+  path.join(dir, 'src', 'client', 'locales.js'),
   path.join(dir, 'src', 'client', 'locales', 'zh.ts'),
+  path.join(dir, 'src', 'client', 'locales', 'zh.js'),
 ]
 const dictFile = dictCandidates.find(file => existsSync(file))
 if (dictFile !== undefined) {
-  const zhSource = readFileSync(dictFile, 'utf8')
-  const zhKeys = extractDictKeys(zhSource, 'zh')
-  let enKeys
-  if (path.basename(dictFile) === 'locales.ts') {
-    enKeys = extractDictKeys(zhSource, 'en')
+  const zhParsed = parseDictPaths(readFileSync(dictFile, 'utf8'), 'zh')
+  let enParsed
+  if (/^locales\.[a-z]+$/.test(path.basename(dictFile))) {
+    enParsed = parseDictPaths(readFileSync(dictFile, 'utf8'), 'en')
   } else {
-    const enFile = path.join(path.dirname(dictFile), 'en.ts')
-    enKeys = existsSync(enFile) ? extractDictKeys(readFileSync(enFile, 'utf8'), 'en') : undefined
+    const enFile = path.join(path.dirname(dictFile), `en${path.extname(dictFile)}`)
+    enParsed = existsSync(enFile) ? parseDictPaths(readFileSync(enFile, 'utf8'), 'en') : undefined
   }
-  if (zhKeys === undefined || enKeys === undefined) {
-    unverifiable(`locale 词典存在但无法机械解析 zh/en 键集: ${rel(dictFile)}（转人工核对 en 是否对齐 zh 键集）`)
+  if (zhParsed === undefined || enParsed === undefined) {
+    unverifiable(`locale 词典存在但未找到可解析的 zh/en 导出对象: ${rel(dictFile)}（转人工核对 en 是否对齐 zh 键集）`)
+  } else if (zhParsed.unsupported.length > 0 || enParsed.unsupported.length > 0) {
+    const reasons = [...new Set([...zhParsed.unsupported, ...enParsed.unsupported])].join('；')
+    unverifiable(`locale 词典存在不可静态解析形态（${reasons}）——键集平价转人工: ${rel(dictFile)}`)
   } else {
-    const missingInEn = [...zhKeys].filter(key => !enKeys.has(key))
-    const extraInEn = [...enKeys].filter(key => !zhKeys.has(key))
+    const zhKeys = zhParsed.paths
+    const enKeys = enParsed.paths
+    const missingInEn = [...zhKeys].filter(key => !enKeys.has(key)).sort()
+    const extraInEn = [...enKeys].filter(key => !zhKeys.has(key)).sort()
     if (missingInEn.length > 0 || extraInEn.length > 0) {
-      fail(`locale 词典 zh/en 键集不平价: en 缺 [${missingInEn.join(', ')}] en 多 [${extraInEn.join(', ')}]（en 必须对齐 zh 键集）`)
+      fail(`locale 词典 zh/en 键集不平价（完整叶路径）: en 缺 [${missingInEn.join(', ')}] en 多 [${extraInEn.join(', ')}]（en 必须对齐 zh 键集）`)
     } else {
-      pass(`locale 词典 zh/en 键集平价（${zhKeys.size} 键）`)
+      pass(`locale 词典 zh/en 键集平价（${zhKeys.size} 叶路径，含嵌套完整路径）`)
     }
   }
 }

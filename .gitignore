@@ -261,3 +261,13 @@ skills/github-star-manager/output/
 .audit-evidence/
 # ZCode Desktop 本地工具配置（自动生成，含本机规则区）
 .zcodeignore
+skills/github-star-manager/scripts/output/stars_raw.json
+skills/github-star-manager/scripts/output/stars_raw_new.json
+
+# Multi-Agent Orca: current task/policy tracking and private runtime exclusions
+# multi-agent-orca 的跨会话维护上下文随 Skill 源码维护
+!skills/multi-agent-orca/DECISIONS.md
+!skills/multi-agent-orca/TASKS.md
+!skills/multi-agent-orca/config/harness-backend-policy.json
+# multi-agent-orca 远程调度回执（runtime 临时文件，含 nonce/会话名，不入库）
+skills/multi-agent-orca/config/remote-dispatch-inbox/

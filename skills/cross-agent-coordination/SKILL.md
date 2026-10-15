@@ -20,7 +20,7 @@ version: 1.0.0
 - 需要跨会话保留任务上下文、依赖和交接记录
 
 **不使用本 Skill：**
-- 单一平台内的并行执行：使用 `multi-agent-orchestration`
+- 单一平台内的并行执行：使用 `multi-agent-orca`
 - 纯 Git 安全规范：使用 `git-workflow`
 
 ## 2. 核心规则
@@ -206,7 +206,7 @@ agents:
 Adapter 选择规则：
 - 复杂网络搜索、资料收集、网页操作：优先分配给具备 `web_research` / `browser_ops` 能力的 Agent。
 - 图片生成、视觉资产：优先分配给具备 `image_generation` 能力的 Agent。
-- 代码修改、本地测试、worktree 执行：交给本地 Agent，并由 `multi-agent-orchestration` 管 session。
+- 代码修改、本地测试、worktree 执行：交给本地 Agent，并由 `multi-agent-orca` 管 session。
 - 任何 adapter 都必须绑定项目任务源中的任务或先查重；结果通过分支、PR、handoff note 回到仓库。
 
 ## 9. 参考文档
@@ -219,10 +219,10 @@ Adapter 选择规则：
 
 ## 10. Related Skills
 
-| 维度 | cross-agent-coordination | multi-agent-orchestration | git-workflow |
+| 维度 | cross-agent-coordination | multi-agent-orca | git-workflow |
 |------|-------------------|----------------------|--------------|
 | 定位 | 任务协调层 | 本地执行层 | Git 安全层 |
 | 主责 | 项目任务源状态、Agent 归属、交接上下文 | Agent Teams / tmux 会话、worktree、PM 巡检 | 分支、PR、diff、review、merge 安全规则 |
 | 不负责 | 本地会话管理、Git 合并策略 | 任务主状态、外部 Agent 邮件触发 | 任务分配、本地 Agent 调度 |
 
-协作模式：先由 `cross-agent-coordination` 从项目任务源确定任务；同平台需要并行执行时使用 `multi-agent-orchestration`；涉及分支、PR、review 或 merge 时遵循 `git-workflow`。
+协作模式：先由 `cross-agent-coordination` 从项目任务源确定任务；同平台需要并行执行时使用 `multi-agent-orca`；涉及分支、PR、review 或 merge 时遵循 `git-workflow`。

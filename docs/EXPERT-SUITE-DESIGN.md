@@ -311,7 +311,7 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 | `intellectual-property-practice` | 知识产权业务 | `patent-download`、`patent-analysis`、`code2patent`、`trademark-assistant`、`new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-visualization` | 专利分析、代码专利化和商标申请规划 |
 | `legal-research-client-insight` | 法律研究与客户洞察 | `yuandian-law-search`、`legal-client-brief`、`legal-industry-report`、`legal-text-format`、`wechat-article-fetch`、`legal-visualization`、`de-ai-polish`、`md2word`、`piclist-upload` | 法律研究、客户简报和行业报告 |
 | `lawyer-knowledge-production` | 律师知识生产 | `dingtalk-minutes`、`local-asr`、`transcription-corrector`、`lecture-review`、`course-generator`、`article2book`、`de-ai-polish`、`md2word`、文章/书籍插图 Skills、`piclist-upload` | 从既有内容资产生成课程、书稿和文章 |
-| `skill-development-quality` | Skill 开发与质量保障 | `project-init`、`legal-harness-init`、`skill-lint`、`verification-gate`、`git-workflow`、`multi-agent-orchestration`、`cross-agent-coordination`、`agent-email` | Skill 项目初始化、开发、验证与协作收口 |
+| `skill-development-quality` | Skill 开发与质量保障 | `project-init`、`legal-harness-init`、`skill-lint`、`verification-gate`、`git-workflow`、`multi-agent-orca`、`cross-agent-coordination`、`agent-email` | Skill 项目初始化、开发、验证与协作收口 |
 | `skill-release-distribution` | Skill 发布与分发 | `git-batch-commit`、`git-workflow`、`release-workflow`、`skill-publish-sync`、`subtree-publish`、`skill-manager`、`skill-lint`、`verification-gate` | 版本、Release、多渠道同步和用户安装 |
 
 同一个 Skill 在表中重复出现是有意设计，不需要为避免重复而删减场景成员。

@@ -1,0 +1,9 @@
+{
+  "schema": "quota-aware-routing.summary.v1",
+  "generated_at": "FIXTURE_GENERATED_AT_STALE",
+  "lanes": {
+    "lane-a": {"type": "fuel", "remaining_percent": 80.0, "resets_at": "FIXTURE_RESETS_FUTURE", "health": "ok"},
+    "lane-b": {"type": "fuel", "remaining_percent": 10.0, "resets_at": "FIXTURE_RESETS_FUTURE", "health": "ok"},
+    "lane-r": {"type": "reservoir", "health": "ok"}
+  }
+}

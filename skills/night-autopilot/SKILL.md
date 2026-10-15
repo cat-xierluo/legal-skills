@@ -4,7 +4,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "0.2.1"
 license: MIT
-description: 无人值守自主推进模式（宿主无关、领域无关）——定时触发下，Agent 自动整理任务、查找下一项、完成或派发、监测 subagent/独立 worker、验收推进并记录交接。适用于代码项目（PR/测试验收）与法律项目（文书核对+律师终审门）等任何有任务源和可定义验收判据的领域。在用户说「我要去睡觉了/今晚继续推进/不间断运行/明早给我结果」并要求定时派发验收时使用。不要用于：单次后台任务（直接派发即可）、用户在场的普通编排（用 multi-agent-orchestration）、一次性定时提醒。
+description: 无人值守自主推进模式（宿主无关、领域无关）——定时触发下，Agent 自动整理任务、查找下一项、完成或派发、监测 subagent/独立 worker、验收推进并记录交接。适用于代码项目（PR/测试验收）与法律项目（文书核对+律师终审门）等任何有任务源和可定义验收判据的领域。在用户说「我要去睡觉了/今晚继续推进/不间断运行/明早给我结果」并要求定时派发验收时使用。不要用于：单次后台任务（直接派发即可）、用户在场的普通编排（用 multi-agent-orca）、一次性定时提醒。
 ---
 
 # Night Autopilot（无人值守自主推进）
@@ -13,7 +13,7 @@ description: 无人值守自主推进模式（宿主无关、领域无关）—�
 
 首战实例：dsh-plugins 仓 2026-09-30 夜（ZCode 宿主、15 分钟轮、代码域、六卡交付）；泛化需求来自用户同日指示（其他宿主定时机制不同 + 法律项目也要能夜跑）。
 
-**定位与分工**：本 skill 是**自主推进循环层**——任务自组织、定时触发、巡检验收、记录交接。通道选择、派发门禁、worker 纪律以其宿主规则 [multi-agent-orchestration](../multi-agent-orchestration/SKILL.md) 为准；Git/PR 规则用 git-workflow。本 skill 不重复它们的内容。
+**定位与分工**：本 skill 是**自主推进循环层**——任务自组织、定时触发、巡检验收、记录交接。通道选择、派发门禁、worker 纪律以其宿主规则 [multi-agent-orca](../multi-agent-orca/SKILL.md) 为准；Git/PR 规则用 git-workflow。本 skill 不重复它们的内容。
 
 ## 1. 核心循环（五步，宿主无关）
 

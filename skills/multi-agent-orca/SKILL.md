@@ -1,0 +1,292 @@
+---
+name: multi-agent-orca
+description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
+license: MIT
+metadata:
+  version: "3.0.0"
+  homepage: https://github.com/cat-xierluo/legal-skills
+  author: 杨卫薪律师（微信ywxlaw）
+---
+
+# Multi-Agent Orca
+
+以当前主会话作为 PM，拆解、派工、巡检、验收和收口多个本地 Agent。日常 worktree 与 terminal/session 优先由 Orca 管理；Orca 不可用、用户明确要求或需要复现兼容路径时才使用 tmux。不要把“开了终端”误写成“建立了受监管任务”。
+
+## 1. 适用边界与副作用
+
+使用本 Skill：
+
+- 同时推进两个以上边界独立、可分别验收的本地任务。
+- 需要独立 worktree、分支、session、额度 lane 或可人工接管的长任务。
+- PM 需要读取 worker 进度、纠偏、等待结构化完成事件并统一收口。
+- 用户明确要求 Orca、tmux、独立 session、多个 worker、PM/orchestrator 或 Wave Autopilot。
+
+不要使用：
+
+- 单个短任务、一次性问答或无并行价值的单文件修改。
+- 纯任务源、负责人和依赖状态同步：遵循项目任务源规则，不在本 Skill 扩展。
+- branch/commit/push/PR/merge/冲突规则：使用 `git-workflow`。
+- **通道选择（subagent vs 独立 worker）是平行决策，不是降级回退**：
+  - **宿主 subagent 首选**：中小型任务卡（单卡 ≤1h 工作量）、质量敏感（像素/数值级验证）、希望快（15-45 分钟/卡实测）、宿主额度充裕。实证（Fathom 2026-09-24，八卡 082-093）：全绿零返工、白名单零越权、运维成本近零。
+  - **独立 worker 首选**：宿主额度紧张/已撞限（subagent 与宿主共享额度，撞限时在途全灭）、大批量长任务并行、需要模型多样性（lane 切换走用户 API 额度）、宿主会话可能中断的任务。
+  - 混用纪律与通道无关：同文件域串行、异文件域并行的冲突控制对所有通道通用。
+
+本 Skill 可能创建 Git/Orca worktree、分支、Session Context、终端、tmux session，以及 supervised Run/Task/Dispatch。它不自动安装依赖，也不自行扩张 push、merge、发布或外部调度授权。Orca worktree 创建固定使用 `--setup skip`：repo Setup 发生在本 Skill 写入 Session Context 和机械门禁之前，`inherit/run` 会在资源创建前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；`--allow-install-command` 只授权门禁已就位后的 worker 阶段，不能追认 Setup。真实 provider 配置及备份不得进入 Git、日志或交付物。
+
+交付成功后，`pm-closeout.sh` 默认清理一次性 worker 的远端 head、worktree 与本地分支；长期功能/集成分支及固定 worktree 必须声明 `long-lived` 并保留。事实未知、身份漂移或生命周期未结算时失败关闭。supervised 清理必须从 Session Context 取得精确 Run，按 `worker-list --run <run> --limit 100` 完整遍历 opaque cursor 后唯一定位 Dispatch；前置分页、身份或结果不可证明时，在 release、terminal、worktree 和分支 mutation 前停止。`reclaimable` release 后还须重新执行同一完整查询；若后置结果不可证明，release 可能已发生，但不得继续 terminal、worktree 或分支 mutation。对已经确认合并、但未走标准 closeout 的单一遗留 worker，可使用 `post-merge-cleanup.sh` 做严格 dry-run/execute 清理；它不替代标准 closeout，也不得用于批量扫描。
+
+## 2. 模式选择
+
+| 模式 | 何时选择 | 完成权威 |
+|---|---|---|
+| Orca supervised | 用户要求监督、等待结果、DAG、ask/reply 或 decision gate；Agent 可被 Orca 识别 | `worker_done → Delivery`，再由 PM 验收与 settlement |
+| Orca terminal-managed | 白名单 backend 未采用 supervised，或 CLI 仅能由外部 terminal 管理 | terminal 输出 + checkpoint + 真实产物，PM 验收 |
+| tmux worktree | Orca 不可用、用户指定 tmux 或兼容性回归 | checkpoint + Git/测试/产物，PM 验收 |
+| tmux lightweight | 用户明确不要 worktree，或非 Git 目标且目录绝不重叠 | checkpoint + 真实产物，PM 验收 |
+| 同宿主 subagent | 中小型质量敏感卡、快速迭代轮次、额度充裕时优先于独立 worker（见上方通道选择判据）；无独立进程/分支开销 | 宿主决定（建议 RESULT 四段自陈） |
+| 远程节点（SSH 桥） | 需要第二台机器扩并发（独立 key 池）或卸载本机 CPU/内存时，PM 经 `spawn-worker-remote.sh` 派到 personal config `remote_nodes` 声明的节点；节点侧全套门禁本机成立，worker 读节点自己的 env/key（`references/25-remote-node-dispatch.md`） | STATUS.json 终态 + 分支 push/PR 存在 + PM 侧 PR-fingerprint 验收（完成三证，不依赖跨机 Orca 回执） |
+
+MiniMax 的短任务 `exec` 在 terminal-managed 中由启动命令读取完整输入，不等待 TUI、不再发送任务；长程任务仍使用交互 CLI。已选择 ZCode 的长程任务默认使用已配置的原生 supervised 启动桥，见 [原生 Orca 合同](references/30-zcode-native-orca.md)。
+
+backend 与模式选择、配置来源及唯一后续动作统一由 [派发 profile 合同](references/32-dispatch-profiles.md) 定义。ZCode auto 缺桥配置时在资源副作用前拒绝；旧显式 native 参数保留，通用兼容入口须传 `--dispatch-profile orca-generic`，直连仍为 `--no-orca-mode`。profile 是派发计划；真实权限、开始、完成与资源状态继续来自原生回执。
+
+同一 worker 只能有一个控制模式。terminal-managed 没有 Task/Dispatch，不得要求 `worker_done`；supervised 必须有 live Task/Dispatch，不得用 STATUS、UI 卡片、TUI idle、heartbeat 或 timeout 冒充完成。
+
+## 3. 派发前合同与门禁
+
+### 3.1 先完成任务建模
+
+PM 在任何 worker 副作用前完成：
+
+1. 读取项目规则和完整任务卡，确定目标、非目标、allowed/forbidden files、验证命令与完成条件。
+2. 按根因、依赖链和文件范围分组；只有范围正交、验收独立、无共享锁文件/schema/迁移时才并行。
+3. 为每个 worker 指定 branch、`branch_lifecycle`、integration target/base、worktree、session、角色、backend/profile/model、provider slot 和资源 owner。
+4. 普通 worker 默认为 `ephemeral-worker`；只有项目任务合同明确声明的长期功能/集成基线才使用 `--branch-lifecycle long-lived`。源分支生命周期与合并目标是两个字段，不得混同。
+5. 从 `python3 scripts/dispatch-value-gate.py --describe-policy` 读取并发与待验收 PR 背压的当前默认值；项目可以收紧，探索窗口须明确授权并限期。派发合同用 `capacity` 绑定 PM 已盘点的共享活跃库存、证据及较小项目上限；已有 worker 与本波候选相加判断。旧合同未提供库存时只证明本波数量合法，不能据此声称全机还有槽位。机器内存 slots 是另一道门，不能替代 worker 库存或覆盖跨项目约定。
+6. 验证命令默认写 scoped：单 spec / 定向用例 / `--bail 1` 早停；整包全量套件（全量 test/build 链）不进 worker 自验合同，全量验证单一在飞（跨项目互斥），默认归宿是 PM 收口时串行复跑。本条约束验证类别，不约束 worker 数量（见 §5 验证负载纪律）。
+7. 固定 `one_wave` 或 `continuous`：真人要求持续派发/返回后review再推进/不要每轮催促时，不默认单波。持续模式派发前核唯一监测的原PM、原任务源、正式配置及周期，读取 [PM接续合同](references/33-pm-continuation-readiness.md)；显式continuous的Wave入口机械检查，其他模式由PM显式检查。只有总控心跳、承诺稍后设置或人工催促后恢复均不证明自动闭环。
+
+Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事故读取 `references/10-parallel-lessons.md`。
+
+### 3.2 强制门禁顺序
+
+以下四道门按阶段执行，任一非零退出均不得跳过：
+
+1. **派发价值门**：候选波次采用 `templates/dispatch-value-gate.example.json` 同构合同，运行 `python3 scripts/dispatch-value-gate.py <spec.json>`。接受 `implementation`、`reusable_verification`、绑定具名 PR/head 的 `merge_gate`，以及有业务目的、来源、精确产物和逐项标准的 `business_artifact`。研究、设计、文书和报告按业务产物验收；无明确消费的维护文档、占位调查与纯格式扩波仍拒绝。
+2. **交付价值后门**：使用同一 spec 运行 `worker-value-postflight.py`，工程交付核真实 diff、声明资产、验证命令和 40 位 immutable head；业务交付读取 Git 或非 Git 目录的真实文件，将合同、来源和文件指纹绑定为同一交付身份。
+3. **角色分离验收门**：非平凡实现由不同 dispatch/session 的 implementer 与 reviewer 完成，运行 `review-acceptance-gate.py`。自审、交付身份漂移、缺失绑定证据、失败验证或未清 blocker 均拒绝；业务产物还须由不同作者逐项核查内容及来源，不以文件哈希证明内容正确。
+4. **失败恢复门**：先用 `acceptance-recovery.py` 分类。`internal_recoverable` 在预算内修复并重新独立审查；`external_dependency`、`safety_unknown` 或预算耗尽才泊车。已具名 PR 的 docs-only 验收修复只能走 `acceptance-repair-gate.py` 的极窄 preflight/postflight 通道。
+
+需要自动记录已提交工程验证时，可按[工程证据采集合同](references/18-dispatch-acceptance-contracts.md#可选工程验证证据采集)使用可选采集/check入口；它只生成原交付后门证据，继续保留独立审查与真实完成核验。
+
+字段、命令、例外枚举、reviewer 证据预算与恢复语义统一读取 `references/18-dispatch-acceptance-contracts.md`；不要在项目 prompt 或别的脚本另造一套分类表。
+
+### 3.3 运行时安全门
+
+- `spawn-worker.sh` 从完整进程祖先链识别真实 PM harness，并对嵌套层白名单取交集。未知、冲突或不可证明的宿主失败关闭；`--pm-harness` 只做一致性声明，不能提权。`--base-ref` 只接受引用名（`main`、`origin/main`、`refs/heads/x` 等），不接受裸 sha——40-hex（以及 7—40 位纯十六进制且 git 解析为 commit 而非引用名）会在任何 worktree/provider/terminal 副作用前以 `SPAWN_WORKER_BASE_REF_MUST_BE_REF: <值>` 拒绝并退出，避免后续 pm-cleanup-worker 在 `INTEGRATION_TARGET_MISMATCH`（argument=main vs metadata=sha）与 `PR_BASE_MISMATCH`（expected=sha vs actual=main）之间死锁。**字符类大小写敏感**：守卫同时识别 `[0-9a-fA-F]`，大写 sha（如 `96A304DF…`）与大小写混合 sha 一律按 sha 路径拒绝；分支名恰为大写 hex 形态且真实存在时（`refs/heads/<v>` 大小写敏感查找），仍按真实 ref 放行。
+- Claude Code/Codex/Hermes PM 的 worker 能力白名单由 `config/harness-backend-policy.json` 决定：支持 Claude Code、Codex、CodeBuddy、独立 Qoder CN CLI（`qoder-cn`）、千问办公 bundled coding CLI（`qwenwork-cn`）、独立 ZCode CLI（`zcode-cli`）、MiniMax Code CLI（`minimax-code`）及兼容的 ZCode app-server driver（`zcode`）。CodeBuddy PM 仍只可派自身，ZCode PM 的既有授权仍只含 Claude/Codex；新增 worker 支持不新增 PM 宿主。QoderWork backend 与旧别名已移除，不能把旧 bundled CLI 软链当作 Qoder CN。Hermes 宿主仍以安装路径签名识别，裸词不作证据。
+- 预建工作树首次接入只接受显式借用合同、新 Session、原 owner 授权与现场无 writer 证明；默认 occupied branch/path 门保持拒绝，借用 long-lived 树与分支不能被失败/收口删除。读取 `references/31-borrowed-existing-worktree.md`，不伪造恢复 metadata。
+- worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
+- Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
+- Shell 按后端和启动模式执行两种策略：Claude Code 的本地 hook 生效且启动命令显式使用 `--permission-mode auto` 时，普通 Bash 交给 Claude Code 的 auto 分类器和用户 settings；编排 hook 继续拦识别出的安装命令、直接及常见 Shell 包装的受保护 Git 操作、Orca 协议和受限 tracked 删除。其他后端与 Claude Code 非 auto 模式继续使用精确 `allowed_shell_commands`。`execution_authority.shell_policy` 固定所选策略；Claude auto 不是 Shell 文件写范围或任意程序副作用的机械沙箱，PM 仍须核对真实 diff 与外部副作用。验证命令不等于安装授权；安装类命令只有精确 `--allow-install-command` 和可审计授权来源才可通过编排门禁。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。
+- 已关闭ZCode原Session的失败接续按[具名恢复入口及已知身份缺口](references/30-zcode-native-orca.md#已关闭原-session-的具名恢复)：先证退出/旧cap撤销，空输入恢复精确Session并核模型，再单次同failed Task retry与真实回执采用；`reauthorize`只用于可证明live的目标，不以ready-reset恢复失败历史。
+- Supervised 完成通道绑定 PM 启动时的 authority receipt，在 `worker-start` 后冻结 Dispatch 身份与 capability 摘要；发送 `worker_done` 前复核 live runtime/process/run。不要改写 receipt 或用 Shell allowlist 绕过完成校验；首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 即停止并向 PM 上报。字段与手动 register 迁移见 `references/13-orca-cli-worker.md` §5。
+- 新隔离 worker 按已授权任务使用原生最高可用执行权限：ZCode CLI 默认 `--mode yolo`，MiniMax batch 默认 `--permission full`；显式较窄模式保持生效。MiniMax 长程任务保持交互 CLI，权限按 [可选 CLI 合同](references/26-optional-cli-backends.md) 配置并核实，不借 batch 参数替代。宿主审批、业务范围、账号登录与编排准入是独立边界，不因 worker 模式而取消。
+- Worker 默认执行权限（v2.22.0，用户决策 2026-09-06）：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，安全类按「分段校验」放宽——管道/`;`/`&&` 复合命令在每段都是安全读或安全交付命令时整体放行（git status/diff/log/show/fetch/add/commit/push/rebase、gh pr create/view、ls/grep/cat/jq/sort 等过滤器、`node --version` 类版本查询）；重定向仅限 `/dev/null` 与临时目录（拒绝 `..` 穿越）。仍然 fail-closed：force push（`--force`/`-f`/`--force-with-lease`）、push 到 `main`/`master`、远端删除（`git push origin :branch`）、`--mirror`/`--tags`、子 shell、输入重定向、命令替换、`gh api`/`gh repo sync`、安装类命令。identity 四件套（`--git-expected-name/--git-expected-email/--git-integration-base/--git-push-remote`）仍推荐用于 PR 交付任务：绑定的 safe-push 会校验从远端 PR base 到 HEAD 的完整提交链后按不可变 OID 推送，是裸 push 的强化替代而非唯一通路。
+- tracked 文件删除是独立高风险类，先于普通 Shell allowlist 判定。只有 hook-enabled worker 可从 receipt 绑定的 worktree 根运行 `git rm -- <一个 canonical repo-relative tracked file>`，且该精确路径必须在 spawn 时写入不可变 `allowed_write_paths`；scope glob、后续 `reauthorize --allow-cmd`、`-r/-f/--cached`、多路径、目录/gitlink、pathspec、Shell 展开和复合命令均不能扩大权限。Codex/ZCode 的 `prompt_only_degraded` 只提供提示，不能声称机械删除保护；详见 `references/02-runtime-dependencies.md` §6。
+- 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。在 Claude auto 策略下，该列表仍是交付验收的必跑命令，不是普通 Bash 的唯一执行权限来源。
+- 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白、U+0000 或安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。业务合同显式 `acceptance_mode: content_review` 时使用空命令数组并进行内容独审，不自动发现无关测试；与显式 `--require-verification` 冲突则拒绝。需要真实命令验证的业务使用 `verifier`。
+- 验证命令只接受一个权威来源：无文件合同时使用 `--verify-cmd`，否则使用派发价值合同；两者互斥。都未提供时才读取项目配置，再回退根目录有界发现。Node/Make 既有发现不变；Python 只在根 manifest 与根 `tests/` 同时存在时注入 `python3 -m unittest discover -s tests -v`。嵌套 Python/其他子项目必须在项目配置 `verification.by_worker_type` 显式写完整命令，不递归猜测。依赖行为读取 `references/02-runtime-dependencies.md`。
+
+## 4. Orca-first 执行
+
+### 4.1 每个新会话先读取运行时合同
+
+```bash
+orca skills get orca-cli
+orca skills get orchestration   # supervised / DAG / ask-reply 时
+orca status --json
+```
+
+以运行中 CLI 的指南和 `--help` 为准。`spawn-worker.sh` 只在当前 `PROJECT_DIR` 可被精确解析为同一 Orca worktree/repo 时进入 Orca；`--no-orca-mode` 显式走 tmux。
+
+### 4.2 Wave 准备屏障
+
+多 worker supervised Wave 必须先一次性写 manifest、创建一个 Run 并预建全部 Task，receipt 成功后才并行启动。不要让并发 spawn 各自创建/重绑 Run，也不要在 `worker-start` 注入任务后再次发送完整 prompt。
+
+```bash
+bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --from "$PM_TERMINAL" --receipt /tmp/wave-receipt.json
+WAVE_RUNTIME_ID=$(jq -er '._meta.runtimeId' /tmp/wave-receipt.json)
+
+bash scripts/spawn-worker.sh \
+  --project "$PROJECT" --branch feat/worker-a --session worker-a \
+  --branch-lifecycle ephemeral-worker --worker-backend claude-code \
+  --verification-contract /tmp/dispatch-spec.json --verification-task-id TASK-A \
+  --command "$AGENT_COMMAND" --orca-supervised \
+  --orca-run-id "$RUN_ID" --orca-coordinator-handle "$COORDINATOR_HANDLE" \
+  --orca-runtime-id "$WAVE_RUNTIME_ID" \
+  --orca-task-id "$TASK_A_ID"
+```
+
+`PM_TERMINAL` 必须是明确属于本轮 PM 的终端句柄，不从 UI 焦点猜测。新 Wave 把 receipt 的 `_meta.runtimeId` 程序化传入 `--orca-runtime-id`；sender、终端活性与 Run/coordinator 在创建 Worker 资源前共同核验，预建 Wave 不重复建 Task/重绑 Run。单 Worker 可在 quota/mem 通过后、新建 lease/worktree/terminal 前准备 Run；无可靠 sender 则拒绝。旧上下文缺 runtime 时只能正向重验当前绑定并明确历史连续性未验证，已有 runtime 漂移不能绕过；仍以 Orca consumer fencing 作最终判断。
+
+完整 manifest、Terminal-managed、Dispatch 自检、cold-start 恢复、settle 与 metadata 合同读取 `references/13-orca-cli-worker.md`。PM 的 read/show/send/wait/reply/release/ack/settle/pr-audit/closeout 命令读取 `references/14-pm-orchestrate.md`。
+
+跨 session 的重要请求使用 `pm-orchestrate.sh send --message-contract`：先用 `worker-show` 复验精确 Run/Task/Dispatch/worker，再固定 sender、业务 thread、correlation、expected action 与 evidence refs；Orca 原生 thread 承载 correlation，使无 payload 的原生 reply 仍能继承可核对的关联标识，业务 thread 保留在合同 payload。send receipt 必须绑定同一 Dispatch relay 的 Orca message ID 与完整请求摘要；成功只证明 `durably_enqueued`。只读巡检使用 `inbox`（`check --peek`），所有出现的顶层及 payload 身份/类型别名必须一致；结构化消息须有精确 provenance，无 payload 的原生关联消息须同时给 thread+correlation 过滤器并精确匹配 worker sender、coordinator recipient、Run 与原生 correlation thread。相关消息可见不证明执行过 `reply`、已消费、开始执行或完成业务。状态层级、白名单、幂等指纹和敏感载荷拒绝规则统一读取 `references/14-pm-orchestrate.md`，不要另造聊天层或用 terminal prompt 代替 Orca 消息。
+
+Worker 需要 PM 回答时使用 live preamble 的 `ask`；timeout、cancel 或断线后只按原 message ID `--resume`，不得重发新问题，也不得把普通 ask 升格为 decision gate。PM 的 `wait` 按最多 50 条完整 FIFO Delivery 返回顺序分类 receipt，同一批在 ack 前重放；逐条完成 question reply、escalation 处置、worker_done 业务验收及 terminal ownership 后，才 ack 精确 Delivery。ack 回执若同时交付下一批，必须按 receipt 继续处理，不能把确认上一批误当作下一批已处理。Worker 在新文件前、每次 scoped test 后和 `worker_done` 前执行非 peek `check --terminal <live worker handle>`，处理整批后仅以同一 handle ack 该 Worker Delivery，并继续排空后续批次；`send` 成功或 `inbox --peek` 可见均不证明 Worker 已处理。`consumer_fenced` 表示 consumer generation/进程身份已被替换，`dispatch_inactive` 表示原 Dispatch 已 settled、stopped 或不再 active；任一出现都立即停止、不得重试 check 或发送 `worker_done`。强制前缀和 Shell 门禁共同拒绝以 `--peek/--all/--unread` 冒充处理；Worker 的 scoped ack 不能指定 coordinator handle，也不授予 reply、release、stop 或 Task mutation。
+
+### 4.3 Worker Prompt 与 Session Context
+
+使用 `templates/worker-prompt.md`，至少写明：任务卡、范围、禁止项、验证命令、完成协议、branch lifecycle、integration target、资源 owner、安装授权和 Git identity。supervised 的 `worker-start` 是唯一任务注入器；长 prompt 可落到 `WORKER_PROMPT.md`，terminal 只发送短 Read 指令。
+
+实际 Task spec 的共同前缀补齐 ask/resume、自然检查点收件、最终收件、最小实施、scoped 验证、授权文件 commit 和唯一 Session Context RESULT；review-only/no-change 不造空提交。`spawn-worker.sh` 在所有合法后端启动链路注入绝对 `WORKER_SESSION_CONTEXT`，不依赖安装/scope guard 是否启用；合法 `prompt_only_degraded` 且无 allow-paths 的 worker 也能定位。该值仅用于定位，不授予安装/Shell/scope 权限，不把降级冒充 hook 活跃。Worker 在自身进程中检查该值及所有非空旧 guard 绑定（`SCOPE_GUARD_SESSION_ROOT`、`WORKER_INSTALL_AUTH_FILE` 父目录）拼写一致且目录存在，全部检查成功后才采用路径；全缺失、任一相对/冲突/不可用时交 PM，不猜仓库根目录，不修改 authority。旧调用仍可由旧 guard 绑定定位。前缀不扩安装、Shell 或 push/PR 权限；辅助命令与 `.venv` opt-in 流程见 `references/02-runtime-dependencies.md`。
+
+```text
+<worktree>/.claude/agent-sessions/<session>/
+├── METADATA.json
+├── STATUS.json
+├── RESULT.md
+├── PATCH_SUMMARY.md
+└── WORKER_PROMPT.md
+```
+
+字段与 checkpoint 读取 `references/03-checkpoint-files.md`。supervised 中 STATUS 只辅助观察，完成权威仍是 `worker_done → Delivery`。
+
+## 5. 巡检、介入与持续推进
+
+按证据优先级巡检：
+
+1. supervised：Delivery、`worker-show`、`worker-read`。
+2. terminal-managed：terminal read + checkpoint。
+3. tmux：checkpoint、Git status/log、bounded capture-pane。
+4. 所有模式最终检查真实 diff、测试、产物与 PR 状态。
+
+发现偏题、阻塞、越界或验证失败时，优先给原 worker 发送窄纠偏；需要独立审阅时另派 reviewer。运行时活性与业务进展必须分开判断：输出/cursor/CPU 前进只证明活性，文件、commit、测试和产物才证明业务进展。观察不确定时不得自动 Esc、Ctrl+C、stop、release 或按进程名批量 kill。
+
+Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才启用。L1 当前会话推进读取 `references/15-wave-autopilot.md`；跨会话 L2 controller 与尚未实现的 L3 scheduler 边界读取 `references/16-autopilot-durability.md`。不要把 session cron、Markdown 任务源或 provider lease 单独描述成持久控制器。
+
+Worker返回后由原PM固定产物/head、不同上下文独审、同次原Task写回，再沿原问题修复或推进具名合法下一项；不能在“已派发/作者done/已交接”处结束本波责任。单卡预算/依赖泊车不停止其他独立READY。记录人工催促/恢复的来源，区分监测配置、正式自动触发与完整自动业务周期；检查配置通过不签出自动自愈，详见 [接续证据等级](references/33-pm-continuation-readiness.md)。
+
+跨项目检查 Orca Worker 是否因 429/usage limit 停在 idle 时，运行 `scripts/orca_rate_limit_recovery.py --manifest <私有清单>`；默认只读，只有显式 `--execute` 才对高置信 `RATE_LIMIT_IDLE` 通过 terminal 输入通道发送一次固定“继续”。tmux、单关键词/陈旧 tail、未分组身份和状态不确定一律不处置；`WAKE_ACCEPTED` 不等于额度恢复或业务继续。完整 manifest、状态机、错峰、幂等、TOCTOU 与退出码读取 `references/20-orca-rate-limit-recovery.md`。
+
+**Worker node OOM 识别与退避**（2026-09-05 事故：多 worker 长输出使会话内 node 进程 V8 堆耗尽 `FatalProcessOutOfMemory → SIGABRT`，PM 周期重拉形成崩溃循环并一度触发整机强制重启）。`spawn-worker.sh` v2.20.0 起默认给 worker 会话注入 `NODE_OPTIONS=--max-old-space-size=2048`（`SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0` 可关），worker 到限自身退出而非拖垮系统。PM 巡检发现 worker node OOM（退出码 134 / SIGABRT / 日志含 `FatalProcessOutOfMemory` / 系统崩溃报告目录（DiagnosticReports）中 node OOM 报告新增且时间吻合）时：同任务不得立即重拉，至少等下一轮巡检并全局并发 -1，且重拉前必须重跑内存预算预检（probe 每次 spawn 都现场探测、不缓存；额度不足按 `PARKED_FOR_MEMORY` 排队，不得绕过）；同一任务连续 2 次 OOM 后停止重拉、泊车并向用户报告——这通常意味着任务本身产生超长输出（全量日志聚合、超大测试跑），需任务侧降输出或拆分，而不是更用力地重试。
+
+**物理内存预算排队（mem budget lane）**：`spawn-worker.sh` 在任何 worktree/terminal/lease/dispatch 副作用之前运行 `scripts/mem_budget_probe.py`，按 per-worker 预算（默认 3 GiB；`SPAWN_WORKER_MEM_BUDGET_BYTES` 可调，`=0` 显式关闭整道门）把现场可用物理内存折算成可派发额度。额度不足或探测不可读时 spawn 以专用退出码 4 拒绝，输出 `SPAWN_WORKER_MEM_BUDGET_DENIED` 与 可用/预算/缺口 诊断；放行则在 PM 日志留下 `SPAWN_WORKER_MEM_BUDGET: available=… budget=… slots=…` 账本行。PM 收到该拒绝不得忙等、不得改走手动 spawn：本轮巡检把任务记 `PARKED_FOR_MEMORY` 并留存 probe 输出，下一轮巡检重试；同一任务连续 3 轮额度不足则正式泊车并向用户报告（附 probe JSON）。单进程堆顶（v2.20.0）管单个 worker 的失血点，本门管总量叠加承诺，也覆盖无堆顶可依赖的非 node runtime。数据源、预算推导、压力收紧与排队状态机读取 `references/22-mem-budget-lane.md`。
+
+**具名任务资源 profile**：确有任务测量/范围与原 PM 串行合同的受控任务，可显式设置 `SPAWN_WORKER_MEMORY_TASK_PROFILE`。轻 Node、既有 Codex 宿主 followup 与限定 MiniMax CLI 使用同一多信号观察门；MiniMax 整 worker 仍至少 3 GiB、单 writer、20 秒稳定窗，实际 Node 堆顶不等于 RSS 上限。没有 profile 时保留旧默认；profile 不能用预算 0 或旧快照放行。字段与独立来源/身份复核见 [资源合同](references/22-mem-budget-lane.md)。
+
+**验证负载纪律（verification lane）**：约束验证类别，不约束 worker 数量。worker 自验默认 scoped（单 spec / 定向用例 / `--bail 1`）；全量套件单一在飞、跨项目互斥——确需 worker 现场跑全量时，先探测既有全量测试进程（如 `pgrep -fl 'vitest|pytest|jest|go test'`），无法确认独占就退避等待或改 scoped。探测是尽力而为的现场信号，不建跨项目锁文件，宁可少并发不可误并发；PM 收口时的全量复跑天然串行，是全量验证的默认归宿。验证输出一律重定向日志文件、只把有界尾部（如 `tail -50`）带回 terminal/session——长输出无界刷屏正是会话侧 node 运行时 OOM 的喂食管。PM 巡检发现系统负载飙升且多个 worker 同时在跑验证时，纠偏为错峰排队（等在飞验证收尾再放下一批），不砍 worker 数量。本纪律与单进程堆顶、物理内存 lane 互补：堆顶管单进程失血点，mem lane 管总量承诺，本纪律管验证执行的并发类别与输出体量（2026-09-05/06 事故中三者缺最后一环：并发全量自验同时制造了负载尖峰与超长输出）。
+
+## 6. 验收、Git 交付与资源收口
+
+长周期 supervised 运行使用 `references/23-runtime-settlement.md` 的只读证据适配器核对 runtime 身份、逻辑终态、terminal、provider lease 与 Delivery。`pm-orchestrate.sh reconcile --snapshot ... --output ...` 只复算已捕获证据；退出码 0 不等于 `complete=true`。缺证和矛盾状态必须保留未结算，由有权限的 owner 执行所列恢复动作后重新观察。
+
+PM 依次完成：
+
+1. 读取完整 Delivery、实际 diff 和 worker 证据；运行与产物类型匹配的验证。GUI/Web/桌面变化必须启动真实入口做代表性交互。
+2. 核对 allowed files、敏感文件、安装授权、Git identity、commit/head、PR 范围，以及任务启动的服务/端口/子进程已按 owner 收口。
+3. supervised worker 先 reuse/release/retain，再 ack；仍存活但漏发完成时先结构化提醒，确认已死才使用 `settle`。
+4. 用户或项目已授权 Git 外部写入时，使用 `pm-closeout.sh` 的 PR-first 流程。PR 唯一性、冻结 head/diff/check/review、两阶段 mutation receipt、Monorepo integration path 与结果不确定恢复统一以 `references/14-pm-orchestrate.md` 为准。
+5. 交付确认后立即取得资源终态；不得把清理留给 PM 记忆。
+6. `STATUS=done`（或 PR 已合并）但进程仍存活的 worker——含跨会话遗留——当轮巡检即触发收口或上报：按 owner 通道 closeout / 释放 terminal / 结算 lifecycle，无法处置时向用户报告具体滞留对象。滞留进程持续挤占物理内存派发额度（`references/22-mem-budget-lane.md`），不收口就直接压缩下一波可派发 worker 数。
+
+```bash
+bash scripts/pm-cleanup-worker.sh \
+  --project "$PROJECT" --worktree "$WT" --branch feat/worker-a --session worker-a \
+  --branch-lifecycle ephemeral-worker --integration-target integration/feature-a \
+  --pr "$PR" --expected-tip "$WORKER_TIP" \
+  --delivery-mode remote-pr --delivery-commit "$MERGE_COMMIT"
+# 手工接管时先预览，再以同一精确参数加 --execute；pm-closeout 成功路径默认自动执行。
+```
+
+清理必须区分源分支生命周期与合并目标：
+
+- `ephemeral-worker`：只有 exact PR head/base、expected tip、delivery commit、干净 worktree 和 settled lifecycle 全部一致时才清理。
+- supervised lifecycle 必须先以 metadata 中的 Run/Dispatch 做完整分页预检；只有 `released`、或可精确结算的 `reclaimable` / `retained external` 才进入后续清理。任何缺页、游标循环、重复/缺失 Dispatch、跨 Run 行或读取失败均保留 terminal、worktree 与分支。
+- `long-lived`，或源分支等于 integration target：保留远端 ref、本地 ref 与固定 worktree，输出 `RETAINED_WITH_REASON reason=long-lived-branch`。
+- 调用参数不得把 metadata 的 `long-lived` 降级；短 Worker 合入长期分支时只清理 Worker head，绝不清理 integration target。
+- 结果只允许 `CLEANED`、`RETAINED_WITH_REASON`、`CLEANUP_PENDING`。交付已确认后，清理失败作为独立债务继续处理，不重跑 push/merge；隐去 `CLEANUP_PENDING` 后声称完全闭环属于 Hard Fail。
+
+Git 生命周期与批量 stale 分支清理由 `git-workflow` Skill 的“分支清理”入口负责；该 Skill 会按需加载自己的清理 reference。
+
+## 7. Backend、额度与依赖
+
+**先区分支持与日常选路**：日常 worker 池保持 Claude Code/Codex 及其既有 provider 路由。ZCode CLI、MiniMax Code CLI 是重点可选支持，CodeBuddy、Qoder CN、千问办公为按需兼容；这些 backend（含旧 `zcode` driver）只有用户明确指定时才派发。不得因为余额、模型能力、与 PM 同名或主力额度不足自动选择它们；也不得写入 quota `tier_policy` 默认链。`harness-backend-policy.json` 的 `dispatch_selection` 是 PM 选择合同，`hosts` 只决定调用权限，不决定优先级。
+
+在日常池内默认优先与 PM 同宿主，只有额度、模型能力或用户明确要求时跨工具。个人偏好写入 ignored 的 `config/orchestration-personal.json`，项目策略写入 `.claude/orchestration.config.json`；个人配置只能在 harness 白名单内选择 backend。
+
+启用 `quota_aware_routing` 时，派单前必须用新鲜 summary 运行 `route_suggest.py`；summary 缺失、过期、lane 低于判停线、provider 不健康或未映射时，`quota_preflight.py` 在任何副作用前拒绝。显式 override 必须携带授权来源并写入 receipt。额度只为已经通过价值门的任务选路，不能生成 quota-burn 工作。模型与 lane 判断读取 `references/01-model-selection-matrix.md` 和 `references/17-model-capability-profile.md`。summary 合同的生产方不限；zcode lane 可用 `scripts/quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实观测合并写入 summary（只更新 zcode lane、不改写其他 lane 的 generated_at，不接触凭证），数据流与合并语义读取 `references/21-zcode-quota-producer.md`。ZCode CLI driver 的启动绑定、配置隔离和证据边界读取 `references/24-zcode-driver-safety.md`。sub2api 网关的四条积分 lane（qwenworkai / lobsterai / autoclaw / codebuddy）可用 `scripts/quota_summary_sub2api.py` 从网关 `/ui/api/quota` 聚合端点拉取合并写入（只更新这四条 lane、其余 lane 原样保留；qw 每日 100 当日过期、lobster campaign 分项临期 → lane 记录带 `remaining_total` / `credit_items`，PM 派简单批量任务前先看临期分项，把当日过期积分在过期前吃掉），数据流与 lane 定义读取 `references/24-sub2api-quota-producer.md`。
+
+需要账号级调度时，读取个人配置 `account_routing`。仅在 `enabled=true`、所选 backend 已获用户明确指定且包含在 `backends` 中时，读取本地 `skill_path/SKILL.md` 并依其入口取得新鲜账号与调度结果。未启用时不调用；启用但 Skill 缺失、观测失败或要求等待时，暂停该 backend。调用与停止边界见 `references/29-local-account-routing-skill.md`。公开 Skill 只提供调用合同，账号/卡规则及私人数据保留在本地 Skill；此调用是 PM 工作流，不能声称 spawn 已机械绑定账号。
+
+独立 CLI 的标准启动参数、版本检查与权限边界读取 `references/26-optional-cli-backends.md`；千问办公的原生工具入口与 bundled coding 入口读取 `references/27-qwenwork-cli-worker.md`。ZCode CLI 原生 Orca supervised 启动的版本、可信环境桥、显式启用与接续合同读取 `references/30-zcode-native-orca.md`；显式选择 MiniMax Code 时默认要求 Orca terminal-managed；只有同时传 `--no-orca-mode` 才走直连 tmux，Orca 不可达或 lightweight 不得隐式回退。其余可选 backend 暂走 terminal-managed 或 tmux，未经真实生命周期验收不声明 supervised 已验证。ZCode CLI/MiniMax Code/Qoder CN/千问 bundled coding 的编排 hook 暂未集成，派发必须显式 `--allow-prompt-only-install-guard "<授权来源>"`；prompt-only 不是机械 scope/安装保护，不自动扩大安装或 Git 权限。
+
+系统依赖：Bash 4+、Git、jq、Python 3；PR 审计/收口需要 `gh`；tmux 仅回退路径需要；Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI。按 backend 还需对应本地 CLI；显式任务内存 profile 另需已安装的原生 Node 与相应 CLI，缺失时拒绝并报告依赖，不自动安装。检查命令：
+
+```bash
+bash scripts/check-dependencies.sh --backend claude-code --backend codex --check-gh
+```
+
+## 8. 按需读取地图
+
+| 当前问题 | 读取 |
+|---|---|
+| 用户指定远端 ZCode GUI 作者直发文档/工程 PR（作者 safe-push + 唯一 draft PR，PM 只读核验） | `references/38-zcode-gui-remote-pr.md` |
+| 标准快速派发（Claude Code + GLM/MiniMax + Orca，常规 worker 三步） | `references/00-fast-dispatch-runbook.md` |
+| 模型、provider、执行模式 | `references/01-model-selection-matrix.md`、`references/17-model-capability-profile.md` |
+| 依赖、checkpoint、Sentinel | `references/02-runtime-dependencies.md`、`03-checkpoint-files.md`、`04-sentinel-design.md` |
+| 法律任务拆分、Issue 分组 | `references/05-legal-domain-patterns.md`、`12-issue-grouping.md` |
+| 并发异常：症状、事实与恢复入口 | `references/10-parallel-lessons.md` |
+| Claude/Codex常用参数与其他backend指南路由 | `references/06-agent-cli-reference.md` |
+| CodeBuddy启动、权限等待与会话接续 | `references/08-codebuddy-cli-worker.md` |
+| legacy ZCode旧诊断指路 | `references/09-zcode-cli-worker.md` |
+| Agent Teams 排障 | `references/11-agent-teams-troubleshooting.md` |
+| Orca worker 与 PM 操作 | `references/13-orca-cli-worker.md`、`14-pm-orchestrate.md` |
+| Autopilot | `references/15-wave-autopilot.md`、`16-autopilot-durability.md` |
+| 派发、交付、review 与修复合同 | `references/18-dispatch-acceptance-contracts.md` |
+| Orca Worker 429 批量巡检与错峰唤醒 | `references/20-orca-rate-limit-recovery.md` |
+| zcode 额度 lane 的 summary 生产链路 | `references/21-zcode-quota-producer.md` |
+| 独立 ZCode CLI、MiniMax Code、Qoder CN 与按需派发 | `references/26-optional-cli-backends.md` |
+| 预建 long-lived 工作树首次接入、唯一 writer 与借用保留 | `references/31-borrowed-existing-worktree.md` |
+| ZCode CLI 原生 Orca supervised、可信单次环境桥与交互接续 | `references/30-zcode-native-orca.md` |
+| 独立 ZCode CLI 的 BigModel 套餐认证、模型切换与实测边界 | `references/28-zcode-cli-bigmodel-coding-plan.md` |
+| 千问办公原生工具与 bundled coding CLI、账号边界 | `references/27-qwenwork-cli-worker.md` |
+| ZCode CLI driver 的启动绑定、配置隔离与安全验证 | `references/24-zcode-driver-safety.md` |
+| sub2api 四条积分 lane（qw/lobster/autoclaw/codebuddy）的生产链路与临期调度 | `references/24-sub2api-quota-producer.md` |
+| 物理内存预算 lane 与派发排队 | `references/22-mem-budget-lane.md` |
+| 远程节点 Worker 派发（SSH 桥 + 一次性 receipt + 容量/基线门） | `references/25-remote-node-dispatch.md` |
+| 可选本地账号调度 Skill 的调用边界 | `references/29-local-account-routing-skill.md` |
+| 只读核查 ZCode 会话/turn/最终 assistant 完成证据（GUI 任务监控方向，非实时活性权威） | `references/zcode-session-evidence.md`；运行 `scripts/zcode-session-evidence.py`（Python 3.9+ 标准库） |
+| 只读GUI监控状态及一次性观察（READY仍需PM验收，无正式Orca监督） | `references/zcode-gui-monitor-adapter.md`、`references/zcode-gui-observe.md`；组合验证见 `references/zcode-gui-evidence-pipeline.md` |
+| GUI交付三件套的校验分块传输及Git bundle消费者 | `references/zcode-gui-artifacts.md` |
+| 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
+
+不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。references只保留可复用操作与当前接口合同；任务计划、待办、逐轮验收和现场证据索引写回原TASKS卡，重要取舍写DECISIONS，不为一次任务新增运行参考。
+
+## 9. Hard Fail
+
+出现以下任一情形，停止派发、接受、合并或清理，并保留可复查证据：
+
+- 用户要求 PM/worker 编排，启动门禁未过而 PM 直接写业务代码。
+- worker cwd/worktree/branch/repo/head 与目标不一致，或宿主/backend 身份不可证明。
+- 真实 provider settings、Token、备份或其他敏感信息进入 Git、日志或打包件。
+- 未授权安装、全局环境写入、raw push、范围外修改，或把 verify 当安装授权。
+- supervised worker 无 live Task/Dispatch，或用 STATUS/Sentinel/idle/timeout 代替 `worker_done` 与 settlement。
+- 只凭 worker 自报、静态 lint、单次 UI 状态或未绑定 head 的证据声称业务完成。
+- 未过派发价值、交付后、角色分离或失败恢复门禁；无授权 reviewer 越界写入，或把 PM 例外交付计为常规交付。
+- PR create/push/merge 前未通过唯一性与冻结事实审计，或结果不确定时盲重试 mutation。
+- worker 启动的服务/监听器没有 owner 与零净增量证据，或按进程名批量 kill。
+- 清理 active/unknown/release pending worker；误删长期分支或 integration target；交付后没有记录三种资源终态之一。
+- 仅凭单一 429 关键词、陈旧 tail 或 idle 状态注入；向身份未绑定、不可写、非 Orca 或仍在 retrying 的 terminal 发送“继续”；把 `WAKE_ACCEPTED` 声称为额度或业务恢复。
+- 远程节点派发时伪造或重放 dispatch receipt、绕过节点侧门禁（receipt 一次性 + TTL + enabled 开关不可绕过），或把节点容量拒绝（`PARKED_FOR_REMOTE_CAPACITY`）擅自回落本机派发；节点不可达（rc=65）回落本机必须是全新本机 spawn 重走全套门禁，不是复用远程上下文。
+- 远程 worker 的完成只凭 ssh 单信号声称：必须集齐完成三证（STATUS.json 终态 + PR 存在 + PR-fingerprint 验收）；supervised 模式跑在远程节点在 M0 一律 NOT_VERIFIED。
+
+修改本 Skill 后，按 `references/19-maintainer-validation.md` 运行受影响测试和完整回归。只有真实启动受支持 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能把该 backend 的 supervised 路径标记为已验证；其他 backend 不得类推。
+
+
+## 名称迁移与兼容
+
+从 3.0.0 起使用 `multi-agent-orca`。安装迁移先运行 `python3 scripts/skill-name-migration.py plan --source NEW_SOURCE --old-link OLD_INSTALL_LINK --owner OWNER --manifest PRIVATE_MANIFEST`，核清单后依次 `apply / verify`；撤销本次新增链接用 `rollback`。脚本只依赖 Python 标准库，默认 plan 不修改安装入口，清单保存到仓库外或本地 archive。
+
+旧 `multi-agent-orchestration/` 是冻结的兼容运行时，不包含 `SKILL.md`，不接收新的业务派发。保留原脚本、references、config 和模板的字节/路径用于在途任务；新任务读取本入口。不要重算旧 authority/helper 摘要或迁移旧状态；schema、`MAO_*`、`MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG`、原状态/锁目录继续兼容。私人配置在本机按原来源单独绑定，不进入发布包。

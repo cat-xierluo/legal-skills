@@ -23,8 +23,8 @@
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
 | [new-case](../../skills/new-case/) | 建立标准案件目录、信息看板和期限底座 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/new-case-1.5.0.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、组织检索并形成风险与诉讼策略；源码 v1.1.0 待发布 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
-| [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索矩阵并核验法规与正反类案 | [已发布 v1.10.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、组织检索并形成风险与诉讼策略；源码 v1.1.1 待发布 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
+| [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索矩阵并核验法规与正反类案；源码 v1.10.1 待发布 | [已发布 v1.10.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
 | [legal-proposal-generator](../../skills/legal-proposal-generator/) | 把研判结果转成诉讼方案、咨询或沟通报告 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-proposal-generator-0.4.1.zip) |
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-ocr-1.6.0.zip) |
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页码索引并按材料内容整理 PDF；源码 v0.6.1 待发布 | [已发布 v0.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-organizer-0.6.0.zip) |

@@ -96,7 +96,7 @@ Before sending work to an external Agent, check `config/collab.yaml`:
 2. Prefer `--issue N` so the adapter receives the project task-source context.
 3. Include acceptance criteria and handoff requirements in the trigger.
 4. Require branch + PR output when the result changes repository files.
-5. Keep local execution sessions in `multi-agent-orchestration`; do not use email adapters to manage tmux or worktree state.
+5. Keep local execution sessions in `multi-agent-orca`; do not use email adapters to manage tmux or worktree state.
 
 ## Finish A Work Session
 

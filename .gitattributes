@@ -15,3 +15,5 @@ node_modules/    export-ignore
 **/*.sqlite*     export-ignore
 **/DECISIONS.md  export-ignore
 **/TASKS.md      export-ignore
+# Native probe fixtures preserve original whitespace as evidence.
+skills/multi-agent-orca/scripts/fixtures/memory-admission-261002/**/memory_pressure.txt -whitespace

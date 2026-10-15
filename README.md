@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-15 | 更新 | [video-screenshot](skills/video-screenshot/) | v1.1.3 | 修复滚动文字裁边、跨页重复与预算降级，强化正文/raw来源校验及优化模式拒绝；源码待发布。 |
+| 2026-10-15 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.0.0 | 更名 Multi-Agent Orca；同步安装、套件与 CI，旧名仅保留冻结兼容运行时，原协议与状态不变。 |
 | 2026-10-14 | 更新 | [git-workflow](skills/git-workflow/) | v1.23.3 | 草稿使用官方 ready 入口保留原 PR，转换前后核 head/base，失败先回查；保留独立授权与 CI 门禁。 |
 | 2026-10-13 | 更新 | [judgment-analysis](skills/judgment-analysis/) | v2.0.0 | 由 litigation-analysis 更名：职责已收敛为单份判决深析，调用名与目录名对齐；legal-case-analysis 等引用同步更新，下载仍为旧名 1.4.0 包。 |
 | 2026-10-13 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.6.8 | 新增 owner/repo 视觉消歧手册：7 条 OCR 误读消歧规则+完整流程+不要做清单，截图输入 404 不再误判「找不到」。 |
 | 2026-10-13 | 更新 | [case-progress](skills/case-progress/) | v0.9.0 | 补齐快递登记、状态回写与 show 邮寄列表；来源保护、日期与凭证路径校验及合成 CLI 回归，源码待发布。 |
 | 2026-10-13 | 更新 | [img2pdf](skills/img2pdf/) | v1.3.1 | 补充逐图六步执行卡、不同页位置示意、坐标换算算例和失败修正表，减少多模态模型裁切时的隐含判断；源码待发布。 |
 | 2026-10-12 | 新上传 | [express-tracking](skills/express-tracking/) | v0.2.1 | 快递邮寄跟踪与证据留痕（EMS/顺丰官网轨迹+水印 PDF 凭证归档）；登录态持久化与 trusted 输入反风控；首次公开登记。 |
-| 2026-10-11 | 更新 | [litigation-analysis](skills/judgment-analysis/) | v1.5.0 | 聚焦单份判决深析；起诉状与庭审参考迁至综合研判，重整模板与交接，源码待发布。（该技能现已更名 judgment-analysis） |
-| 2026-10-11 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.1.0 | 明确综合研判与检索职责，承接起诉状、庭审参考，复用判决节点成果；源码待发布。 |
 
 </details>
 
@@ -706,13 +706,13 @@
 <td>所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)</td>
 </tr>
 <tr>
-<td><a href="skills/multi-agent-orchestration/"><strong>multi-agent-orchestration</strong></a></td>
+<td><a href="skills/multi-agent-orca/"><strong>multi-agent-orca</strong></a></td>
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal、Run/Task/Dispatch、额度与生命周期门禁；按需接入独立 ZCode CLI、MiniMax Code、CodeBuddy、Qoder CN 与千问办公，日常池保持 Claude Code/Codex</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.36.8</td>
+<td style="text-align:center">v3.0.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip">已发布 v2.30.5</a></td>
-<td>所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)</td>
+<td>源码 v3.0.0 待发布；旧包保留历史名称。所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)</td>
 </tr>
 <tr>
 <td><a href="skills/release-workflow/"><strong>release-workflow</strong></a></td>
@@ -807,7 +807,7 @@
 | mineru-ocr               | v1.2.0 | 已归档（2026-09-04）。OCR 能力由 [legal-ocr](skills/legal-ocr/) 统一覆盖，推荐使用 legal-ocr 作为唯一入口。原 skill 依然可用：需自行配置 MinerU API Token 才能正常使用 |
 | dsh-plugin-lint          | v1.0.0 | 已合并（2026-09-29，PR #206 收拢）。插件设计预检、质量审查与发布验收能力并入 [dsh-plugin-dev](skills/dsh-plugin-dev/) 统一覆盖，后者 description 已含"发布前机械审查与验收" |
 | paddle-ocr               | v1.1.1 | 已归档（2026-09-04）。OCR 能力由 [legal-ocr](skills/legal-ocr/) 统一覆盖，推荐使用 legal-ocr 作为唯一入口。原 skill 依然可用：需自行配置 PaddleOCR API 才能正常使用 |
-| multi-search             | v1.1.0 | 智能多主题深度研究工具，功能被[multi-agent-orchestration](skills/multi-agent-orchestration/) v1.16+ 内置的并行 Subagent 能力覆盖，停止独立维护 |
+| multi-search             | v1.1.0 | 智能多主题深度研究工具，功能被[multi-agent-orca](skills/multi-agent-orca/) v1.16+ 内置的并行 Subagent 能力覆盖，停止独立维护 |
 | skill-architect          | v1.6.2 | 已重定位为[skill-lint](skills/skill-lint/) v2.0.0，创建能力不再作为本仓库独立入口维护                                                          |
 | minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill                                                                                         |
 | minimax-web-search       | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill                                                                                         |

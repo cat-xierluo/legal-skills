@@ -39,7 +39,7 @@ git update-ref -d refs/heads/<branch> <expected-tip>
 
 不得升级为无条件 `git branch -D`。tip 漂移时删除失败，保留现场。
 
-`multi-agent-orchestration` 的 `pm-closeout.sh` / `pm-cleanup-worker.sh` 实现该协议。结果必须归一为：
+`multi-agent-orca` 的 `pm-closeout.sh` / `pm-cleanup-worker.sh` 实现该协议。结果必须归一为：
 
 - `CLEANED`：本次一次性资源均已安全清理。
 - `RETAINED_WITH_REASON`：按生命周期或具名理由保留。

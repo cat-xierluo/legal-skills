@@ -32,8 +32,33 @@
 | 实验后生产 profile 变了 | **profile-selection/profile-preferences 按共享 userData 存放**，`DSH_HOME` 隔离不了它；隔离 home 无 profile 时应用回退创建默认并改写选择 | 实验前后快照/恢复该文件（流程 1/6） |
 | 每次启动重弹基础配置向导 | 向导完成态在 `userData/profile-setup/<homeHash>/state.json`；只有 `.pending` 就重弹 | 按完成态 schema 补种（7 字段按排序比较、profileHash 须与路径哈希一致、outcome=completed/skipped、version=2；解析器 profile-channel-admission） |
 | `open -a` 恢复"没反应" | 单例锁把启动请求**转发给尚存活的实验实例**（ premature 恢复） | 退出验证与恢复命令**分步执行、逐门通过**——曾因此时序竞态二次 SIGTERM |
-| renderer 偶发 boot failed | 30s 健康超时；两种形态（compatibility-chrome.html ERR_FAILED / Unknown client plugin），五次实验两现。**语义解码（2026-09-29 静态归因）：「Unknown client plugin」是显示伪影——插件列表为空时的占位文案，而主进程超时路径恰好构造空列表报告；真实含义 = 渲染器 30s 整体静默（未到插件枚举），与被测插件无关** | Host 侧不受影响；GUI 级验收（截图/交互）前需定位；三假设（资源竞态/首启路径/系统代理）与判别复跑方案见 dsh-plugins `docs/research/2026-09-29-renderer-static-diagnosis.md`；隔离 home 种子 cordis.patch.yml 只留本实验 insert 行（生产皮肤残留只警告但添噪）。**2026-10-11 内容工厂 W7 实证补充**：系统代理（scutil --proxy HTTPProxy:1082）瞬断时段该静默**稳定复现**（非偶发两现）——`--no-proxy-server` 不解除（静默在 Renderer boot health 上报层）；代理恢复后同 profile 正常。另两条新增前置坑：共享 userData profile-selection 指向隔离 home 不存在的 profile 必进恢复模式（恢复助手「切换 Profile」UI 可切）；profile 级 cordis.patch.yml **只有注释行会被拒**（须顶层数组，`[]` 即合法） |
+| renderer 偶发 boot failed | 30s 健康超时；两种形态（compatibility-chrome.html ERR_FAILED / Unknown client plugin），五次实验两现。**语义解码（2026-09-29 静态归因）：「Unknown client plugin」是显示伪影——插件列表为空时的占位文案，而主进程超时路径恰好构造空列表报告；真实含义 = 渲染器 30s 整体静默（未到插件枚举），与被测插件无关** | Host 侧不受影响；GUI 级验收（截图/交互）前需定位；三假设（资源竞态/首启路径/系统代理）与判别复跑方案见 dsh-plugins `docs/research/2026-09-29-renderer-static-diagnosis.md`；隔离 home 种子 cordis.patch.yml 只留本实验 insert 行（生产皮肤残留只警告但添噪）。**2026-10-11 内容工厂 W7 实证补充**：系统代理（scutil --proxy HTTPProxy:1082）瞬断时段该静默**稳定复现**（非偶发两现）——`--no-proxy-server` 不解除（静默在 Renderer boot health 上报层）；代理恢复后同 profile 正常。 **同日终轮补充（5 连败实测）**：坏窗口内 `--proxy-server='direct://'` 同样不解除；**单次 curl 经代理外网 200 不能预测窗口好坏**（窗口分钟级翻动，须直接试 boot）；坏窗口内挂死实例 **SIGTERM 可能无响应须 kill -9**；GUI 模式 stdout **不打印 token 行**（token:0 非故障信号）。处置=择机重试（好窗口内同配方一次成功），不盲改插件与配置。另两条新增前置坑：共享 userData profile-selection 指向隔离 home 不存在的 profile 必进恢复模式（恢复助手「切换 Profile」UI 可切）；profile 级 cordis.patch.yml **只有注释行会被拒**（须顶层数组，`[]` 即合法） |
 | 全屏截图取证 | 会截到用户无关私人窗口 | **不用全屏截图做宿主证据**；Host 半体以宿主日志为权威 |
+
+## 并行测试实例（不影响正在使用的 DSH，2026-10-11 双实例共存实证）
+
+**问题**：Desktop 调试每次都要 SIGTERM 生产实例（单例锁 + 共享 userData 的 profile-selection 循环），打断正在使用的 DSH。
+
+**解法**：`--user-data-dir=<隔离目录>` 开完全并行的第二实例——独立单例锁/独立 profile-selection/独立向导态/独立 Cookies，与生产实例**同时运行互不干扰**（实测双 pid 共存：并行实例侧栏=内容工厂，生产实例侧栏=常驻任务/合同审查各自插件集）。
+
+```bash
+# 1) 隔离 userData 预置（自带 selection + 向导完成态）
+UD=<隔离userData>; mkdir -p "$UD/profile-selection"
+echo '{"version":2,"active":"<测试profile>"}' > "$UD/profile-selection/state.json"
+PH=$(python3 -c "import hashlib;print(hashlib.sha256('<DSH_HOME>/profiles/<测试profile>'.encode()).hexdigest())")
+mkdir -p "$UD/profile-setup/$PH"
+cat > "$UD/profile-setup/$PH/state.json" <<J
+{"version":2,"profileHash":"$PH","outcome":"skipped","desktopVersion":"2.0.15","dshVersion":"0.1.7-rc.2","setupRevision":1,"recordedAt":"2026-10-11T15:30:00.000Z"}
+J
+chmod 700 "$UD/profile-setup" && chmod 700 "$UD/profile-setup/$PH" && chmod 600 "$UD/profile-setup/$PH/state.json"
+# 2) 并行启动（生产实例保持运行）
+DSH_HOME=<隔离home> CONTENT_FACTORY_SCAN_ROOT=<夹具> \
+  "/Applications/DSH Desktop.app/Contents/MacOS/DSH Desktop" --user-data-dir="$UD"
+```
+
+**权限坑（实测）**：向导完成态校验要求 **state.json 600 且其父目录链 700**（`state directory permissions must be 700`——只 chmod 文件不够）。
+
+**注意**：① 并行实例窗口出现在用户桌面前台——用户可能误当生产实例操作（实测撞见 textarea 出现用户输入），测试完及时关闭并行实例或提前告知；② 生产实例全程零接触（无需 SIGTERM/无需改共享 userData——那是旧配方）；③ `--profile` 参数在 GUI 模式被忽略，profile 由该实例自己 userData 里的 selection 决定。
 
 ## 无 GUI 验证入口
 

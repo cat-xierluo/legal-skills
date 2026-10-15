@@ -1,0 +1,80 @@
+{
+  "description": "Minimum raw files from three frozen memory-admission observations; no policy override",
+  "files": [
+    {
+      "path": "snapshot-1/hw_memsize.txt",
+      "sha256": "57d5473bac8c93f9991ae91cf27dcff110029feff9821e24a4502928d1861a74",
+      "size_bytes": 12
+    },
+    {
+      "path": "snapshot-1/vm_stat.txt",
+      "sha256": "d8a38d6e57c31e3aaf04425aeeef70ee9d156a1ac7b5b4fcf70abaf3c7560ec9",
+      "size_bytes": 1137
+    },
+    {
+      "path": "snapshot-1/memory_pressure.txt",
+      "sha256": "f591e8a2a71ea06da22f9a8036609d0949fb1b3a728d610f4c8c9efc831a5219",
+      "size_bytes": 532
+    },
+    {
+      "path": "snapshot-1/vm_swapusage.txt",
+      "sha256": "70f0e55f3a63e69b5126342fae92e59395d200650d74938fb8a070ffd31b9fb1",
+      "size_bytes": 65
+    },
+    {
+      "path": "snapshot-1/kernel_pressure.txt",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "size_bytes": 2
+    },
+    {
+      "path": "snapshot-2/hw_memsize.txt",
+      "sha256": "57d5473bac8c93f9991ae91cf27dcff110029feff9821e24a4502928d1861a74",
+      "size_bytes": 12
+    },
+    {
+      "path": "snapshot-2/vm_stat.txt",
+      "sha256": "6afe08a93613dc238609b9e61cf60b0b3cbabba2e10cec48a88ac1f2530edce7",
+      "size_bytes": 1137
+    },
+    {
+      "path": "snapshot-2/memory_pressure.txt",
+      "sha256": "850c3cec222943ec4c105a74a4bb2b29f43f52bf6266bd80ad9277edb396511e",
+      "size_bytes": 532
+    },
+    {
+      "path": "snapshot-2/vm_swapusage.txt",
+      "sha256": "70f0e55f3a63e69b5126342fae92e59395d200650d74938fb8a070ffd31b9fb1",
+      "size_bytes": 65
+    },
+    {
+      "path": "snapshot-2/kernel_pressure.txt",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "size_bytes": 2
+    },
+    {
+      "path": "snapshot-3/hw_memsize.txt",
+      "sha256": "57d5473bac8c93f9991ae91cf27dcff110029feff9821e24a4502928d1861a74",
+      "size_bytes": 12
+    },
+    {
+      "path": "snapshot-3/vm_stat.txt",
+      "sha256": "a98365123d34f972676d46a1ebdba1739e3d99470993616f7ab73454d015c00c",
+      "size_bytes": 1137
+    },
+    {
+      "path": "snapshot-3/memory_pressure.txt",
+      "sha256": "7fba5a1ce2174633f638383705566c1461d1e68be37832efa9f74faf203cba5f",
+      "size_bytes": 532
+    },
+    {
+      "path": "snapshot-3/vm_swapusage.txt",
+      "sha256": "495bc9aa715ee839062e1447fad16d0620d9cd72543c02f6a640dae02c0e2417",
+      "size_bytes": 65
+    },
+    {
+      "path": "snapshot-3/kernel_pressure.txt",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "size_bytes": 2
+    }
+  ]
+}
