@@ -4,6 +4,12 @@
 
 ---
 
+## [0.8.1] - 2026-10-15
+
+### 新增
+
+- **快照补 repo 数字主键 `id`（D-00 对账发现的缺口闭合）**：`original_latest.json` 的 repos 条目新增 `id` 字段（GitHub 数字主键，改名后保持稳定）。此前 id 只存在于 export 路径的 data.js，快照侧缺失——下游消费者（Hermes star-board 插件 sync 以 id 为主键）无法用快照锚定改名仓库，会把改名误判为新仓库。消费方应以 id 为主键、full_name 为展示名。附加字段向后兼容，schema_version 维持 2
+
 ## [0.8.0] - 2026-10-15
 
 ### 新增

@@ -73,7 +73,7 @@ with tempfile.TemporaryDirectory() as td:
     t = make_tracker(Path(td))
 
     # 1. 完整快照可提交
-    t.save_latest([{"full_name": "a/b"}], fetch_meta={
+    t.save_latest([{"full_name": "a/b", "id": 4242}], fetch_meta={
         "complete": True, "failed_pages": [], "account_id": "u",
         "limit_truncated": False})
     snap = t.load_latest()
@@ -81,6 +81,7 @@ with tempfile.TemporaryDirectory() as td:
     check("完整快照 complete=True 可提交", ok)
     check("快照写入 snapshot_meta", snap.get("snapshot_meta", {}).get("complete") is True)
     check("schema_version=2", snap.get("schema_version") == 2)
+    check("repo 数字主键 id 进快照（D-00 缺口闭合）", snap["repos"][0].get("id") == 4242)
 
     # 2. 部分快照不可提交（旧基线保留语义）
     t.save_latest([{"full_name": "a/c"}], fetch_meta={

@@ -618,6 +618,9 @@ README 内容（前6000字）:
             "repos": [
                 {
                     # 基本信息
+                    # id：GitHub 数字主键，改名后保持稳定（消费者应以 id 为主键、
+                    # full_name 为展示名，避免改名被误判为新仓库——D-00 对账发现的缺口）
+                    "id": r.get("id"),
                     "full_name": r["full_name"],
                     "name": r.get("name"),
                     "owner": r.get("owner", {}).get("login") if isinstance(r.get("owner"), dict) else None,
