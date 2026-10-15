@@ -315,39 +315,14 @@ class StarTracker:
         return repos
 
     def _match_category(self, repo: Dict, categories_map: Dict[str, Dict]) -> Optional[Dict]:
-        """根据仓库信息匹配合适分类"""
-        # 收集仓库的所有可匹配信息
-        language = (repo.get('language') or '').lower()
-        description = (repo.get('description') or '').lower()
-        topics = [t.lower() for t in repo.get('topics', [])]
-        name = repo.get('name', '').lower()
-        full_name = repo.get('full_name', '').lower()
+        """根据仓库信息匹配合适分类
 
-        # 检查每个分类的匹配度
-        best_match = None
-        best_score = 0
-
-        for cat_id, cat in categories_map.items():
-            score = 0
-            keywords = cat.get('keywords', [])
-
-            # 检查关键词匹配
-            repo_keywords = f"{language} {description} {' '.join(topics)} {name} {full_name}"
-            for kw in keywords:
-                if kw.lower() in repo_keywords:
-                    score += 3
-                    break  # 关键词匹配得高分，不再检查其他
-
-            # 检查语言匹配
-            if language and any(kw.lower() in language for kw in keywords):
-                score += 2
-
-            # 最低要求至少有一个关键词匹配
-            if score > 0 and score > best_score:
-                best_match = cat
-                best_score = score
-
-        return best_match
+        0.8.0 起与 quick_export.py 共用统一评分规则（common.match_categories），
+        收敛审计「分类/导出分叉」：在线单分类 = 多标签结果的首个（min_score=1）。
+        """
+        from common import match_categories
+        best = match_categories(repo, list(categories_map.values()), min_score=1)
+        return best[0] if best else None
 
     def get_latest_release(self, repo_full_name: str) -> Optional[Dict]:
         """获取项目的最新 Release"""

@@ -20,7 +20,10 @@
 """
 
 import sys
+import os
 import json
+import time
+import base64
 import contextlib
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -88,6 +91,131 @@ def parse_dt(s: Optional[str]) -> Optional[datetime]:
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
+
+
+# ==================== evidence fetch：显式联网取证（与只读查询分离） ====================
+
+def _github_get(url: str, token: Optional[str]):
+    """GitHub API GET（轻量重试；进度/错误走 stderr，不污染 stdout JSON）"""
+    try:
+        import requests
+    except ImportError:
+        warn("❌ 缺少依赖: requests（pip install requests 或 pip install -r assets/requirements.txt）")
+        return None
+
+    headers = {"Accept": "application/vnd.github+json",
+               "User-Agent": "github-star-manager-skill"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    delay = 2
+    for attempt in range(1, 4):
+        try:
+            r = requests.get(url, headers=headers, timeout=30)
+            if r.status_code in (429, 500, 502, 503, 504) and attempt < 3:
+                retry_after = r.headers.get("Retry-After")
+                wait = int(retry_after) if retry_after and retry_after.isdigit() else delay
+                warn(f"[retry] HTTP {r.status_code}，{wait}s 后第 {attempt}/3 次重试: {url}")
+                time.sleep(wait)
+                delay = min(delay * 2, 30)
+                continue
+            return r
+        except Exception as e:
+            if attempt >= 3:
+                warn(f"[retry] 网络异常重试耗尽 {url}: {type(e).__name__}")
+                return None
+            warn(f"[retry] 网络异常，{delay}s 后重试: {type(e).__name__}")
+            time.sleep(delay)
+            delay = min(delay * 2, 30)
+    return None
+
+
+def cmd_evidence_fetch(args) -> int:
+    """显式联网取证：抓取仓库 meta/README/最新 Release 写入本地缓存。
+
+    这是查询接口里唯一联网的命令（审计 §3：取证与查询分离）。
+    缓存落 output/evidence/<owner>__<repo>/，后续 evidence 导出只读缓存。
+    README 记录 blob sha 作为证据锚点；原文权威，不做翻译。
+    """
+    token = os.getenv("GITHUB_PAT")
+    warnings = []
+    if not token:
+        warnings.append("未设置 GITHUB_PAT：匿名限速 60 次/小时，公开仓库仍可取证")
+
+    repo = args.repo
+    base = f"https://api.github.com/repos/{repo}"
+
+    meta_resp = _github_get(base, token)
+    if meta_resp is None or meta_resp.status_code != 200:
+        status = meta_resp.status_code if meta_resp is not None else "网络异常"
+        return emit(envelope([], errors=[f"仓库元数据获取失败（{status}）: {repo}"]), 1)
+    meta = meta_resp.json()
+
+    readme_resp = _github_get(f"{base}/readme", token)
+    readme_block = None
+    readme_text = None
+    if readme_resp is not None and readme_resp.status_code == 200:
+        rj = readme_resp.json()
+        try:
+            text = base64.b64decode(rj.get("content") or "").decode("utf-8", errors="replace")
+        except Exception as e:
+            warnings.append(f"README 解码失败（{type(e).__name__}），按空处理")
+            text = ""
+        truncated = len(text) > args.max_readme
+        readme_text = text[:args.max_readme]
+        readme_block = {
+            "blob_sha": rj.get("sha"),
+            "html_url": rj.get("html_url"),
+            "download_url": rj.get("download_url"),
+            "path": rj.get("path"),
+            "original_size": rj.get("size"),
+            "truncated": truncated,
+            "stored_chars": len(readme_text),
+        }
+        if truncated:
+            warnings.append(f"README 截断至 {args.max_readme} 字符（原文 {rj.get('size')} 字节）")
+    else:
+        status = readme_resp.status_code if readme_resp is not None else "网络异常"
+        warnings.append(f"README 获取失败（{status}）")
+
+    release = None
+    rel_resp = _github_get(f"{base}/releases/latest", token)
+    if rel_resp is not None and rel_resp.status_code == 200:
+        rj = rel_resp.json()
+        release = {"tag_name": rj.get("tag_name"), "name": rj.get("name"),
+                   "published_at": rj.get("published_at"), "html_url": rj.get("html_url")}
+    elif rel_resp is not None and rel_resp.status_code == 404:
+        warnings.append("无最新 Release（404）")
+    else:
+        warnings.append(f"Release 获取失败（{rel_resp.status_code if rel_resp is not None else '网络异常'}）")
+
+    ev_dir = StarTracker.CACHE_DIR / "evidence" / repo.replace("/", "__")
+    ev_dir.mkdir(parents=True, exist_ok=True)
+    record = {
+        "schema_version": "1.0",
+        "repo": repo,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "repo_meta": {k: meta.get(k) for k in (
+            "full_name", "description", "default_branch", "pushed_at", "updated_at",
+            "stargazers_count", "archived", "html_url")},
+        "readme": readme_block,
+        "release": release,
+    }
+    (ev_dir / "meta.json").write_text(json.dumps(record, ensure_ascii=False, indent=2),
+                                       encoding="utf-8")
+    if readme_text is not None:
+        (ev_dir / "readme.md").write_text(readme_text, encoding="utf-8")
+
+    item = {
+        "repo": repo,
+        "cache_dir": str(ev_dir),
+        "cached_files": sorted(p.name for p in ev_dir.iterdir() if p.is_file()),
+        "fetched_at": record["fetched_at"],
+        "readme": readme_block,
+        "release": release,
+        "repo_meta": record["repo_meta"],
+    }
+    return emit(envelope([item], warnings=warnings))
 
 
 # ==================== recent：任意时间窗的新关注 ====================
@@ -308,10 +436,10 @@ def _load_project_profile(project_id: Optional[str]) -> Optional[Dict]:
 # ==================== evidence：单仓库缓存证据 ====================
 
 def cmd_evidence(args) -> int:
-    """导出单仓库的缓存证据包（只读，缺缓存显式标记 stale/missing）。
+    """导出单仓库的缓存证据包（只读，缺缓存显式标记 missing，过期标 stale）。
 
-    证据来源限本地缓存：快照元数据 + evidence/ 目录下此前抓取的 README/Release。
-    不自动联网取证——联网走 main.py --export 等显式命令。
+    证据来源限本地缓存：快照元数据 + output/evidence/ 下此前 evidence-fetch
+    抓取的 README/Release（含 blob sha 锚点与抓取时间）。不自动联网。
     """
     snap, fail = load_snapshot_or_fail()
     if not snap:
@@ -330,7 +458,36 @@ def cmd_evidence(args) -> int:
     if not has_snapshot_entry:
         warnings.append(f"仓库 {repo_full} 不在本地快照中（可能未 star 或快照过旧）")
     if not cached_files:
-        warnings.append(f"无缓存证据（{evidence_dir}），需要 README/Release 原文时请先显式取证")
+        warnings.append(f"无缓存证据（{evidence_dir}）：需要 README/Release 原文时"
+                        f"请先运行 evidence-fetch（显式联网取证）")
+
+    # 读取取证记录与 README 摘录（缓存内容与新鲜度分开表达）
+    record = None
+    meta_path = evidence_dir / "meta.json"
+    if meta_path.exists():
+        try:
+            record = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            warnings.append(f"缓存记录解析失败: {e}")
+
+    readme_excerpt = None
+    readme_path = evidence_dir / "readme.md"
+    if readme_path.exists() and args.excerpt > 0:
+        try:
+            readme_excerpt = readme_path.read_text(encoding="utf-8")[:args.excerpt]
+        except Exception as e:
+            warnings.append(f"README 缓存读取失败: {e}")
+
+    fetched_at = (record or {}).get("fetched_at")
+    age_days = stale = None
+    if fetched_at:
+        fdt = parse_dt(fetched_at)
+        if fdt:
+            age_days = round((datetime.now(timezone.utc) - fdt).total_seconds() / 86400, 2)
+            stale = age_days > args.max_age_days
+            if stale:
+                warnings.append(f"证据缓存已 {age_days} 天（阈值 {args.max_age_days} 天），"
+                                f"结论前建议重新 evidence-fetch")
 
     item = {
         "repo": repo_full,
@@ -340,6 +497,13 @@ def cmd_evidence(args) -> int:
         "cached_evidence_files": cached_files,
         "evidence_dir": str(evidence_dir),
         "cache_status": "present" if cached_files else "missing",
+        "evidence_stale": stale,
+        "evidence_age_days": age_days,
+        "fetched_at": fetched_at,
+        "repo_meta": (record or {}).get("repo_meta"),
+        "readme": (record or {}).get("readme"),
+        "readme_excerpt": readme_excerpt,
+        "release": (record or {}).get("release"),
     }
     return emit(envelope(
         items=[item],
@@ -426,6 +590,7 @@ def main() -> int:
   python star_query.py interests --window 30 --compare previous
   python star_query.py match --project myproj --query "字幕 时间轴"
   python star_query.py evidence --repo owner/name
+  python star_query.py evidence-fetch --repo owner/name   # 唯一联网命令（显式取证）
   python star_query.py research --project myproj --limit 5
         """)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -447,9 +612,19 @@ def main() -> int:
     p.add_argument("--limit", type=int, default=20, help="返回上限（默认 20）")
     p.set_defaults(func=cmd_match)
 
-    p = sub.add_parser("evidence", help="单仓库缓存证据包")
+    p = sub.add_parser("evidence", help="单仓库缓存证据包（只读，缺缓存/过期显式标记）")
     p.add_argument("--repo", required=True, help="owner/name")
+    p.add_argument("--max-age-days", type=float, default=7.0,
+                   help="缓存过期阈值（天，默认 7）")
+    p.add_argument("--excerpt", type=int, default=2000,
+                   help="README 摘录字符数（默认 2000，0 关闭）")
     p.set_defaults(func=cmd_evidence)
+
+    p = sub.add_parser("evidence-fetch", help="显式联网取证：抓取 meta/README/Release 写缓存")
+    p.add_argument("--repo", required=True, help="owner/name")
+    p.add_argument("--max-readme", type=int, default=20000,
+                   help="README 存储上限字符（默认 20000）")
+    p.set_defaults(func=cmd_evidence_fetch)
 
     p = sub.add_parser("research", help="组装供 Agent 分析的最小候选+证据包")
     p.add_argument("--project", required=True, help="项目 ID（必须已登记）")

@@ -80,7 +80,8 @@ def repo(full_name, starred_at=None, topics=None, desc=None, lang=None, stars=10
 class Args:
     def __init__(self, **kw):
         defaults = {"since": None, "until": None, "window": 30, "compare": "previous",
-                    "project": None, "query": "", "limit": 20, "repo": None}
+                    "project": None, "query": "", "limit": 20, "repo": None,
+                    "max_age_days": 7.0, "excerpt": 2000, "max_readme": 20000}
         defaults.update(kw)
         for k, v in defaults.items():
             setattr(self, k, v)
@@ -334,6 +335,127 @@ with tempfile.TemporaryDirectory() as td:
     # list 过滤
     rc, data, _, _ = capture(opp.cmd_list, type("A", (), {"project": "myproj", "repo": None})())
     check("list 返回 2 条记录", data["count"] == 2, str(data["count"]))
+
+
+# ============ evidence-fetch：显式联网取证（mock 网络） ============
+print("\n[evidence-fetch] 取证与缓存闭环")
+
+
+class FakeResp:
+    def __init__(self, status_code=200, payload=None, headers=None):
+        self.status_code = status_code
+        self._payload = payload
+        self.headers = headers or {}
+
+    def json(self):
+        return self._payload
+
+
+with tempfile.TemporaryDirectory() as td:
+    tmp = Path(td)
+    sq, _ = make_env(tmp)
+    write_snapshot(tmp, [repo("owner/known")])
+
+    readmes = ["# Demo\nsubtitle timeline cue algorithm." * 50]  # 足够长以触发截断
+    import base64 as _b64
+
+    def fake_get(url, token):
+        if url.endswith("/repos/owner/known"):
+            return FakeResp(200, {"full_name": "owner/known", "description": "d",
+                                  "default_branch": "main", "pushed_at": "2026-10-14T00:00:00Z",
+                                  "stargazers_count": 100, "html_url": "u", "archived": False})
+        if url.endswith("/readme"):
+            return FakeResp(200, {"sha": "abc123", "html_url": "ru", "download_url": "du",
+                                  "path": "README.md", "size": len(readmes[0]),
+                                  "content": _b64.b64encode(readmes[0].encode()).decode()})
+        if url.endswith("/releases/latest"):
+            return FakeResp(200, {"tag_name": "v2.0.0", "name": "v2",
+                                  "published_at": "2026-10-01T00:00:00Z", "html_url": "ru"})
+        return FakeResp(404)
+
+    saved_get = sq._github_get
+    sq._github_get = fake_get
+    try:
+        rc, data, _, _ = capture(sq.cmd_evidence_fetch,
+                                 Args(repo="owner/known", max_readme=100))
+        check("取证 rc=0", rc == 0)
+        item = data["items"][0]
+        check("README blob_sha 锚点记录", item["readme"]["blob_sha"] == "abc123")
+        check("截断可见（truncated=True）", item["readme"]["truncated"] is True)
+        check("release 记录", item["release"]["tag_name"] == "v2.0.0")
+        ev_dir = tmp / "evidence" / "owner__known"
+        check("缓存文件落盘", (ev_dir / "meta.json").exists() and (ev_dir / "readme.md").exists())
+
+        # 闭环：缓存后 evidence 导出带内容与新鲜度
+        rc, data, _, _ = capture(sq.cmd_evidence,
+                                 Args(repo="owner/known", max_age_days=7, excerpt=200))
+        item = data["items"][0]
+        check("导出 cache_status=present", item["cache_status"] == "present")
+        check("导出含 README 摘录", item["readme_excerpt"] and "subtitle" in item["readme_excerpt"])
+        check("新鲜缓存 stale=False", item["evidence_stale"] is False)
+        check("导出含 repo_meta", item["repo_meta"]["default_branch"] == "main")
+
+        # 陈旧缓存：把 fetched_at 改老
+        rec = json.loads((ev_dir / "meta.json").read_text(encoding="utf-8"))
+        rec["fetched_at"] = "2026-08-01T00:00:00+00:00"
+        (ev_dir / "meta.json").write_text(json.dumps(rec), encoding="utf-8")
+        rc, data, _, _ = capture(sq.cmd_evidence,
+                                 Args(repo="owner/known", max_age_days=7, excerpt=200))
+        item = data["items"][0]
+        check("陈旧缓存 stale=True + 警告", item["evidence_stale"] is True
+              and any("重新 evidence-fetch" in w for w in data["warnings"]))
+
+        # release 404 分支
+        def fake_get_404(url, token):
+            if url.endswith("/repos/owner/norel"):
+                return FakeResp(200, {"full_name": "owner/norel"})
+            if url.endswith("/releases/latest"):
+                return FakeResp(404)
+            if url.endswith("/readme"):
+                return FakeResp(200, {"sha": "s", "content": _b64.b64encode(b"# t").decode()})
+            return FakeResp(404)
+        sq._github_get = fake_get_404
+        rc, data, _, _ = capture(sq.cmd_evidence_fetch,
+                                 Args(repo="owner/norel", max_readme=1000))
+        check("无 Release 记 null+警告", rc == 0 and data["items"][0]["release"] is None
+              and any("无最新 Release" in w for w in data["warnings"]))
+
+        # 仓库 404 → 拒绝
+        def fake_get_dead(url, token):
+            return FakeResp(404)
+        sq._github_get = fake_get_dead
+        rc, data, _, _ = capture(sq.cmd_evidence_fetch,
+                                 Args(repo="owner/dead", max_readme=100))
+        check("仓库不存在 rc=1", rc == 1 and "404" in data["errors"][0])
+    finally:
+        sq._github_get = saved_get
+
+
+# ============ 分类匹配算法收敛（在线单分类 = 多标签首个） ============
+print("\n[match-parity] 分类算法收敛")
+import common
+import star_tracker as _st2
+
+cats = [
+    {"id": "ai", "name": "AI", "keywords": ["claude", "llm", "agent"]},
+    {"id": "devtools", "name": "工具", "keywords": ["cli", "tool"]},
+    {"id": "subtitle", "name": "字幕", "keywords": ["subtitle", "caption"]},
+]
+samples = [
+    {"language": "Python", "description": "claude agent toolkit", "topics": ["agent"], "name": "a", "full_name": "o/a"},
+    {"language": "Rust", "description": "subtitle caption aligner", "topics": ["subtitle"], "name": "b", "full_name": "o/b"},
+    {"language": "Go", "description": "unrelated thing", "topics": [], "name": "c", "full_name": "o/c"},
+    {"language": None, "description": None, "topics": [], "name": "d", "full_name": "o/d"},
+]
+t_probe = _st2.StarTracker.__new__(_st2.StarTracker)
+cat_map = {c["id"]: c for c in cats}
+for s in samples:
+    multi = common.match_categories(s, cats)
+    single = t_probe._match_category(s, cat_map)
+    expected_first = multi[0] if multi else None
+    check(f"单分类=多标签首个 ({s['full_name']})",
+          (single or {}).get("id") == (expected_first or {}).get("id"))
+check("无匹配时返回 None", t_probe._match_category(samples[3], cat_map) is None)
 
 
 # ============ 汇总 ============

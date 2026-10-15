@@ -18,7 +18,7 @@ except ImportError:
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from common import assess_value
+from common import assess_value, match_categories  # noqa: F401  (match_categories 统一实现，保留导出兼容)
 
 
 def load_json_data(json_path: Path) -> Dict:
@@ -34,62 +34,6 @@ def load_categories(categories_path: Path) -> List[Dict]:
     with open(categories_path, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
         return data.get('categories', []) if data else []
-
-
-def match_categories(repo: Dict, categories: List[Dict], min_score: int = 3) -> List[Dict]:
-    """为仓库匹配多个分类（多标签模式）
-
-    Args:
-        repo: 仓库数据
-        categories: 分类列表
-        min_score: 最低匹配分数阈值
-
-    Returns:
-        匹配的分类列表（按分数排序）
-    """
-    if not categories:
-        return []
-
-    # 收集仓库的可匹配信息
-    language = (repo.get('language') or '').lower()
-    description = (repo.get('description') or '').lower()
-    topics = [t.lower() for t in repo.get('topics', [])]
-    name = repo.get('name', '').lower()
-    full_name = repo.get('full_name', '').lower()
-    repo_text = f"{language} {description} {' '.join(topics)} {name} {full_name}"
-
-    # 检查每个分类的匹配度
-    matched = []
-
-    for cat in categories:
-        score = 0
-        keywords = cat.get('keywords', [])
-
-        # 统计匹配的关键词数量
-        matched_keywords = 0
-        for kw in keywords:
-            if kw.lower() in repo_text:
-                matched_keywords += 1
-
-        # 根据匹配的关键词数量计算分数
-        if matched_keywords > 0:
-            score = matched_keywords * 3  # 每个匹配的关键词得3分
-
-        # 语言精确匹配加分
-        if language and any(kw.lower() == language for kw in keywords):
-            score += 2
-
-        # topic 精确匹配加分
-        for topic in topics:
-            if topic in [kw.lower() for kw in keywords]:
-                score += 2
-
-        if score >= min_score:
-            matched.append((cat, score))
-
-    # 按分数排序，返回分类列表
-    matched.sort(key=lambda x: -x[1])
-    return [cat for cat, score in matched]
 
 
 def generate_data_js(output_path: Path, projects: List[Dict], categories: List[Dict]) -> None:
