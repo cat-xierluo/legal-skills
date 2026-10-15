@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import csv
+import shutil
 from types import SimpleNamespace
 from hashlib import sha256
 import json
@@ -100,53 +101,160 @@ def fixtures():
         else: raise AssertionError('invalid OCR succeeded')
 
 
-def verify_output(root):
-    manifest=json.loads((root/'output-manifest.json').read_text())['files']
-    actual={str(p.relative_to(root)):sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file() and p.name!='output-manifest.json'}
-    assert actual==manifest
-    frames=json.loads((root/'frames.json').read_text())['frames']
-    receipt=json.loads((root/'receipt.json').read_text())
-    assert len(frames)==receipt['frame_count']==len(list((root/'frames').glob('frame_*.png')))
-    assert receipt['ocr_images']<=receipt['parameters']['max_ocr_images']
-    assert receipt['frame_count']<=receipt['parameters']['max_frames']
-    assert receipt['source_sha256_before']==receipt['source_sha256_after']
-    assert sha256(Path(receipt['source']).read_bytes()).hexdigest()==receipt['source_sha256_before']
-    for index,f in enumerate(frames):
-        assert sha256((root/f['full']).read_bytes()).hexdigest()==f['full_sha256']
-        assert (root/f['body']).is_file()
-        box=f['roi']['box'];w,h=f['size']
-        assert 0<=box[0]<box[2]<=w and 0<=box[1]<box[3]<=h
-        assert abs(f['sample_seconds']-index*receipt['parameters']['interval'])<.0001
-        with Image.open(root/f['full']) as full,Image.open(root/f['body']) as body:
-            assert full.size[0]*full.size[1]<=receipt['parameters']['max_pixels']
-            assert full.crop(box).convert('RGB').tobytes()==body.convert('RGB').tobytes()
-    review=json.loads((root/'review/questions.json').read_text())
-    ids={f['id'] for f in frames}
-    review_ids={fid for q in review['questions'] for fid in q['frames']}
-    assert review['unique_images']==len(review_ids)<=review['max_images'] and len(review['questions'])<=review['max_groups']
-    assert review_ids<=ids and review['status']=='not_reviewed'
-    raw={}
-    if (root/'raw-ocr.jsonl').exists():
-        for row in (root/'raw-ocr.jsonl').read_text().splitlines():
-            item=json.loads(row)
-            if item['stage']=='body':
-                raw[item['frame']]={x['raw_index']:x for x in item['record']['normalized_lines']}
-    with (root/'provenance.tsv').open() as stream:
-        for row in csv.DictReader(stream,delimiter='\t'):
-            assert row['line_index'] != '' and int(row['line_index']) in raw[row['frame']]
-    blocks=json.loads((root/'blocks.json').read_text())
-    assert len(blocks)==receipt['blocks']
-    for block in blocks:
-        assert block['text'] in {v['text'] for v in block['variants']}
-        for r in block['refs']+block['header_refs']:
-            assert r['frame'] in raw and r['line_index'] in raw[r['frame']]
-        for variant in block['variants']:
-            observed=[raw[r['frame']][r['line_index']]['text'].strip() for r in variant['refs']]
-            # Variants may contain repeated observations from identical samples; original text
-            # must appear as a contiguous actually observed line sequence, not a rewrite.
-            expected=variant['text'].splitlines()
-            assert any(observed[k:k+len(expected)]==expected for k in range(len(observed)-len(expected)+1))
+def audit_content_regressions():
+    # A fixed short speaker/time and a fixed long footer-adjacent sentence are body,
+    # even when only the middle of the screen is moving.
+    for start in (180, 340):
+        a=Image.new('RGB',(400,900),'white'); b=a.copy()
+        for im,offset in ((a,0),(b,7)):
+            d=ImageDraw.Draw(im);d.rectangle((5,45,390,60),fill='black')
+            for y in range(start,700,45):d.rectangle((10,y+offset,380,y+offset+15),fill='black')
+            d.text((10,140),'NAME TIME',fill='black');d.text((10,760),'STATIONARY BODY',fill='black')
+            d.text((10,850),'PLAY',fill='black')
+        lines=[line('Transcript',.045),line('张三',.15),line('17:09',.18),line('收到。',.21),
+               line('Long stationary body below moving region',.84),line('播放',.95)]
+        roi=select_roi(a,[b],lines)
+        assert roi['box'][1] <= .15*900 and roi['box'][3] >= .862*900, roi
+    # Crossing long equal statements provide ambiguous identity. Keep both observations.
+    A,X,B,C='甲'*30,'重复长句'*10,'乙'*30,'丙'*30
+    entries=lambda seq:[('我','18:15',t) for t in seq]
+    blocks,issues=stitch([page(1,entries([A,X,B])),page(2,entries([B,X,C]))])
+    assert [x['text'] for x in blocks]==[A,X,B,B,X,C]
+    assert any(x['kind']=='ambiguous_sequence_alignment' for x in issues)
+    assert all(x['uncertain_alignment'] for x in blocks[3:])
+    for name,clock in [('张三','17:09'),('我','35:20')]:
+        parsed=observations([line(name,.1),line(clock,.13),line('实际正文',.2)],frame(1))
+        assert parsed[0]['speaker']==name and parsed[0]['page_time']==clock
+        assert parsed[0]['text']=='实际正文'
+    ls=normalize_lines({'lines':[{'text':'我','bbox':[.03,.106,.08,.128]},
+                                {'text':'17:09','bbox':[.15,.104,.23,.126]},
+                                {'text':'正文','bbox':[.03,.20,.90,.24]}]})
+    parsed=observations(ls,frame(1))
+    assert parsed[0]['speaker']=='我' and parsed[0]['page_time']=='17:09'
+    # A visible timestamp with no OCR body is a gap, not an absent utterance.
+    missing=observations([line('其他',.10),line('18:27',.13),line('我',.20),line('18:28',.23),line('下一句正文',.3)],frame(1))
+    assert len(missing)==2 and missing[0]['page_time']=='18:27' and missing[0]['text']==''
+    blocks,issues=stitch([(frame(1),missing)])
+    assert any(x['kind']=='header_without_body' and x['page_time']=='18:27' for x in issues)
+    with tempfile.TemporaryDirectory(prefix='scroll-missing-body-') as folder:
+        root=Path(folder);write_texts(root,blocks,issues,'draft_requires_review')
+        assert '18:27' in (root/'transcript.txt').read_text() and '正文未识别' in (root/'transcript.txt').read_text()
+        from scroll_text import make_review
+        fs=[dict(frame(i),roi={'method':'full_page_fallback','box':[0,0,10,10],'boundary_lines':[]},full='full.png',body='body.png') for i in range(1,20)]
+        make_review(root,fs,issues,1,3)
+        questions=json.loads((root/'review/questions.json').read_text())['questions']
+        assert questions[0]['target']=='F000001' and '标签无正文' in questions[0]['question']
+    from ocr_runtime import backend_candidates
+    assert backend_candidates('rapidocr',rapid_python='/__absent_explicit_interpreter__')==[]
 
+
+def verify_output(root):
+    root = Path(root).resolve()
+    if any(p.is_symlink() for p in root.rglob('*')):
+        raise ValueError('output contains symbolic links')
+    manifest = json.loads((root / 'output-manifest.json').read_text())['files']
+    actual = {str(p.relative_to(root)): sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file() and p.name != 'output-manifest.json'}
+    if not actual == manifest:
+        raise ValueError('output binding mismatch: actual == manifest')
+    frames = json.loads((root / 'frames.json').read_text())['frames']
+    receipt = json.loads((root / 'receipt.json').read_text())
+    if not len(frames) == receipt['frame_count'] == len(list((root / 'frames').glob('frame_*.png'))):
+        raise ValueError("output binding mismatch: len(frames) == receipt['frame_count'] == len(list((root / 'frames').glob('frame_*.png')))")
+    if not receipt['ocr_images'] <= receipt['parameters']['max_ocr_images']:
+        raise ValueError("output binding mismatch: receipt['ocr_images'] <= receipt['parameters']['max_ocr_images']")
+    if not receipt['frame_count'] <= receipt['parameters']['max_frames']:
+        raise ValueError("output binding mismatch: receipt['frame_count'] <= receipt['parameters']['max_frames']")
+    if not receipt['source_sha256_before'] == receipt['source_sha256_after']:
+        raise ValueError("output binding mismatch: receipt['source_sha256_before'] == receipt['source_sha256_after']")
+    if not sha256(Path(receipt['source']).read_bytes()).hexdigest() == receipt['source_sha256_before']:
+        raise ValueError("output binding mismatch: sha256(Path(receipt['source']).read_bytes()).hexdigest() == receipt['source_sha256_before']")
+    for index, f in enumerate(frames):
+        if not sha256((root / f['full']).read_bytes()).hexdigest() == f['full_sha256']:
+            raise ValueError("output binding mismatch: sha256((root / f['full']).read_bytes()).hexdigest() == f['full_sha256']")
+        if not (root / f['body']).is_file():
+            raise ValueError("output binding mismatch: (root / f['body']).is_file()")
+        box = f['roi']['box']
+        w, h = f['size']
+        if not (0 <= box[0] < box[2] <= w and 0 <= box[1] < box[3] <= h):
+            raise ValueError('output binding mismatch: 0 <= box[0] < box[2] <= w and 0 <= box[1] < box[3] <= h')
+        if not abs(f['sample_seconds'] - index * receipt['parameters']['interval']) < 0.0001:
+            raise ValueError("output binding mismatch: abs(f['sample_seconds'] - index * receipt['parameters']['interval']) < 0.0001")
+        with Image.open(root / f['full']) as full, Image.open(root / f['body']) as body:
+            if not full.size[0] * full.size[1] <= receipt['parameters']['max_pixels']:
+                raise ValueError("output binding mismatch: full.size[0] * full.size[1] <= receipt['parameters']['max_pixels']")
+            if not full.crop(box).convert('RGB').tobytes() == body.convert('RGB').tobytes():
+                raise ValueError("output binding mismatch: full.crop(box).convert('RGB').tobytes() == body.convert('RGB').tobytes()")
+    review = json.loads((root / 'review/questions.json').read_text())
+    ids = {f['id'] for f in frames}
+    review_ids = {fid for q in review['questions'] for fid in q['frames']}
+    if not (review['unique_images'] == len(review_ids) <= review['max_images'] and len(review['questions']) <= review['max_groups']):
+        raise ValueError("output binding mismatch: review['unique_images'] == len(review_ids) <= review['max_images'] and len(review['questions']) <= review['max_groups']")
+    if not (review_ids <= ids and review['status'] == 'not_reviewed'):
+        raise ValueError("output binding mismatch: review_ids <= ids and review['status'] == 'not_reviewed'")
+    # The canonical blocks must actually render to the delivered reading files.
+    blocks_data = json.loads((root / 'blocks.json').read_text())
+    issues_data = json.loads((root / 'issues.json').read_text())
+    with tempfile.TemporaryDirectory(prefix='scroll-render-verify-') as directory:
+        rendered = Path(directory)
+        write_texts(rendered, blocks_data, issues_data, receipt['status'])
+        for name in ('transcript.txt', 'transcript.md', 'provenance.tsv', 'uncertain.md'):
+            if (root / name).read_bytes() != (rendered / name).read_bytes():
+                raise ValueError('rendered output differs from canonical observations: ' + name)
+    by_id = {f['id']: f for f in frames}
+    if len(by_id) != len(frames):
+        raise ValueError('duplicate frame id')
+    raw = {}
+    body_records = {}
+    if (root / 'raw-ocr.jsonl').exists():
+        for row in (root / 'raw-ocr.jsonl').read_text().splitlines():
+            item = json.loads(row)
+            relative = Path(item['input_relative'])
+            if relative.is_absolute() or '..' in relative.parts or not (root / relative).is_file():
+                raise ValueError('raw OCR image source missing/outside output')
+            expected_path = Path(receipt['staging_path']) / relative
+            if Path(item['record']['path']) != expected_path:
+                raise ValueError('raw OCR path does not bind original staging input')
+            stage = item['stage']
+            frame_data = by_id[item['frame']]
+            if stage not in ('layout', 'body'):
+                raise ValueError('unknown OCR stage')
+            expected_image = frame_data['full' if stage == 'layout' else 'body']
+            with Image.open(root / relative) as seen, Image.open(root / expected_image) as expected:
+                if pixel_hash(seen) != pixel_hash(expected):
+                    raise ValueError('OCR cache image differs from frame input')
+            if normalize_lines(item['record']) != item['record']['normalized_lines']:
+                raise ValueError('normalized OCR differs from original engine lines')
+            if item['stage'] == 'body':
+                if item['frame'] in body_records:
+                    raise ValueError('duplicate body OCR frame')
+                body_records[item['frame']] = item['record']['normalized_lines']
+                raw[item['frame']] = {x['raw_index']: x for x in item['record']['normalized_lines']}
+    expected_recognized = {f['id'] for f in frames if f.get('ocr_status') == 'recognized'}
+    if set(body_records) != expected_recognized:
+        raise ValueError('recognized frames/body OCR coverage mismatch')
+    # Recreate header parsing and sequence alignment from saved raw observations.
+    # This also binds labels, per-line coordinates, timestamps and variant membership.
+    rebuilt, _ = stitch([(f, observations(body_records[f['id']], f)) for f in frames if f['id'] in body_records])
+    if rebuilt != blocks_data:
+        raise ValueError('canonical blocks differ from raw observations/order/labels/coordinates')
+    with (root / 'provenance.tsv').open() as stream:
+        for row in csv.DictReader(stream, delimiter='\t'):
+            if not (row['line_index'] != '' and int(row['line_index']) in raw[row['frame']]):
+                raise ValueError("output binding mismatch: row['line_index'] != '' and int(row['line_index']) in raw[row['frame']]")
+    blocks = json.loads((root / 'blocks.json').read_text())
+    if not len(blocks) == receipt['blocks']:
+        raise ValueError("output binding mismatch: len(blocks) == receipt['blocks']")
+    for block in blocks:
+        if not block['text'] in {v['text'] for v in block['variants']}:
+            raise ValueError("output binding mismatch: block['text'] in {v['text'] for v in block['variants']}")
+        for r in block['refs'] + block['header_refs']:
+            if not (r['frame'] in raw and r['line_index'] in raw[r['frame']]):
+                raise ValueError("output binding mismatch: r['frame'] in raw and r['line_index'] in raw[r['frame']]")
+        for variant in block['variants']:
+            observed = [raw[r['frame']][r['line_index']]['text'].strip() for r in variant['refs']]
+            expected = variant['text'].splitlines()
+            if not any((observed[k:k + len(expected)] == expected for k in range(len(observed) - len(expected) + 1))):
+                raise ValueError('output binding mismatch: any((observed[k:k + len(expected)] == expected for k in range(len(observed) - len(expected) + 1)))')
 
 def cli_fixtures():
     with tempfile.TemporaryDirectory(prefix='scroll-fixtures-') as folder:
@@ -166,6 +274,44 @@ def cli_fixtures():
         p=invoke(out); assert p.returncode==0,(p.stdout,p.stderr)
         verify_output(out)
         original={str(x.relative_to(out)):x.read_bytes() for x in out.rglob('*') if x.is_file()}
+        # Public verification must reject a rewritten reading draft/raw path,
+        # even after a new self-authored manifest, and under Python optimization.
+        for fault in ('render','raw_source','raw_lines','optimized','label','bbox','sample_time'):
+            target=root/('fault-'+fault);shutil.copytree(out,target)
+            if fault=='render':
+                (target/'transcript.txt').write_text('FABRICATED BODY')
+            elif fault in ('raw_source','raw_lines'):
+                records=[json.loads(x) for x in (target/'raw-ocr.jsonl').read_text().splitlines()]
+                for item in records:
+                    if fault=='raw_source':item['input_relative']='missing-image.png'
+                    else:item['record']['lines'][0]['text']='UNOBSERVED ENGINE TEXT'
+                (target/'raw-ocr.jsonl').write_text('\n'.join(json.dumps(x) for x in records)+'\n')
+            elif fault in ('label','bbox','sample_time'):
+                bad_blocks=json.loads((target/'blocks.json').read_text())
+                if fault=='label':bad_blocks[0]['speaker']='李四';bad_blocks[0]['page_time']='99:59'
+                elif fault=='bbox':bad_blocks[0]['refs'][0]['bbox']=[.90,.90,.99,.99]
+                else:bad_blocks[0]['refs'][0]['sample_seconds']=12345
+                receipt=json.loads((target/'receipt.json').read_text())
+                write_texts(target,bad_blocks,json.loads((target/'issues.json').read_text()),receipt['status'])
+            else:
+                receipt=json.loads((target/'receipt.json').read_text());receipt['source_sha256_after']='bad'
+                (target/'receipt.json').write_text(json.dumps(receipt))
+            manifest=json.loads((target/'output-manifest.json').read_text())
+            manifest['files']={str(x.relative_to(target)):sha256(x.read_bytes()).hexdigest() for x in target.rglob('*') if x.is_file() and x.name!='output-manifest.json'}
+            (target/'output-manifest.json').write_text(json.dumps(manifest))
+            args=[sys.executable]+(['-O'] if fault=='optimized' else [])+[str(Path(__file__).resolve()),'--verify-output',str(target)]
+            failed=subprocess.run(args,capture_output=True,text=True)
+            assert failed.returncode==1 and 'SCROLL_OUTPUT_BINDING_PASSED' not in failed.stdout,(fault,failed.stdout,failed.stderr)
+        # Force the crop branch while real FFmpeg/helper calls exhaust the shared budget.
+        fallback=root/'body-budget-fallback'
+        args=parse_args(['-i',str(video),'-o',str(fallback),'--engine','vision','--ocr-executable',str(helper),'--max-frames','2','--max-ocr-images','2'])
+        def crop(*a,**kw):return {'box':[0,100,400,850],'method':'explicit','confidence':'test_fixture','boundary_lines':[]}
+        with patch('scroll_text.select_roi',side_effect=crop):
+            assert run(args)==3
+        receipt=json.loads((fallback/'receipt.json').read_text())
+        assert receipt['ocr_images']==2 and receipt['blocks']>0 and receipt['status']=='partial'
+        assert any(i['kind']=='body_ocr_fallback_full_page' for i in json.loads((fallback/'issues.json').read_text()))
+        verify_output(fallback)
         assert invoke(out).returncode==2
         assert original=={str(x.relative_to(out)):x.read_bytes() for x in out.rglob('*') if x.is_file()}
         link=root/'linked';link.symlink_to(out,target_is_directory=True)
@@ -315,9 +461,15 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--case', choices=['all','core','cli'],default='all');p.add_argument('--verify-output',type=Path)
     args=p.parse_args()
     if args.verify_output:
-        verify_output(args.verify_output);print('SCROLL_OUTPUT_BINDING_PASSED');return
+        try:
+            verify_output(args.verify_output)
+        except (ValueError, OSError, KeyError, TypeError, IndexError, OCRFailure) as exc:
+            print('SCROLL_OUTPUT_BINDING_FAILED: '+str(exc), file=sys.stderr)
+            raise SystemExit(1)
+        print('SCROLL_OUTPUT_BINDING_PASSED');return
     if args.case in ('all','core'):
         fixtures()
+        audit_content_regressions()
         environment_fixtures()
         runtime_fixtures()
     if args.case in ('all','cli'): cli_fixtures()

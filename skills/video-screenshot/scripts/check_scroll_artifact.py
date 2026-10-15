@@ -16,7 +16,8 @@ BOUNDED = 'SCROLL-TEXT-LOCAL-BOUNDED'
 def check(data):
     sources = data['observations']
     lookup = {x['id']: x for x in sources}
-    assert len(lookup) == len(sources)
+    if len(lookup) != len(sources):
+        raise ValueError("duplicate observation id")
     seen, failures = [], []
     conservation = True
     for block in data['blocks']:

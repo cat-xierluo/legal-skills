@@ -59,6 +59,8 @@ def diagnose(args):
             return blocked('NO_LOCAL_BACKEND_READY','prepare_local_backend',str(exc))
     if args.engine == 'rapidocr':
         choices=backend_candidates('rapidocr',rapid_python=args.rapid_python,root=args.runtime_dir)
+        if not choices:
+            return blocked('RAPID_PYTHON_INVALID', 'report_python_diagnostic', '显式Rapid解释器不存在或不可执行，不回退其他Python。')
         selected=choices[0][1]
         if selected != sys.executable:
             probe=subprocess.run([selected,'-s','-c',"import importlib.util,json; print(json.dumps({n:(s.origin if (s:=importlib.util.find_spec(n)) else None) for n in ['PIL','rapidocr_onnxruntime','onnxruntime']}))"],capture_output=True,text=True,timeout=15,check=False)

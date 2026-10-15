@@ -49,6 +49,8 @@ def backend_candidates(requested, executable=None, rapid_python=None, root=None)
     if requested=='vision':
         return [('vision',vision)] if vision else []
     if requested=='rapidocr':
+        if rapid_python and not rapid:
+            return []
         # Explicit legacy interpreter remains available; doctor will diagnose it.
         return [('rapidocr',rapid or sys.executable)]
     choices=[]

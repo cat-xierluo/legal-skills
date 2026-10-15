@@ -39,7 +39,19 @@ def normalize_lines(record):
         result.append({'text': item['text'], 'bbox': box, 'confidence': score, 'raw_index': index, 'bbox_outside_image': bool(box and any(v < 0 or v > 1 for v in box))})
     # Boxless legacy helpers retain their original order and no invented coordinates.
     if result and all(x['bbox'] is not None for x in result):
-        result.sort(key=lambda x: (round(x['bbox'][1], 2), x['bbox'][0]))
+        # Group boxes by actual vertical overlap before left-to-right ordering.
+        # Rounding y to 1% can invert speaker/time columns across a bucket boundary.
+        rows = []
+        for item in sorted(result, key=lambda x: x['bbox'][1]):
+            top, bottom = item['bbox'][1], item['bbox'][3]
+            row = next((r for r in reversed(rows) if min(bottom,r['bottom'])-max(top,r['top']) >=
+                        .5*min(bottom-top,r['bottom']-r['top'])), None)
+            if row is None:
+                rows.append({'top': top, 'bottom': bottom, 'items': [item]})
+            else:
+                row['items'].append(item)
+                row['top'], row['bottom'] = max(row['top'],top), min(row['bottom'],bottom)
+        result = [item for row in rows for item in sorted(row['items'],key=lambda x:x['bbox'][0])]
     return result
 
 
@@ -88,7 +100,10 @@ class LocalOCR:
                 raise OCRFailure('缺少本地 Vision 可执行程序。用 swiftc scripts/scroll_vision.swift -o <仓库外路径> 编译后传 --ocr-executable；不自动安装或云回退。')
         elif engine == 'rapidocr':
             # Run in isolated Python process; disable old user-site leakage.
-            self.executable = backend_candidates('rapidocr', executable, rapid_python, runtime_dir)[0][1]
+            choices = backend_candidates('rapidocr', executable, rapid_python, runtime_dir)
+            if not choices:
+                raise OCRFailure('显式Rapid解释器不存在或不可执行；保留所选环境，不回退其他Python。')
+            self.executable = choices[0][1]
         else:
             raise OCRFailure('未知引擎')
         if deny_network and not shutil.which('sandbox-exec'):
