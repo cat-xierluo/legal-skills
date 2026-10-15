@@ -375,6 +375,32 @@ try {
     assert.equal(f02d.report.fails, 0, JSON.stringify(findingsOf(f02d.report, 'FAIL')))
   })
 
+  // 2026-10-16: 不把未实现的 JS 浅覆盖/嵌套展开语义当作叶路径并集。
+  for (const [name, source] of [
+    ['nested-spread', "const base={x:'x'}; export const zh={a:{...base}}; export const en={a:'a',x:'x'};"],
+    ['spread-overwrite', "const base={a:{x:'x'}}; export const zh={...base,a:'a'}; export const en={a:'a'};"],
+    ['overwrite-before-spread', "const base={a:{x:'x'}}; export const zh={a:'a',...base}; export const en={a:{x:'x'}};"],
+    ['duplicate-key', "export const zh={a:{x:'x'},a:'a'}; export const en={a:'a'};"],
+    ['two-spreads', "const first={a:{x:'x'}}; const second={a:'a'}; export const zh={...first,...second}; export const en={a:'a'};"],
+  ]) {
+    const result = runLint(cloneValid(name, root => {
+      write(path.join(root, 'src', 'client', 'locales.ts'), source)
+    }), harnessRoot)
+    ok(name + ': NOT_VERIFIED，不能假 PASS 或假 FAIL', () => {
+      assertHasFinding(result.report, 'NOT_VERIFIED', '不可静态解析')
+      assertNoFinding(result.report, 'PASS', '键集平价')
+      assertNoFinding(result.report, 'FAIL', '键集不平价')
+    })
+  }
+  const safeSpread = runLint(cloneValid('disjoint-spread', root => {
+    write(path.join(root, 'src', 'client', 'locales.ts'),
+      "const base={a:{x:'x',y:'y'}}; export const zh={...base,b:'b'}; export const en={a:{x:'x',y:'y'},b:'b'};")
+  }), harnessRoot)
+  ok('不相交顶层展开保留可验证平价', () => {
+    assertHasFinding(safeSpread.report, 'PASS', '键集平价（3 叶路径')
+    assertNoFinding(safeSpread.report, 'NOT_VERIFIED', '不可静态解析')
+  })
+
   // F03 纯注释 patch（此前字符串 includes 假 PASS；宿主实际拒绝）
   const f03a = runLint(cloneValid('f03-comment-only', (root) => {
     write(path.join(root, 'cordis.patch.yml'), '# @test/valid-plugin\n')
@@ -470,3 +496,4 @@ try {
 } finally {
   rmSync(workspace, { recursive: true, force: true })
 }
+

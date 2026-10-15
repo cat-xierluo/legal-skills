@@ -394,15 +394,17 @@ function parseDictPaths(source, constName) {
   }
 
   /** 解析 code[cursor-1] === '{' 起的对象体，返回 { paths, spreads, closed }。 */
-  const parseObject = () => {
+  const parseObject = (depth = 0) => {
     const paths = new Set()
     const spreads = []
+    const keys = new Set()
     while (cursor < code.length) {
       while (cursor < code.length && /[\s,]/.test(code[cursor])) cursor += 1
       if (cursor >= code.length) break
       const c = code[cursor]
       if (c === '}') { cursor += 1; return { paths, spreads, closed: true } }
       if (code.startsWith('...', cursor)) {
+        if (depth > 0) unsupported.push('嵌套展开的路径前缀尚未验证')
         cursor += 3
         while (cursor < code.length && /\s/.test(code[cursor])) cursor += 1
         const m = /^[A-Za-z_$][\w$]*/.exec(code.slice(cursor))
@@ -434,11 +436,13 @@ function parseDictPaths(source, constName) {
       }
       while (cursor < code.length && /\s/.test(code[cursor])) cursor += 1
       if (code[cursor] !== ':') { unsupported.push(`键 ${key} 非简单键值形态（方法简写/getter 等）`); skipValueAt(); continue }
+      if (keys.has(key)) unsupported.push(`重复键 ${key} 的覆盖语义尚未验证`)
+      keys.add(key)
       cursor += 1
       while (cursor < code.length && /\s/.test(code[cursor])) cursor += 1
       if (code[cursor] === '{') {
         cursor += 1
-        const sub = parseObject()
+        const sub = parseObject(depth + 1)
         if (!sub.closed) unsupported.push('嵌套对象未闭合')
         if (sub.paths.size === 0) paths.add(key)
         else for (const p of sub.paths) paths.add(`${key}.${p}`)
@@ -456,6 +460,14 @@ function parseDictPaths(source, constName) {
   // 同文件 const 展开源解析（带循环引用防护）
   const resolved = new Map()
   const resolving = new Set()
+  // 叶路径集合只能安全合并不相交属性；JS spread 为浅覆盖，不能当集合并集。
+  const mergeSpreadPaths = (target, incoming) => {
+    const roots = new Set([...target].map(p => p.split('.')[0]))
+    for (const p of incoming) {
+      if (roots.has(p.split('.')[0])) unsupported.push('展开属性重叠的浅覆盖语义尚未验证')
+    }
+    for (const p of incoming) target.add(p)
+  }
   const resolveSpread = (name) => {
     if (resolved.has(name)) return resolved.get(name)
     if (resolving.has(name)) {
@@ -473,7 +485,7 @@ function parseDictPaths(source, constName) {
       if (!obj.closed) unsupported.push(`展开源 ${name} 对象未闭合`)
       for (const s of obj.spreads) {
         const sub = resolveSpread(s)
-        for (const p of sub.paths) obj.paths.add(p)
+        mergeSpreadPaths(obj.paths, sub.paths)
       }
       result = { paths: obj.paths, spreads: [] }
       cursor = saved
@@ -484,7 +496,7 @@ function parseDictPaths(source, constName) {
   }
   for (const name of root.spreads) {
     const sub = resolveSpread(name)
-    for (const p of sub.paths) root.paths.add(p)
+    mergeSpreadPaths(root.paths, sub.paths)
   }
   return { paths: root.paths, unsupported }
 }
@@ -986,3 +998,4 @@ if (argv.json) {
   })}`)
 }
 process.exit(fails)
+
