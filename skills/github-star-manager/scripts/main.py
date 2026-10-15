@@ -39,7 +39,7 @@ def init_command(tracker: StarTracker, args):
         print(f"⚠️ 有 {len(fetch_meta['failed_pages'])} 页抓取失败（页码: {pages}），本次数据不完整")
 
     # F01: 抓取不完整时禁止覆盖既有基线
-    if not fetch_meta.get("complete"):
+    if not fetch_meta.get("complete") or fetch_meta.get("limit_truncated"):
         existing = tracker.load_latest()
         if existing:
             print("❌ 抓取不完整且已存在旧快照，已保留旧快照不被覆盖（审计 F01 守卫）")
@@ -93,7 +93,7 @@ def check_command(tracker: StarTracker, args):
     print(f"当前 Star 数量: {len(current_repos)}")
 
     # F01: 抓取不完整时保留旧基线，不做取消判定
-    if not fetch_meta.get("complete"):
+    if not fetch_meta.get("complete") or fetch_meta.get("limit_truncated"):
         failed = fetch_meta.get("failed_pages", [])
         pages = ", ".join(str(p["page"]) for p in failed)
         print(f"❌ 本次抓取不完整（失败页: {pages}），已放弃保存与对比，旧快照保持不变")
@@ -215,7 +215,7 @@ def export_command(tracker: StarTracker, args):
     print(f"获取到 {len(repos)} 个项目")
 
     # F01: 导出产物只用于展示，允许部分数据，但必须明示
-    if not fetch_meta.get("complete"):
+    if not fetch_meta.get("complete") or fetch_meta.get("limit_truncated"):
         failed = fetch_meta.get("failed_pages", [])
         pages = ", ".join(str(p["page"]) for p in failed)
         print(f"⚠️ 本次抓取不完整（失败页: {pages}），Dashboard 将只展示部分数据")
@@ -624,3 +624,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

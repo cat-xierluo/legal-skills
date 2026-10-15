@@ -35,7 +35,7 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-10-16 | 更新 | [skill-manager](skills/skill-manager/) | v1.9.0 | 改名软链收敛工具链成型：安装即登记（链接创建自动写 registry install_links）+ relink-skill.py 查表秒级改名收敛（--from-registry），四类来源分级与项目集合目录子项目发现；源码待发布。 |
-| 2026-10-15 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.8.1 | 审计批次 A+B/C：快照完整性守卫与 9 项缺陷修复；Agent 只读查询接口（recent/interests/match/evidence/evidence-fetch/research，JSON envelope）与机会卡反馈闭环；快照补 repo 数字主键 id（改名锚定，下游切换前置）。 |
+| 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.8.2 | 限额截断标为 partial，init/check 保留旧基线并拒绝误报取消 Star；兼容矛盾完整性元数据，新增六项离线回归。源码待发布。 |
 | 2026-10-15 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.0.1 | 退役删除冻结兼容旧目录，仓库收敛为单一目录名；私人配置与历史 archive 并入新目录，修复断链 hook 与 skill_root；wire schema 与状态路径兼容不变。 |
 | 2026-10-15 | 更新 | [video-screenshot](skills/video-screenshot/) | v1.2.0 | Task-039：滚动文字模式加 `--deadline-seconds` 墙钟预算与 `--resume-from` 批次级恢复（帧字节等值才复用、恢复终稿逐字节一致），成本预估登记；含 v1.1.3 正文裁边/跨页重复/来源校验修复。源码待发布。 |
 | 2026-10-15 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.0.0 | 更名 Multi-Agent Orca；同步安装、套件与 CI，原协议与状态不变。 |
@@ -815,4 +815,3 @@
 | zhihe-legal-research     | v1.2.2 | 已归档（2026-08-09 复测：报告接口自 2026-04-08 起 has_report 持续 false，智合法律研究已整体迁移至新平台 zhiexa.com；老 API submit 端点持续 500，无法提交新问题。技能暂不可用，待后续迁移至新平台 zhiexa.com）。技能目录已从仓库移除                                                                                                          |
 
 </details>
-
