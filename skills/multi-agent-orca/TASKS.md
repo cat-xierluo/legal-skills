@@ -1058,3 +1058,13 @@ skills/multi-agent-orchestration -> multi-agent-orca
 - 云端：[草稿 PR #303](https://github.com/cat-xierluo/legal-skills/pull/303)，head 为同一具名功能分支；用户已明确批准目的地与载荷后，safe-push/safe-pr 全范围门禁通过。未转 ready、未合 main、未发布 Release 或外部渠道包，旧资产 URL 保持。
 - 后续范围：M4 正式合并/渠道发布和远端节点更新须按后续明确授权推进；M5 兼容期退役待所有在途来源结算，不自动删除。旧 wire schema、环境变量、状态/锁及业务身份继续保留。
 - 私有证据入口：本地 `archive/20261015_name_migration/evidence-pointer.json` 指向本轮实际 apply journal、安装 manifest、字节校验、测试/原始失败、独审与 ZIP 记录；不将用户路径、安装 registry 或凭证写入公开源码。
+
+### 2026-10-15 合并验收与同步波次
+
+- 用户已明确授权合并改名 PR，并要求盘点内部 Skill 本地/云端同步与现有 PR 验收。PM 为本会话；继续复用原独占稀疏树。
+- [x] 在候选树接入远端 main 的并发 video-screenshot 成果，保留原主目录现场。
+- [x] 修复阻塞预览的专家套件旧版本索引：仅按各 CHANGELOG 标明当前源码待发布，保留既有真实下载 URL，不发布资产、不放宽验证器。
+- [ ] 运行全九套件验证与预览打包，补迁移回归和最终独审；固定最终 OID、实际 CI 和最终说明后合并原 PR。
+- [ ] 对账云端合并与本机稳定入口，保留主目录并发 index/dirty，不用 pull/reset 同步。
+- 验证依赖增补：九套件及其 41 个真实成员；跟踪内容约 40MB，检出总预算延续 150MB。新增写域限定套件 README 的 13 个版本声明及一条旧名包说明及本任务卡，其他成员仅作验证读取。
+- 其他仓库 PR 验收台账保存在本会话私有证据目录，不将内部材料写入公开源。
