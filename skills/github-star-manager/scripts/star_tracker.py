@@ -6,9 +6,28 @@ GitHub Star 追踪器 - 核心分析模块
 import os
 import json
 import time
-import yaml
-import requests
-from datetime import datetime, timedelta
+
+try:
+    import yaml
+except ImportError:
+    yaml = None  # 分类 YAML 加载时给出安装提示，见 _load_categories
+
+try:
+    import requests
+except ImportError:
+    print("❌ 缺少依赖: requests")
+    print("   请运行: pip install requests")
+    print("   或运行: pip install -r assets/requirements.txt")
+    raise SystemExit(1)
+
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except ImportError:
+    OpenAI = None
+    HAS_OPENAI = False  # AI 摘要可选：缺失时自动降级为基础摘要（修复 F03 NameError）
+
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Set
 from pathlib import Path
 
@@ -36,6 +55,11 @@ class StarTracker:
         self.github_token = github_token or os.getenv("GITHUB_PAT")
         self.user = None
         self._auth_username = None
+        # 最近一次 get_starred_repos 的抓取完整性元数据（审计 F01）
+        self.last_fetch_meta: Optional[Dict] = None
+        # AI 客户端惰性初始化状态（F03：此前未初始化即被 _ensure_ai_client 引用）
+        self._client = None
+        self._use_ai = False
         self.headers = {"Accept": "application/vnd.github.v3+json"}
         if self.github_token:
             self.headers["Authorization"] = f"token {self.github_token}"
@@ -92,11 +116,25 @@ class StarTracker:
     def _load_categories(self) -> List[Dict]:
         """加载分类配置"""
         if self.CATEGORIES_FILE.exists():
-            try:
-                with open(self.CATEGORIES_FILE, 'r', encoding='utf-8') as f:
-                    return yaml.safe_load(f)
-            except Exception:
-                pass
+            if yaml is None:
+                print("⚠️ 检测到分类配置但缺少依赖: pyyaml")
+                print("   请运行: pip install pyyaml（或 pip install -r assets/requirements.txt）")
+                print("   本次将使用内置默认分类")
+            else:
+                try:
+                    with open(self.CATEGORIES_FILE, 'r', encoding='utf-8') as f:
+                        loaded = yaml.safe_load(f)
+                        # 兼容两种格式：裸列表 或 {categories: [...]}（generate_categories.py 生成后者）
+                        if isinstance(loaded, dict) and 'categories' in loaded:
+                            loaded = loaded['categories']
+                        if isinstance(loaded, list) and loaded:
+                            return loaded
+                        # 空文件/空列表：回落默认
+                except Exception as e:
+                    # 不静默：环境问题（如旧版 pyyaml 与新版 Python 不兼容）必须可见
+                    print(f"⚠️ 分类配置加载失败（{type(e).__name__}: {e}），本次使用内置默认分类")
+                    print(f"   配置文件: {self.CATEGORIES_FILE}")
+                    print("   若为 pyyaml 版本过旧（<6.0）请运行: pip install -U pyyaml")
         # 返回默认分类
         return self._get_default_categories()
 
@@ -156,8 +194,6 @@ class StarTracker:
         """获取分类映射字典，用于快速查找"""
         return {cat["id"]: cat for cat in self.categories}
 
-        # 缓存当前认证用户名
-        self._auth_username = None
     def get_authenticated_user(self) -> Optional[str]:
         """获取当前 Token 对应的用户名"""
         if self._auth_username:
@@ -186,6 +222,10 @@ class StarTracker:
     def get_starred_repos(self, username: str, limit: int = 9999, include_starred_at: bool = True) -> List[Dict]:
         """获取用户 Star 的所有仓库
 
+        分页中途失败不再静默返回子集（审计 F01）：完整抓取状态记录在
+        self.last_fetch_meta，调用方在提交快照前必须检查 complete 字段，
+        部分数据只能作临时对比，不得覆盖基线。
+
         Args:
             username: GitHub 用户名
             limit: 最大获取数量，默认 9999 表示获取全部
@@ -196,6 +236,16 @@ class StarTracker:
         per_page = 100  # GitHub API 每页最大 100
         categories_map = self.get_categories_map()
 
+        fetch_meta = {
+            "account_id": username,
+            "complete": True,
+            "failed_pages": [],
+            "limit_requested": limit,
+            "limit_truncated": False,
+            "starred_at_available": False,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        }
+
         # 检查是否可以获取 starred_at（需要认证用户自己）
         auth_user = self.get_authenticated_user()
         can_get_starred_at = (
@@ -204,6 +254,7 @@ class StarTracker:
             and auth_user
             and auth_user.lower() == username.lower()
         )
+        fetch_meta["starred_at_available"] = bool(can_get_starred_at)
 
         if can_get_starred_at:
             # 使用特殊 API 获取带 starred_at 的数据（只能获取自己的）
@@ -223,7 +274,11 @@ class StarTracker:
             response = self._request_with_retry("GET", url, headers=starred_headers)
 
             if response is None or response.status_code != 200:
-                print(f"警告: 获取 Star 列表失败 (状态码: {response.status_code if response else '网络异常重试耗尽'})")
+                status_desc = str(response.status_code) if response else "网络异常重试耗尽"
+                print(f"警告: 获取 Star 列表失败 (状态码: {status_desc})")
+                # F01: 标记抓取不完整，由调用方决定是否允许提交快照
+                fetch_meta["complete"] = False
+                fetch_meta["failed_pages"].append({"page": page, "status": status_desc})
                 break
 
             data = response.json()
@@ -246,6 +301,7 @@ class StarTracker:
             # 获取数量已足够
             if len(repos) >= limit:
                 repos = repos[:limit]
+                fetch_meta["limit_truncated"] = True
                 break
 
         # 为每个仓库匹配分类
@@ -255,6 +311,7 @@ class StarTracker:
                 repo['category'] = category
             repo['matched_keywords'] = category.get('keywords', []) if category else []
 
+        self.last_fetch_meta = fetch_meta
         return repos
 
     def _match_category(self, repo: Dict, categories_map: Dict[str, Dict]) -> Optional[Dict]:
@@ -303,7 +360,7 @@ class StarTracker:
 
     def get_recent_commits(self, repo_full_name: str, days: int = 7) -> List[Dict]:
         """获取最近的 Commit"""
-        since = (datetime.utcnow() - timedelta(days=days)).isoformat() + "Z"
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         url = f"{self.API_BASE}/repos/{repo_full_name}/commits?since={since}"
         response = self._request_with_retry("GET", url, headers=self.headers)
 
@@ -490,12 +547,10 @@ class StarTracker:
         """使用 AI 总结项目
 
         Args:
-            use_ai: 是否使用 AI（默认 True），如果为 False 则强制使用基础摘要
+            use_ai: 是否使用 AI（默认 True）。openai 未安装或初始化失败时自动降级为基础摘要。
         """
-        self._ensure_ai_client(use_ai=use_ai)
-        if not self._client:
+        if not self._ensure_ai_client(use_ai=use_ai) or not self._client:
             return self._basic_summary(repo_info)
-
         prompt = f"""请简要分析以下 GitHub 项目：
 
 项目名称: {repo_info['name']}
@@ -523,32 +578,35 @@ README 内容（前6000字）:
             print(f"AI 摘要失败: {e}")
             return self._basic_summary(repo_info)
 
-    def _ensure_ai_client(self, use_ai: bool = True):
+    def _ensure_ai_client(self, use_ai: bool = True) -> bool:
         """确保 AI 客户端只在需要时才初始化
 
         Args:
             use_ai: 是否使用 AI（默认 True），如果为 False 则强制不使用 AI
+
+        Returns:
+            本次调用结束时 AI 摘要是否可用（HAS_OPENAI 为 False 时恒为 False）
         """
-        if not HAS_OPENAI or self._client is not None:
-            return self._use_ai == use_ai
+        if not use_ai:
+            return False
 
-        # 需要 AI 但客户端未初始化
-        if use_ai and self._client is None:
-            try:
-                self._client = OpenAI()
-                self._use_ai = True
-            except Exception as e:
-                print(f"⚠️ AI 客户端初始化失败: {e}")
-                print("💡 将使用基础摘要替代")
-                self._client = None
-                self._use_ai = False
+        if not HAS_OPENAI:
+            print("💡 未安装 openai 包，使用基础摘要替代（可选: pip install openai）")
+            return False
 
-        # 不需要 AI 但客户端已初始化
-        if not use_ai and self._client is not None:
+        if self._client is not None:
+            return True
+
+        try:
+            self._client = OpenAI()
+            self._use_ai = True
+            return True
+        except Exception as e:
+            print(f"⚠️ AI 客户端初始化失败: {e}")
+            print("💡 将使用基础摘要替代")
             self._client = None
             self._use_ai = False
-
-        return self._use_ai
+            return False
 
     def _basic_summary(self, repo_info: Dict) -> str:
         """基础摘要（无 AI 时）"""
@@ -556,14 +614,32 @@ README 内容（前6000字）:
 **技术栈**: {repo_info.get('language', '未知')}
 **Stars**: {repo_info.get('stargazers_count', 0)}"""
 
-    def save_latest(self, repos: List[Dict]) -> Path:
-        """保存最新数据（包含完整多维度信息，便于 AI 分析）"""
+    def save_latest(self, repos: List[Dict], fetch_meta: Optional[Dict] = None) -> Path:
+        """保存最新数据（包含完整多维度信息，便于 AI 分析）
+
+        Args:
+            repos: 仓库列表
+            fetch_meta: 抓取完整性元数据（来自 get_starred_repos 的 last_fetch_meta）。
+                不传时按「完整性未知」处理，快照标记为 partial 并说明原因。
+        """
         latest_file = self.CACHE_DIR / "original_latest.json"
         fetch_time = datetime.now().isoformat()
 
+        if fetch_meta is None:
+            snapshot_meta = {
+                "complete": False,
+                "completeness": "unknown",
+                "note": "保存时未提供抓取元数据，无法证明快照完整",
+            }
+        else:
+            snapshot_meta = dict(fetch_meta)
+            snapshot_meta["completeness"] = "complete" if fetch_meta.get("complete") else "partial"
+
         data = {
+            "schema_version": 2,
             "timestamp": fetch_time,
             "total_count": len(repos),
+            "snapshot_meta": snapshot_meta,
             "repos": [
                 {
                     # 基本信息
@@ -615,17 +691,40 @@ README 内容（前6000字）:
         return latest_file
 
     def load_latest(self) -> Optional[Dict]:
-        """加载最新数据"""
+        """加载最新数据（兼容 v1 无元数据快照）"""
         latest_file = self.CACHE_DIR / "original_latest.json"
 
         if not latest_file.exists():
             return None
 
         try:
-            return json.loads(latest_file.read_text(encoding="utf-8"))
+            data = json.loads(latest_file.read_text(encoding="utf-8"))
+            # v1 快照（无 snapshot_meta）标记完整性未知，避免被当成完整快照消费
+            if "snapshot_meta" not in data:
+                data["snapshot_meta"] = {
+                    "complete": False,
+                    "completeness": "unknown",
+                    "note": "v1 旧快照，无抓取完整性元数据",
+                }
+            return data
         except Exception as e:
             print(f"读取数据失败: {e}")
             return None
+
+    @staticmethod
+    def is_snapshot_submittable(snapshot: Optional[Dict]) -> tuple[bool, str]:
+        """判断快照能否作为新基线提交（审计 F01 守卫）
+
+        Returns:
+            (是否可提交, 不可提交的原因)
+        """
+        if not snapshot:
+            return False, "快照不存在"
+        meta = snapshot.get("snapshot_meta") or {}
+        if meta.get("complete") is True:
+            return True, ""
+        completeness = meta.get("completeness", "unknown")
+        return False, f"快照完整性为 {completeness}（complete={meta.get('complete')}），不允许作为基线覆盖旧数据"
 
     def check_updates(self, username: str) -> Dict:
         """检查更新"""
@@ -679,22 +778,84 @@ README 内容（前6000字）:
         return config
 
     def import_config(self, config_data: Dict) -> bool:
-        """导入配置"""
+        """校验并持久化配置到 user_settings.json
+
+        此前只校验不落盘（审计第 6 节：设置从未进入价值判断），
+        现在校验通过即写入 user_settings.json，assess_value 等可读取。
+        """
         required_keys = ["username"]
         for key in required_keys:
             if key not in config_data:
                 return False
-        return True
+        return self.save_settings(config_data)
+
+    def save_settings(self, settings: Dict) -> bool:
+        """保存用户设置到 user_settings.json"""
+        try:
+            with open(self.SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(settings, f, ensure_ascii=False, indent=2)
+            self.settings = settings
+            return True
+        except Exception as e:
+            print(f"⚠️ 保存设置失败: {e}")
+            return False
+
+    def get_value_config(self) -> Dict:
+        """读取价值评估配置（value_keywords/min_stars），供价值判断使用"""
+        return {
+            "value_keywords": self.settings.get("value_keywords",
+                ["claude", "ai", "llm", "agent", "python"]),
+            "min_stars": self.settings.get("min_stars", 100),
+            "ignore_repos": self.settings.get("ignore_repos", []),
+        }
 
     def get_version_diff(self, repo_full_name: str, old_version: str, new_version: str) -> Dict:
-        """获取版本之间的差异信息"""
-        commits = self.get_commits_between_releases(repo_full_name, limit=20)
+        """获取两个版本（tag/分支/commit）之间的真实差异
 
+        修复审计「版本对比名实不符」：此前只是取最近 N 条 commits 加上
+        一个 compare_url，并未真正做版本间比较。现改用 GitHub compare API。
+
+        Args:
+            repo_full_name: 仓库全名 (owner/repo)
+            old_version: 基准版本（tag 名如 v1.0.0，或分支名/commit SHA）
+            new_version: 目标版本
+        """
+        url = f"{self.API_BASE}/repos/{repo_full_name}/compare/{old_version}...{new_version}"
+        response = self._request_with_retry("GET", url, headers=self.headers)
+
+        if response is None:
+            return {
+                "error": "网络异常重试耗尽",
+                "old_version": old_version,
+                "new_version": new_version,
+                "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
+            }
+        if response.status_code == 404:
+            return {
+                "error": f"仓库或版本不存在（检查 tag 是否正确）: {repo_full_name} {old_version}...{new_version}",
+                "old_version": old_version,
+                "new_version": new_version,
+                "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
+            }
+        if response.status_code != 200:
+            return {
+                "error": f"GitHub API 返回 {response.status_code}",
+                "old_version": old_version,
+                "new_version": new_version,
+                "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
+            }
+
+        data = response.json()
+        commits = data.get("commits", [])
         return {
             "old_version": old_version,
             "new_version": new_version,
-            "commits_count": len(commits),
-            "commits": commits[:5],  # 只返回前5条
+            "status": data.get("status"),          # ahead/behind/identical 等
+            "ahead_by": data.get("ahead_by"),
+            "behind_by": data.get("behind_by"),
+            "total_commits": data.get("total_commits", len(commits)),
+            "commits_count": data.get("total_commits", len(commits)),  # 兼容旧字段名
+            "commits": commits,
             "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
         }
 
@@ -702,7 +863,7 @@ README 内容（前6000字）:
         """生成更新报告"""
         repos = self.get_starred_repos(username)
         updates = self.check_updates(username)
-        snapshot = self.load_latest(username)
+        snapshot = self.load_latest()  # F03: load_latest 不接受 username 参数
 
         report_lines = [
             f"# GitHub Star 更新报告",
@@ -839,7 +1000,7 @@ README 内容（前6000字）:
             (成功数, 失败数, 失败列表)
         """
         success = 0
-        failed = []
+        failed = 0
         failed_repos = []
 
         for repo in repo_list:
@@ -871,7 +1032,7 @@ README 内容（前6000字）:
             (成功数, 失败数, 失败列表)
         """
         success = 0
-        failed = []
+        failed = 0
         failed_repos = []
 
         for repo in repo_list:
@@ -908,9 +1069,10 @@ README 内容（前6000字）:
 
         print(f"\n检查 {len(repos)} 个 Star 项目（阈值: {days_threshold} 天）...")
 
+        now = datetime.now(timezone.utc)  # 与 API 返回的 aware 时间统一（修复 naive/aware 相减崩溃）
         for repo in repos:
             updated = datetime.fromisoformat(repo.get("updated_at", "").replace("Z", "+00:00"))
-            days_since = (datetime.now() - updated).days
+            days_since = (now - updated).days
 
             if days_since > days_threshold:
                 stale_repos.append({

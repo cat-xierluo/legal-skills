@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.8"
+version: "0.7.0"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -123,8 +123,9 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
 | 包名 | 用途 | 安装命令 |
 |------|------|----------|
 | `requests` | HTTP 请求，调用 GitHub API | `pip install requests` |
+| `pyyaml` | 分类配置解析（必需） | `pip install pyyaml` |
 | `python-dotenv` | 从 .env 文件加载配置 | `pip install python-dotenv` |
-| `openai` | AI 摘要生成（可选） | `pip install openai` |
+| `openai` | AI 摘要生成（可选，未安装时自动降级） | `pip install openai` |
 
 ### 依赖包文件
 
@@ -208,10 +209,26 @@ python scripts/main.py --report --user 你的用户名 --days 7
 生成包含项目摘要和更新状态的完整报告。
 
 ### 6. 定期运行（推荐）
+脚本本身不含定时功能，用系统 cron/launchd 每周执行一次 `--check` 即可，例如：
 ```bash
-# 每周检查一次
-python scripts/main.py --check --user 你的用户名 --weekly
+# crontab -e 添加（每周一 09:00 检查一次）
+0 9 * * 1 python /path/to/skills/github-star-manager/scripts/main.py --check --user 你的用户名
 ```
+
+### 7. 查看版本差异
+```bash
+python scripts/main.py --version-diff --repo owner/repo --old-version v1.0.0 --new-version v2.0.0
+```
+版本参数支持 tag、分支名或 commit SHA；缺参时直接报错退出，不再进入交互模式。
+
+## 数据完整性保障（重要）
+
+脚本模块的快照机制带**抓取完整性元数据**：
+
+- `--check` / `--init` 在分页失败或限流导致抓取不完整时，**自动放弃保存**，旧快照保持不变——部分数据不会被误判为「用户取消收藏」
+- 快照文件（`output/original_latest.json`）带 `snapshot_meta` 字段（complete/failed_pages/账户/抓取时间）
+- `--export` 允许部分数据展示，但会显式警告
+- 无 `snapshot_meta` 的 v1 旧快照会被标记为「完整性未知」消费
 
 ## 配置与自定义
 
@@ -221,11 +238,12 @@ python scripts/main.py --check --user 你的用户名 --weekly
 
 | 文件 | 用途 |
 |------|------|
-| `assets/categories.yaml` | 分类定义和关键词规则 |
+| `assets/categories.yaml` | 分类定义模板（首次运行后实际生效的是 `output/categories.yaml`） |
+| `output/user_settings.json` | 用户设置（价值关键词、阈值；由 `--import-config` 写入） |
 | `assets/tags.json` | 标签管理和别名配置 |
 | `assets/.env.example` | 环境变量模板 |
 
-首次运行时，配置文件会自动复制到 `~/.github-star-manager/` 目录。
+注意：配置实际读写位置是技能目录的 `output/`（`original_latest.json`、`categories.yaml`、`user_settings.json` 同目录），不是 `~/.github-star-manager/`。
 
 ## 适用场景
 - **开发者**：及时了解依赖库的版本更新
@@ -278,5 +296,5 @@ python scripts/main.py --check --user 你的用户名 --weekly
 
 ## 参考文档
 
-- [SKILL-GUIDE.md](../../../SKILL-GUIDE.md) - 技能开发指南
+- [skill-lint 技能开发规范](../skill-lint/references/skill-dev-guide.md) - 技能开发指南（唯一维护源）
 - [AGENTS.md](../../../AGENTS.md) - 项目协作规范

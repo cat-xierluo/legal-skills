@@ -6,9 +6,19 @@
 """
 
 import json
-import yaml
+
+try:
+    import yaml
+except ImportError:
+    print("❌ 缺少依赖: pyyaml")
+    print("   请运行: pip install pyyaml")
+    print("   或运行: pip install -r assets/requirements.txt")
+    raise SystemExit(1)
+
 from pathlib import Path
 from typing import Dict, List, Optional
+
+from common import assess_value
 
 
 def load_json_data(json_path: Path) -> Dict:
@@ -80,21 +90,6 @@ def match_categories(repo: Dict, categories: List[Dict], min_score: int = 3) -> 
     # 按分数排序，返回分类列表
     matched.sort(key=lambda x: -x[1])
     return [cat for cat, score in matched]
-
-
-def assess_value(repo: dict) -> str:
-    """评估项目价值"""
-    stars = repo.get('stargazers_count', 0)
-    language = repo.get('language') or ''
-    description = (repo.get('description') or '').lower()
-
-    high_value_keywords = ['claude', 'ai', 'llm', 'agent', 'python', 'mcp', 'openclaw']
-
-    if stars > 5000 or any(kw in description for kw in high_value_keywords):
-        return 'high'
-    elif stars > 1000 or 'Python' in language:
-        return 'medium'
-    return 'low'
 
 
 def generate_data_js(output_path: Path, projects: List[Dict], categories: List[Dict]) -> None:

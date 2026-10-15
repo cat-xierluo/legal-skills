@@ -511,6 +511,10 @@
                         <span class="chip-icon">💀</span><span class="chip-label">更久</span>
                         <span class="chip-count" id="countStale">0</span>
                     </div>
+                    <div class="time-chip" data-filter="unknown" data-type="activity">
+                        <span class="chip-icon">❔</span><span class="chip-label">未知时间</span>
+                        <span class="chip-count" id="countUnknown">0</span>
+                    </div>
                 </div>
             </div>
 
@@ -551,6 +555,10 @@
                     <div class="time-chip" data-filter="stale" data-type="star">
                         <span class="chip-icon">💀</span><span class="chip-label">更久</span>
                         <span class="chip-count" id="starCountStale">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="unknown" data-type="star">
+                        <span class="chip-icon">❔</span><span class="chip-label">未知时间</span>
+                        <span class="chip-count" id="starCountUnknown">0</span>
                     </div>
                 </div>
             </div>
@@ -616,8 +624,13 @@
         }
 
         function getActivityCategory(dateStr) {
-            if (!dateStr) return 'stale';
-            const d = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+            // F02 修复：缺失时间归「未知」，不再回退到别的字段或伪装成 3 年以上。
+            // 此前 !dateStr 返回 'stale'，导致无 starred_at 的仓库被计成「3 年+」。
+            if (!dateStr) return 'unknown';
+            const ts = new Date(dateStr).getTime();
+            if (isNaN(ts)) return 'unknown';
+            const d = Math.floor((Date.now() - ts) / 86400000);
+            if (d < 0) return 'unknown';  // 未来日期/时钟偏差不做桶归类
             if (d < 7) return 'week';
             if (d < 30) return 'month';
             if (d < 90) return 'quarter';
@@ -629,7 +642,7 @@
         }
 
         function updateActivityStats() {
-            const c = { all: projects.length, week: 0, month: 0, quarter: 0, halfyear: 0, year: 0, twoyears: 0, threeyears: 0, stale: 0 };
+            const c = { all: projects.length, week: 0, month: 0, quarter: 0, halfyear: 0, year: 0, twoyears: 0, threeyears: 0, stale: 0, unknown: 0 };
             projects.forEach(p => c[getActivityCategory(p.updated_at || p.pushed_at)]++);
             document.getElementById('activityAll').textContent = c.all;
             document.getElementById('countWeek').textContent = c.week;
@@ -640,12 +653,15 @@
             document.getElementById('countTwoYears').textContent = c.twoyears;
             document.getElementById('countThreeYears').textContent = c.threeyears;
             document.getElementById('countStale').textContent = c.stale;
+            document.getElementById('countUnknown').textContent = c.unknown;
             document.getElementById('activityTotal').textContent = c.all;
         }
 
         function updateStarStats() {
-            const c = { all: projects.length, week: 0, month: 0, quarter: 0, halfyear: 0, year: 0, twoyears: 0, threeyears: 0, stale: 0 };
-            projects.forEach(p => c[getActivityCategory(p.starred_at || p.updated_at)]++);
+            // F02 修复：star 统计只看 starred_at 本身；缺失时进 unknown 桶，
+            // 不再用 updated_at（仓库更新时间）冒充「我的 Star 时间」。
+            const c = { all: projects.length, week: 0, month: 0, quarter: 0, halfyear: 0, year: 0, twoyears: 0, threeyears: 0, stale: 0, unknown: 0 };
+            projects.forEach(p => c[getActivityCategory(p.starred_at)]++);
             document.getElementById('starAll').textContent = c.all;
             document.getElementById('starCountWeek').textContent = c.week;
             document.getElementById('starCountMonth').textContent = c.month;
@@ -655,6 +671,7 @@
             document.getElementById('starCountTwoYears').textContent = c.twoyears;
             document.getElementById('starCountThreeYears').textContent = c.threeyears;
             document.getElementById('starCountStale').textContent = c.stale;
+            document.getElementById('starCountUnknown').textContent = c.unknown;
             document.getElementById('starTotal').textContent = c.all;
         }
 
@@ -715,7 +732,10 @@
             });
             const s = [...t.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
             document.getElementById('tagCloud').innerHTML = '<span class="tag active" data-tag="all">全部</span>' +
-                s.map(([k, n]) => `<span class="tag" data-tag="${k}">${k} <small style="opacity:0.6">${n}</small></span>`).join('');
+                s.map(([k, n]) => {
+                    const safeKey = escapeHtml(k);
+                    return `<span class="tag" data-tag="${safeKey}">${safeKey} <small style="opacity:0.6">${n}</small></span>`;
+                }).join('');
         }
 
         function filterProjects() {
@@ -736,7 +756,7 @@
                 const mt = activeTag === 'all' || allTags.includes(activeTag);
                 // 时间筛选
                 const ma = act === 'all' || getActivityCategory(p.updated_at || p.pushed_at) === act;
-                const ms2 = star === 'all' || getActivityCategory(p.starred_at || p.updated_at) === star;
+                const ms2 = star === 'all' || getActivityCategory(p.starred_at) === star;  // F02: 不再用 updated_at 冒充 Star 时间
                 return ms && mc && mt && ma && ms2;
             });
             currentPage = 1; renderProjects(); updateStats();
@@ -767,17 +787,21 @@
             const projectCategories = p.categories || (p.category ? [p.category?.id || p.category] : []);
             const categoryBadges = projectCategories.slice(0, 3).map(catId => {
                 const c = categories[catId] || { icon: '📁', color: '#8b949e' };
-                return `<span class="category-badge" style="background:${c.color}20;color:${c.color}">${c.icon}</span>`;
+                return `<span class="category-badge" style="background:${c.color}20;color:${c.color}">${escapeHtml(c.icon)}</span>`;
             }).join('');
             const uc = isRecent(p.updated_at) ? 'updated-recent' : '';
-            const th = (p.topics || []).slice(0, 3).map(t => `<span class="topic-tag">${t}</span>`).join('');
+            const th = (p.topics || []).slice(0, 3).map(t => `<span class="topic-tag">${escapeHtml(t)}</span>`).join('');
             const st = p.starred_at ? `<span class="star-time">⭐ ${formatDate(p.starred_at)} Star</span>` : '';
-            return `<div class="card" onclick="window.open('${p.html_url}', '_blank')">
-                <div class="card-header"><a href="${p.html_url}" target="_blank" class="repo-name" onclick="event.stopPropagation()">${p.full_name}</a>
+            const safeName = escapeHtml(p.full_name);
+            const safeUrl = escapeHtml(p.html_url || '');
+            const safeDesc = escapeHtml(p.description || '暂无描述');
+            const safeLang = escapeHtml(p.language || '-');
+            return `<div class="card" onclick="window.open('${safeUrl}', '_blank')">
+                <div class="card-header"><a href="${safeUrl}" target="_blank" class="repo-name" onclick="event.stopPropagation()">${safeName}</a>
                 ${categoryBadges}</div>
-                <div class="description">${p.description || '暂无描述'}</div>${th ? `<div class="topics-row">${th}</div>` : ''}
+                <div class="description">${safeDesc}</div>${th ? `<div class="topics-row">${th}</div>` : ''}
                 <div class="card-footer"><div class="metrics">
-                    <span class="metric"><span class="language-dot" style="background:${getLangColor(p.language)}"></span>${p.language || '-'}</span>
+                    <span class="metric"><span class="language-dot" style="background:${getLangColor(p.language)}"></span>${safeLang}</span>
                     <span class="metric">⭐${formatNumber(p.stargazers_count)}</span><span class="metric">⑂${formatNumber(p.forks_count)}</span></div>
                     <div class="time-info">${st}<span class="${uc}">${formatDate(p.updated_at)} 更新</span></div></div></div>`;
         }
@@ -785,6 +809,8 @@
         function getLangColor(l) { const c = {Python:'#3572A5',JavaScript:'#f1e05a',TypeScript:'#3178c6',Go:'#00ADD8',Rust:'#dea584',Java:'#b07219','C++':'#f34b7d',HTML:'#e34c26',CSS:'#563d7c',Kotlin:'#A97BFF',Swift:'#F05138',Dart:'#00B4AB'}; return c[l] || '#6e7681'; }
         function formatNumber(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : n; }
         function isRecent(d) { return d && Math.floor((Date.now() - new Date(d)) / 86400000) < 7; }
+        // HTML 转义：data.js 中的 description/topics 等来自仓库自述文本，拼入 innerHTML 前必须转义
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
         function formatDate(d) { if (!d) return '-'; const n = Math.floor((Date.now() - new Date(d)) / 86400000); return n < 1 ? '今天' : n < 7 ? n + '天前' : n < 30 ? Math.floor(n / 7) + '周前' : n < 365 ? Math.floor(n / 30) + '月前' : new Date(d).getFullYear() + '年'; }
         function updateStats() { document.getElementById('totalRepos').textContent = projects.length; document.getElementById('filteredCount').textContent = filteredProjects.length; }
 
