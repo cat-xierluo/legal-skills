@@ -830,8 +830,8 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-SKILL-NAME-MIGRATION — multi-agent-orca 名称迁移
 
-- 状态：`IN_PROGRESS`（2026-10-15 用户明确要求实施）；Owner / writer / 集成者：Codex /root。原计划来源：原MAO Codex PM。来源：真人指定新名multi-agent-orca，要求完善迁移计划写在Skill内部，特别覆盖符号链接。
-- 当前交付：完整计划、执行状态、清单与证据统一保存在本卡下方，不再作为运行参考发布。本轮没有搬目录、改name/title、重建链接、改registry、发布或重派任务。
+- 状态：`IMPLEMENTED_LOCAL / DRAFT_PR_OPEN / LEGACY_PRESERVED`（2026-10-15）；Owner / writer / 集成者：Codex /root。原计划来源：原MAO Codex PM。来源：真人指定新名multi-agent-orca，要求完善迁移计划写在Skill内部，特别覆盖符号链接。
+- 当前交付：命名实施已在本机采用，15 个全局/项目安装根可发现新名称；云端交付为草稿 PR #303。旧目录保留冻结运行时，无 SKILL.md；私人配置单一来源保留。正式合并/发布及旧兼容退役未获本轮授权，继续保持待办。
 - 已确认：盘点时源2.35.4与registry2.28.0不同，写计划期间另一GUI会话已更新源2.36.0，保持其改动、实施前重新冻结基线；只读有界扫描及深度3补盘发现40链接访问路径/22实际链接对象、44实体访问路径/22canonical实体根（含主源/其他Git检出/项目副本，须按owner分类，不能当作22份待覆盖安装）。全局3入口指向同源；套件必须同时改链接成员basename与target，CI/.gitignore及当前消费者/发布索引需同步。原#248此时OPEN/DRAFT/CONFLICTING，实施前先沿原卡对齐；不以更名绕过facts/smoke欠账。
 - 范围：规划新权威目录/元数据、宿主发现与兼容、CAS链接工具、静态副本保护、原worker凭证与状态保留、缓存/job/远程/渠道迁移、发布包、回退及旧入口退役；当前不实施这些工程或执行真实切换。
 - 清单：
@@ -848,7 +848,7 @@ blocker_and_recovery:
 - 文档验证：相对引用全部可达，diff空白检查通过，22个登记链接未出现target漂移；旧name仍生效且新权威目录尚未创建。只读检查证据见gitignored `archive/20261002_name_migration_plan/plan-validation.json`，不代表迁移功能已验收。
 
 <details>
-<summary>完整名称迁移计划（从原reference移入；仅规划，尚未实施）</summary>
+<summary>2026-10-02 原始迁移设计（历史原文，当时仅规划；当前实施结果见本卡状态和下方波次）</summary>
 
 ### `multi-agent-orca` 名称迁移计划
 
@@ -1040,10 +1040,21 @@ skills/multi-agent-orchestration -> multi-agent-orca
 ### 2026-10-15 实施波次
 
 - 授权：用户明确要求“实现正确的改名，帮我推进”。恢复原迁移卡，基线 main `3408afbb438ea9800de9cf8a9f80002907528415`，分支 `feat/multi-agent-orca/name-migration-261015`；原任务 ID、历史、wire schema、环境变量和状态位置保持。
-- [ ] 复盘当前安装及活跃引用、确定兼容方案与逐项迁移清单。
-- [ ] 实现有前置状态核验、日志、重复执行与回退的安装迁移工具，覆盖冲突/断链/别名/漂移及失败。
-- [ ] 权威目录及 name/title 改为 multi-agent-orca，版本 3.0.0；同步根忽略、CI、README、套件与当前消费者，保留历史下载。
-- [ ] 从新路径运行受影响回归、发现/旧路径兼容/源码和套件 ZIP 验证，独立审查。
-- [ ] 按候选 OID 具名采用主目录与实际安装；保留在途 runtime/私人配置，核注册信息与新会话发现，分别结算云端。
+- [x] 复盘当前安装及活跃引用、确定兼容方案与逐项迁移清单。
+- [x] 实现有前置状态核验、日志、重复执行与回退的安装迁移工具，覆盖冲突/断链/别名/漂移及失败。
+- [x] 权威目录及 name/title 改为 multi-agent-orca，版本 3.0.0；同步根忽略、CI、README、套件与当前消费者，保留历史下载。
+- [x] 从新路径运行受影响回归、发现/旧路径兼容/源码和套件 ZIP 验证，独立审查。
+- [x] 按候选 OID 具名采用主目录与实际安装；保留在途 runtime/私人配置，核注册信息与新会话发现，分别结算云端。
 - 检出范围：目标 Skill 与已枚举的消费者、skill-lint/release-workflow 只读验证依赖及具名 CI/docs/专家套件；磁盘预算不超过 150MB，不全量检出。
 - 非目标：不改后端派发/权限/协议，不重派生产任务，不移动其他 worktree/静态副本，不重写旧发布资产。独立 backend 模型任务无代码行为变化，不用它追认名称发现；真实渠道发布另按发布合同结算。
+
+### 2026-10-15 实施验收与边界
+
+- 固定代码候选：`5173907f536b5eaf9df90362d976c5780653b4ef`，独立复审无阻断；当前清单只记录命名实施，不追认全部后端生命周期。
+- 本机采用：具名逐文件采用 313 个路径，main 固定分支身份，原 index/HEAD/目标内容写前核验；12 个原草稿字节守恒。旧运行时 282 个 scripts/config/references/templates 跟踪文件原字节保留，SKILL 原文移为 .snapshot；旧 TASKS/DECISIONS 仅单向引用新权威文件。
+- 实际安装：15 个已核安装链接通过本轮工具 apply/verify；逐根只发现 multi-agent-orca 3.0.0，旧链接保持以支持旧脚本。另 7 个登记对象按其他 checkout/冻结运行时/脚本入口或已迁套件成员保留，不改他人树。8 份私人配置仅建立本地单一来源链接；安装 registry 新 key 和实际 3.0.0 已读回，installed_at 与旧记录历史保留。
+- 验证：迁移 21 项回归、20 个独立日志故障点、并发替换负控通过；无旧上下文的读取、发现与依赖检查通过。两个新名称 ZIP 真实构建并核目录/成员/敏感文件排除，8 成员套件校验及其 9 项验证器回归通过。三个便携隐私/路径 fixture 消费者 exit0；完整 staged 隐私与 diff 格式门禁通过。
+- 完整维护矩阵：73 条命令首轮 67 条 exit0；借用树首次 240s 超时后独立完整 53 项通过，内存准入首次受 ps 限制/短超时，已补单独受控读回与失败用例通过。ZCode closed-recovery、PM closeout、autopilot facts 仍有短超时/整套超时；Orca live smoke 首轮为环境拒绝/exit77，具体后续只读复验与基线对照见私有日志。此处不报告全矩阵 PASS、不改生产超时/策略凑绿。
+- 云端：[草稿 PR #303](https://github.com/cat-xierluo/legal-skills/pull/303)，head 为同一具名功能分支；用户已明确批准目的地与载荷后，safe-push/safe-pr 全范围门禁通过。未转 ready、未合 main、未发布 Release 或外部渠道包，旧资产 URL 保持。
+- 后续范围：M4 正式合并/渠道发布和远端节点更新须按后续明确授权推进；M5 兼容期退役待所有在途来源结算，不自动删除。旧 wire schema、环境变量、状态/锁及业务身份继续保留。
+- 私有证据入口：本地 `archive/20261015_name_migration/evidence-pointer.json` 指向本轮实际 apply journal、安装 manifest、字节校验、测试/原始失败、独审与 ZIP 记录；不将用户路径、安装 registry 或凭证写入公开源码。
