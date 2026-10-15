@@ -2,7 +2,7 @@
 name: dsh-plugin-dev
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.2"
+version: "0.6.3"
 license: MIT
 description: DeepSeek Harness（DSH）插件的设计、开发、装载验证、版本迁移与发布审查指引（版本感知）。在用户要为 DSH Desktop 开发插件、把 Pi/Hermes 插件迁移到 DSH、做隔离装载实验、排查插件在真实宿主的行为、跟进 DSH 版本升级适配，或在发布前做机械审查与验收（dsh.bundle / dsh.client 双面包工件契约、inject/external 对账、主题变量、类型化 locale）时使用。不要用于普通 npm 包审查或与 DSH 无关的 agent 项目。
 ---
@@ -78,7 +78,7 @@ harness 根解析优先级：`--harness-root` 参数 → `DSH_HARNESS_ROOT` 环�
 
 ## 已知限制（继承 lint）
 
-- 词典平价为**静态叶路径解析**（嵌套对象按 `a.x` 完整路径比对；同文件 const 展开可解析合并，跨文件展开/计算键/方法简写转 NOT_VERIFIED），不执行词典代码。
+- 词典平价为**静态叶路径解析**（嵌套对象按 `a.x` 完整路径比对；同文件顶层不相交 const 展开可解析合并；嵌套展开、重复键、属性重叠展开转 NOT_VERIFIED，跨文件展开/计算键/方法简写转 NOT_VERIFIED），不执行词典代码。
 - patch 结构检查识别简单 insert/id/name 行；复杂 YAML 形态转人工（NOT_VERIFIED），不出假 PASS。
 - 产物 bare builtin require、JSX CJK 检测为启发式，需人工确认。
 - client 源扫描范围固定 `src/client`（ts/tsx/js/mjs/jsx/css）；其他源布局（如 `lib/client`）不在机械覆盖内，0 文件时明示 WARN 转人工。
