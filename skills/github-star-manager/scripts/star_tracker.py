@@ -300,8 +300,12 @@ class StarTracker:
 
             # 获取数量已足够
             if len(repos) >= limit:
+                # 仅当本页已证明耗尽且没有丢弃条目时，限额结果才是完整集。
+                # 整页恰好命中上限仍可能存在下一页，必须保守标记 partial。
+                truncated = len(repos) > limit or len(data) == per_page
                 repos = repos[:limit]
-                fetch_meta["limit_truncated"] = True
+                fetch_meta["limit_truncated"] = truncated
+                fetch_meta["complete"] = not truncated
                 break
 
         # 为每个仓库匹配分类
@@ -699,7 +703,7 @@ README 内容（前6000字）:
         if not snapshot:
             return False, "快照不存在"
         meta = snapshot.get("snapshot_meta") or {}
-        if meta.get("complete") is True:
+        if meta.get("complete") is True and not meta.get("limit_truncated"):
             return True, ""
         completeness = meta.get("completeness", "unknown")
         return False, f"快照完整性为 {completeness}（complete={meta.get('complete')}），不允许作为基线覆盖旧数据"
@@ -1071,4 +1075,5 @@ README 内容（前6000字）:
             print(f"  ... 还有 {len(stale_repos) - 20} 个")
 
         return len(stale_repos), [r["full_name"] for r in stale_repos]
+
 
