@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.7.0"
+version: "0.8.0"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -229,6 +229,40 @@ python scripts/main.py --version-diff --repo owner/repo --old-version v1.0.0 --n
 - 快照文件（`output/original_latest.json`）带 `snapshot_meta` 字段（complete/failed_pages/账户/抓取时间）
 - `--export` 允许部分数据展示，但会显式警告
 - 无 `snapshot_meta` 的 v1 旧快照会被标记为「完整性未知」消费
+
+## Agent 查询接口（无需面板/模型 Key）
+
+`scripts/star_query.py` 为对话中的 Agent 提供只读事实与候选：stdout 只写 JSON envelope（schema_version/account_id/snapshot_id/generated_at/status/coverage/items/warnings/errors），日志走 stderr，失败返回非零，部分数据显式标 partial。
+
+```bash
+# 近期关注（真实 starred_at 时间窗；未知时间单独归 unknown_time_items，不冒充）
+python scripts/star_query.py recent --since 2026-09-15 --until 2026-10-15
+
+# 主题窗口计数（可比窗口对比；无分类数据时明确返回 needs_analysis，不暗中调模型）
+python scripts/star_query.py interests --window 30 --compare previous
+
+# 项目需求 ↔ 收藏召回（分数=关键词命中数，只是召回依据不是适用性证明）
+python scripts/star_query.py match --project myproj --query "字幕 时间轴"
+
+# 单仓库缓存证据包（缺缓存显式标记 missing，不自动联网）
+python scripts/star_query.py evidence --repo owner/name
+
+# 组装供 Agent 分析的最小候选+证据包（项目必须已登记）
+python scripts/star_query.py research --project myproj --limit 5
+```
+
+**项目登记**：`output/projects/<project_id>.json`，字段 `project_id/capabilities/needs/constraints`。match/research 读取它对齐项目需求；未登记时 match 退化为通用召回并警告。
+
+**机会卡与采用反馈**（`scripts/opportunity.py`）：research 产出的候选经当前 Agent 分析后，用机会卡记录判断（signal/target/evidence/gap/hypothesis/experiment/decision 七字段必答）。decision 状态机强制：`tested` 必须带 `run_evidence`（运行产物+验证日志），`adopted` 必须再有 `adoption_evidence`（目标项目产物/提交+验收回执）——没有证据时只允许 `researched`/`experiment_proposed`，写下"已测试/已采用"不能关单。
+
+```bash
+python scripts/opportunity.py validate --input card.json   # 校验（不落盘）
+python scripts/opportunity.py record --input card.json     # 校验通过后持久化到 output/feedback/
+python scripts/opportunity.py list --project myproj        # 列出反馈
+python scripts/opportunity.py suppress --repo owner/name --project myproj  # 查询拒绝抑制
+```
+
+拒绝抑制只针对同候选+同方向的重复推荐；携带新 repo revision/需求版本时可重新出卡。gap 枚举：新增能力/接入缺口/执行缺陷/验证缺口/**已有等价能力**/不适用——「已有等价能力，无需吸收」是合法结论。
 
 ## 配置与自定义
 

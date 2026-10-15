@@ -4,6 +4,24 @@
 
 ---
 
+## [0.8.0] - 2026-10-15
+
+### 新增
+
+- **Agent 查询接口（批次 B，审计 §3 落地）**：新增 `scripts/star_query.py`，五个只读命令——`recent`（按真实 starred_at 时间窗列新关注，未知/非法时间单独归 unknown_time_items 不冒充）、`interests`（可比窗口的主题计数与 delta，无分类数据明确返回 needs_analysis 不暗中调模型）、`match`（项目需求关键词召回，分数只是召回依据）、`evidence`（单仓库缓存证据包，缺缓存显式 missing）、`research`（组装供 Agent 分析的最小候选+证据包）。统一 JSON envelope（schema_version/account_id/snapshot_id/status/coverage/warnings/errors），stdout 只写 JSON、日志走 stderr、失败非零、partial 显式标注
+- **机会卡与采用反馈（批次 C 核心，审计 §4 落地）**：新增 `scripts/opportunity.py`——机会卡七字段必答校验（signal/target/evidence/gap/hypothesis/experiment/decision）、decision 状态机（tested 必须带 run_evidence、adopted 必须再有 adoption_evidence，无证据只允许 researched/experiment_proposed）、gap 六值枚举（含「已有等价能力」合法结论）、反馈持久化到 output/feedback/、拒绝抑制查询（同候选同方向默认跳过，新 repo revision 允许重新评估）
+- **项目登记**：`output/projects/<id>.json`（project_id/capabilities/needs/constraints），match/research 对齐项目需求；未登记时 match 退化通用召回并警告
+
+### 修复
+
+- **envelope 合同违规**：interests 调 `_load_categories` 时其内部警告 print 会混入 stdout 污染 JSON（stdout 现重定向到 stderr）
+- **interests 静默冒充**：分类文件不存在时此前回落内置默认分类继续计数（把「没有你自己的分类数据」伪装成分析结果）——现在明确返回 needs_analysis
+- **同秒反馈覆盖丢数据**：opportunity record 的文件名时间戳精确到秒，同候选同秒两次反馈互相覆盖——改毫秒时间戳+冲突递增序号
+
+### 技术优化
+
+- 离线回归套件 `tests/test_batch_b.py`：48 用例覆盖五命令 envelope 合同、partial 警示、needs_analysis 拒绝、召回截断、证据缺失标记、未登记项目指路、机会卡全字段拒绝矩阵、tested/adopted 证据红线、拒绝抑制与 list 过滤；批次 A 套件 33 用例无回归
+
 ## [0.7.0] - 2026-10-15
 
 ### 修复
