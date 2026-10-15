@@ -31,6 +31,7 @@ jobs:
         run: python3 -m pip install PyYAML==6.0.3
       - name: Run isolated privacy and identity regressions
         run: |
+          python3 -m unittest discover -s skills/git-workflow/scripts -p test_pr_ready_contract.py -v
           python3 -m unittest discover -s skills/git-workflow/scripts -p test_privacy_check.py -v
           bash skills/git-workflow/scripts/test-check-outgoing-identities.sh
           bash skills/git-workflow/scripts/test-identity-audit.sh
