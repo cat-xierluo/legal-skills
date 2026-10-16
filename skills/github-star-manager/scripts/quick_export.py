@@ -57,8 +57,9 @@ def generate_data_js(output_path: Path, projects: List[Dict], categories: List[D
     # 生成分类数据
     categories_str = json.dumps(categories_map, ensure_ascii=False)
 
-    # R3：与 star-board 共用 output/.gsm-write.lock（原子写 + 跨进程互斥）
-    import os, sys
+    # R6/J1b：与 star-board 共用 output/.gsm-write.lock；锁不可用时 fail-closed
+    # （不写投影、抛 LockUnavailable），不退回无锁写。data.js 为纯投影。
+    import os
     from lockutil import write_lock
     text = f"const PROJECTS_DATA = {projects_str};\n\nconst CATEGORIES_DATA = {categories_str};\n"
 
@@ -74,11 +75,7 @@ def generate_data_js(output_path: Path, projects: List[Dict], categories: List[D
                 pass
             raise
 
-    try:
-        with write_lock(output_path.parent):
-            _atomic()
-    except TimeoutError as e:
-        print(f"⚠️ {e}；本次降级为原子写（无跨进程互斥）", file=sys.stderr)
+    with write_lock(output_path.parent):
         _atomic()
 
 
