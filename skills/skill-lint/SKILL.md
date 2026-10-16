@@ -2,7 +2,7 @@
 name: skill-lint
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.9.1"
+version: "2.9.2"
 license: MIT
 description: Skill 创建预检、可靠性验收与格式审查工具。本技能应在用户创建、重大改造或审查Skill，需要识别旧版 Skill 的指令遵循不稳定、产出漂移、验证模态错配、约束漏检，或检查 Harness 契约、候选绑定证据、故障注入、目录结构、业务流和安全风险时使用。不要用于：代替业务领域验证器、代码审查、应用功能测试、通用编程任务。
 ---
@@ -106,6 +106,8 @@ description: Skill 创建预检、可靠性验收与格式审查工具。本技�
 - `harness-reliability-standards.md`：七层 Harness、独立验证、候选绑定证据、故障注入和闭环
 - `instruction-stability-standards.md`：约束追踪、验证模态、产物阶段、多轮覆盖和漂移判定
 - `reporting-standards.md`：问题分级和报告结构
+
+仅维护legal-skills公仓公开Skill时，读取[项目发布配置](references/legal-skills-project-profile.md)核许可证、版权、发布字段、迁移历史及README；第三方/普通私有Skill不继承该配置。项目AGENTS旧历史仅溯源时读，不作为现行规范。
 
 `LICENSE.txt`、`version`、README 和 Marketplace 属于发布治理，不属于普通目录结构硬要求。审查私人或第三方普通 Skill 时，只有在用户给出发布目标或项目规则时才按发布模块判定。
 

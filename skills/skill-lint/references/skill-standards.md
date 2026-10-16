@@ -22,6 +22,7 @@
 | 多 Skill 重叠 | `skill-merge-standards.md` | 两个及以上 skill 疑似职责重叠、合并/降级/拆分决策，或消费聚类报告 | 四判据判定：合并、降级为 reference、加边界声明、拆分或保留独立 |
 | 配置与隐私 | `configuration-privacy-standards.md` | 检查 config、example、公开内容 | 是否泄露真实信息或本地配置 |
 | 安全评估 | `security-assessment-standards.md` | 检查外部 Skill、脚本、MCP、网络、依赖或提示词风险 | 是否存在危险执行、敏感访问、数据外传或提示词安全问题 |
+| legal-skills项目配置 | `legal-skills-project-profile.md` | 仅维护legal-skills公仓公开Skill的发布规范时 | 项目许可/版权/字段/README，不能污染第三方目标 |
 | 发布治理 | `publishing-standards.md` | 检查 LICENSE、CHANGELOG、version、索引 | 是否符合发布目标 |
 | 工作流与输出 | `workflow-output-standards.md` | 检查 SKILL.md 正文、依赖、脚本、输出 | 是否可执行、可维护 |
 | 业务流深度 | `business-flow-rubric.md` | 判断 Skill 是否承载真实业务流程 | Trigger / Intake / Reasoning / Output / Safety |

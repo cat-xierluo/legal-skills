@@ -2,6 +2,14 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.9.2] - 2026-10-16
+
+### 文档完善
+
+- 承接legal-skills根AGENTS的项目发布配置与旧变更历史，许可证/版权、公开字段、Command迁移记录和README要求按需读取；明确不施加给第三方或普通私有Skill。
+- 依赖与脚本防护沿既有开发/输出模块，补正文动作表述、相对资源引用和单换行要求；通用发布模块改引用项目配置，减少重复维护。
+- 根AGENTS聚焦任务/角色/连续交接与隔离行为；敏感信息和Git操作转引git-workflow。未改变检查脚本、默认审查流程或部署运行时。
+
 ## [2.9.1] - 2026-09-23
 
 ### 文档完善
