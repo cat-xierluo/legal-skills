@@ -31,12 +31,10 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 def _locked_write(output_dir: Path, path: Path, text: str) -> None:
-    """R3：与 star-board 共用 output/.gsm-write.lock，闭合 TOCTOU 竞隙。"""
-    try:
-        with write_lock(output_dir):
-            _atomic_write(path, text)
-    except TimeoutError as e:
-        print(f"⚠️ {e}；本次降级为原子写（无跨进程互斥）", file=sys.stderr)
+    """R6/J1b：与 star-board 共用 output/.gsm-write.lock；锁不可用时 fail-closed
+    （不写投影、抛 LockUnavailable），不退回无锁写。data.js 为纯投影，写失败仅
+    使 UI 停留在上一版，不损坏权威数据。"""
+    with write_lock(output_dir):
         _atomic_write(path, text)
 
 

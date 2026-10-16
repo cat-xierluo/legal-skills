@@ -4,6 +4,14 @@
 
 ---
 
+## [0.8.6] - 2026-10-16
+
+### 修复（R6：上游定向复审 J1 事务协议，gsm 侧）
+
+- **J1a 旧读覆盖（P1）**：`save_latest` 新增 `base_timestamp` CAS 参数——锁内重读当前快照，基线被外部写者推进则抛 `SnapshotConflictError`（fail-closed，调用方重读重试）；并做**扩展字段前向合并**：`description_zh/tags_zh/_lite/reason/matched_keywords` 等插件产物在全量快照重写时保留（按 full_name 对齐，仅本方无值时从前值补）。技能 init/check 走全量远端快照语义（不传 base_timestamp），前向合并保证插件确认条目不丢；上游 `locked_stale_skill_write` 反例（插件确认被旧读覆盖）现被 CAS 拒
+- **J1b 超时不得绕过互斥（P1）**：`lockutil.write_lock` 超时/无 fcntl/锁不可开一律抛 `LockUnavailable`（不再"降级为原子写"继续无锁提交）；`save_latest`/`generate_dashboard`/`quick_export` 三处 fail-closed，超时→拒绝写入、旧数据不变、显式抛错；确需无锁平台降级设 `GSM_ALLOW_UNLOCKED_WRITE=1`
+- **J1c runner 假绿（P2）**：`tests/r3_dual_process_check.py` 重写为逐操作结构化回执（ok/conflict/error）——任何意外异常使 runner 退出码非零，覆盖新增/取消/翻译交错并核终态、断言插件 zh 保真与无 limit_truncated；**注入 RuntimeError 判别力验证：被正确报 error 并 FAIL（非零）**
+
 ## [0.8.5] - 2026-10-16
 
 ### 修复（R5：上游定向复审 UA:GSM-AUDIT-R1R4-REVIEW-261016 gsm 侧返修）
