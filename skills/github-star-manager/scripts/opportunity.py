@@ -45,6 +45,10 @@ DECISIONS = {
 
 REQUIRED_CARD_FIELDS = ["signal", "target", "evidence", "gap", "hypothesis", "experiment", "decision"]
 
+# 状态短词白名单（R5/J2：明确列举，避免 "somedir" 这类目录名被误豁免）
+_STATUS_WORDS = {"ok", "pass", "passed", "fail", "failed", "done", "true", "false",
+                 "yes", "no", "n/a", "na", "none", "null"}
+
 
 def feedback_dir() -> Path:
     return StarTracker.CACHE_DIR / "feedback"
@@ -62,36 +66,148 @@ def load_card(path: str) -> Optional[Dict]:
         return None
 
 
-def _verify_evidence_paths(block: Dict, label: str,
-                           errors: List[str], warnings: List[str]) -> None:
-    """R1/F08 实质校验：tested/adopted 声称的运行产物与回执里，凡形如本地路径的
-    字符串值必须真实存在且非空——虚构文件不再仅凭字段存在就过关。
+def _resolve_evidence_path(val: str, base_dir: Path) -> Path:
+    """证据路径解析（上游 J2）：相对路径以**卡文件所在目录**为基准（不是 cwd），
+    ~ 展开，符号链接解析到实际目标。"""
+    p = Path(os.path.expanduser(val))
+    if not p.is_absolute():
+        p = base_dir / p
+    try:
+        return p.resolve(strict=False)   # 解析符号链接与相对段
+    except OSError:
+        return p
 
-    URL 形态无法离线核验，降级为 warning（不做通过依据之外的背书）。
+
+def _verify_evidence_paths(block: Dict, label: str,
+                           errors: List[str], warnings: List[str],
+                           base_dir: Optional[Path] = None) -> None:
+    """R5/J2 证据块实质校验（上游复审要求重做）：
+
+    - 类型：只接受字符串/字符串列表；bool/数字/None 拒绝（此前 `run_evidence: true`
+      直接跳过）；嵌套数组逐项递归
+    - 路径：必须是**存在的普通文件**且非空；目录拒绝；符号链接解析到实际目标校验
+    - 基准：相对路径以卡文件目录（base_dir）为基准，不是 cwd（避免漂移误判）
+    - URL：仅候选线索，不构成 tested/adopted 证据（warning，不阻断）
+    - 豁免：状态短词（ok/pass/done）与含中文散文说明不算路径主张
     """
     checked = 0
-    for k, v in block.items():
-        if not isinstance(v, str) or not v:
-            continue
+
+    def _walk(v, path_key: str):
+        nonlocal checked
+        if isinstance(v, bool) or isinstance(v, (int, float)) or v is None:
+            errors.append(f"{path_key} 类型不支持（{type(v).__name__}）——"
+                          f"证据必须是路径字符串或字符串列表")
+            return
+        if isinstance(v, list):
+            if not v:
+                warnings.append(f"{path_key} 为空列表")
+            for i, item in enumerate(v):
+                _walk(item, f"{path_key}[{i}]")
+            return
+        if isinstance(v, dict):
+            if not v:
+                warnings.append(f"{path_key} 为空对象")
+            for k2, v2 in v.items():
+                _walk(v2, f"{path_key}.{k2}")
+            return
+        if not isinstance(v, str):
+            errors.append(f"{path_key} 类型不支持（{type(v).__name__}）")
+            return
         val = v.strip()
+        if not val:
+            return
         if val.startswith(("http://", "https://")):
-            warnings.append(f"{label}.{k}=URL 无法离线核验，采信需人工抽查")
-            continue
-        if "/" not in val and not val.startswith("~"):
-            continue  # 非路径形态（如 'ok'、commit sha），不适用文件校验
-        path = Path(os.path.expanduser(val))
+            warnings.append(f"{path_key}=URL 无法离线核验，仅作候选线索，"
+                            f"不构成 tested/adopted 证据")
+            return
+        if re.search(r"[\u4e00-\u9fff]", val):
+            return  # 中文散文说明
+        # 状态短词白名单（明确列举，不用通配——否则 "somedir" 这类目录名会被误豁免）
+        if val.lower() in _STATUS_WORDS:
+            return
+        p = _resolve_evidence_path(val, base_dir or Path.cwd())
         checked += 1
-        if not path.exists():
-            errors.append(f"{label}.{k} 指向不存在的路径: {val}——"
+        if not p.exists():
+            errors.append(f"{path_key} 指向不存在的路径: {val}——"
                           f"虚构运行产物/回执不能作为 tested/adopted 证据")
-        elif path.is_file() and path.stat().st_size == 0:
-            errors.append(f"{label}.{k} 指向空文件: {val}——空产物不构成可核实证据")
+        elif p.is_dir():
+            errors.append(f"{path_key} 指向目录而非文件: {val}——目录不构成可核实产物")
+        elif p.is_file() and p.stat().st_size == 0:
+            errors.append(f"{path_key} 指向空文件: {val}——空产物不构成可核实证据")
+        elif p.is_file():
+            _verify_evidence_content(p, path_key, errors)
+
+    for k, v in block.items():
+        _walk(v, f"{label}.{k}")
+
     if checked == 0:
-        warnings.append(f"{label} 未含任何可核验的本地路径——按审计红线，"
-                        f"只有字段没有产物时请降级为 experiment_proposed")
+        # 上游 J2：URL/状态词/散文都不构成完成证据——整块无可核验文件时必须拒，
+        # 不能仅 warning 后继续签 tested/adopted
+        errors.append(f"{label} 未含任何可核验的本地文件——"
+                      f"URL/状态词/散文不足以支撑 tested/adopted，"
+                      f"请补真实产物路径或降级为 experiment_proposed")
 
 
-def validate_card(card: Dict) -> Tuple[bool, List[str], List[str]]:
+def _verify_code_evidence(evidence: Dict, errors: List[str],
+                          warnings: List[str], base_dir: Optional[Path] = None) -> None:
+    """R5/J2：源码证据须可回查且**绑定**——带文件/行号/锚点/摘录/commit 哈希，
+    且形如 `path:line` 时该文件须真实存在（上游反例：`missing/source.py:999
+    fabricated quote` 的路径不存在却通过）。"""
+    ce = evidence.get("code_evidence")
+    if ce in (None, "", {}, []):
+        return
+    if isinstance(ce, str):
+        m = re.match(r"^([^\s:]+)[:#](\d+)", ce.strip())
+        if m:
+            src = _resolve_evidence_path(m.group(1), base_dir or Path.cwd())
+            if not src.exists():
+                errors.append(f"evidence.code_evidence 引用的源码不存在: {m.group(1)}"
+                              f"——虚构源码摘录不能作为代码证据")
+            elif src.is_dir():
+                errors.append(f"evidence.code_evidence 引用的是目录: {m.group(1)}")
+            return
+        if not re.search(r"@[0-9a-f]{7,}|\b[0-9a-f]{7,40}\b", ce):
+            errors.append("evidence.code_evidence 无可回查锚点"
+                          "（须 path:line / commit 哈希 / 结构化锚点对象）——"
+                          "一句「某处有实现」不构成代码证据")
+        return
+    if isinstance(ce, dict):
+        anchor = None
+        for k in ("path", "file"):
+            if ce.get(k):
+                anchor = ce[k]
+                break
+        if anchor:
+            src = _resolve_evidence_path(str(anchor), base_dir or Path.cwd())
+            if not src.exists():
+                errors.append(f"evidence.code_evidence.{k} 引用的源码不存在: {anchor}")
+        elif not any(ce.get(k) for k in ("commit", "sha", "hash", "excerpt", "anchor")):
+            errors.append("evidence.code_evidence 缺锚点字段"
+                          "（path/file/line/commit/sha/excerpt/hash 至少其一）")
+        return
+    errors.append("evidence.code_evidence 类型不支持（须字符串或对象）")
+
+
+# 证据内容须非纯占位/无关文本（上游反例：'unrelated nonempty text' 通过）
+_PLACEHOLDER_RE = re.compile(
+    r"^(unrelated|placeholder|todo|tbd|fake|dummy|test|sample|example|"
+    r"lorem ipsum)\b", re.I)
+
+
+def _verify_evidence_content(path: Path, path_key: str, errors: List[str]) -> None:
+    """R5/J2 内容绑定（最小可行）：证据文件内容不能是明显占位/无关文本。"""
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace")[:200].strip()
+    except OSError:
+        return
+    if not head:
+        return  # 空文件已由上层拒收
+    if _PLACEHOLDER_RE.match(head):
+        errors.append(f"{path_key} 内容疑似占位/无关文本（{head[:40]!r}）——"
+                      f"任意非空文件不构成产物证据，须为真实运行输出")
+
+
+def validate_card(card: Dict, base_dir: Optional[Path] = None) -> Tuple[bool, List[str], List[str]]:
     """校验机会卡。返回 (是否通过, errors, warnings)"""
     errors: List[str] = []
     warnings: List[str] = []
@@ -127,7 +243,7 @@ def validate_card(card: Dict) -> Tuple[bool, List[str], List[str]]:
         if not target.get("capability"):
             errors.append("target.capability 缺失（目标能力/需求描述）")
 
-    # 4. evidence：必须区分证据类型
+    # 4. evidence：必须区分证据类型 + R5/J2 源码证据可回查
     evidence = card["evidence"]
     if not isinstance(evidence, dict):
         errors.append("evidence 必须是对象")
@@ -139,6 +255,7 @@ def validate_card(card: Dict) -> Tuple[bool, List[str], List[str]]:
         if not kinds:
             warnings.append("evidence 未区分证据类型（readme_claim/code_evidence/"
                             "author_demo/self_tested）——README 宣称 ≠ 代码证据")
+        _verify_code_evidence(evidence, errors, warnings, base_dir)
 
     # 5. gap 枚举
     if card["gap"] not in GAP_TYPES:
@@ -157,11 +274,12 @@ def validate_card(card: Dict) -> Tuple[bool, List[str], List[str]]:
                     f"{'运行产物与验证日志' if req == 'run_evidence' else '采纳产物/提交与验收回执'}"
                     f"不可省略；没有证据时请用 experiment_proposed")
                 continue
-            # R1/F08：字段存在还不够——里面的路径类产物做实质校验（虚构文件拒收）
-            if isinstance(decision[req], dict):
-                _verify_evidence_paths(decision[req], f"decision.{req}", errors, warnings)
-            elif isinstance(decision[req], str) and decision[req].strip():
-                _verify_evidence_paths({req: decision[req]}, f"decision", errors, warnings)
+            # R5/J2：证据字段做实质校验（类型/目录/嵌套/符号链接/相对路径基准）。
+            # 非 dict/str 的一切类型（bool/数字/None/数组）也交给校验器拒收，
+            # 不能因形态不匹配而跳过检查。
+            if req in ("run_evidence", "adoption_evidence"):
+                _verify_evidence_paths({req: decision[req]}, f"decision",
+                                       errors, warnings, base_dir)
 
     return len(errors) == 0, errors, warnings
 
@@ -206,7 +324,7 @@ def cmd_validate(args) -> int:
     card = load_card(args.input)
     if card is None:
         return 1
-    ok, errors, warnings = validate_card(card)
+    ok, errors, warnings = validate_card(card, base_dir=Path(args.input).resolve().parent)
     result = {"valid": ok, "errors": errors, "warnings": warnings,
               "decision_status": (card.get("decision") or {}).get("status")}
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -218,7 +336,7 @@ def cmd_record(args) -> int:
     if card is None:
         return 1
 
-    ok, errors, warnings = validate_card(card)
+    ok, errors, warnings = validate_card(card, base_dir=Path(args.input).resolve().parent)
     if not ok:
         print(json.dumps({"recorded": False, "errors": errors, "warnings": warnings},
                          ensure_ascii=False, indent=2))

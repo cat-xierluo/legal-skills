@@ -433,6 +433,54 @@ def _load_project_profile(project_id: Optional[str]) -> Optional[Dict]:
         return None
 
 
+def _verify_profile_refs(profile: Dict) -> List[str]:
+    """R5/J2：校验 profile 的源引用是否仍有效。
+
+    支持的声明形态：
+    - `source_ref` / `paths`：字符串或列表，本地路径须存在（~ 展开、相对项目目录）
+    - `hashes` / `source_hashes`：{路径: sha256}，路径存在且哈希须匹配（零/全零视为失效）
+
+    失效即返回错误清单——research 不得对无效目标出包。
+    """
+    import hashlib
+    errs: List[str] = []
+    base = StarTracker.CACHE_DIR / "projects"
+    refs = []
+    for key in ("source_ref", "paths", "sources"):
+        v = profile.get(key)
+        if isinstance(v, str):
+            refs.append(v)
+        elif isinstance(v, list):
+            refs.extend(str(x) for x in v if x)
+    for r in refs:
+        p = Path(os.path.expanduser(r))
+        if not p.is_absolute():
+            p = base / p
+        if not p.exists():
+            errs.append(f"{r} 不存在")
+    hashes = profile.get("hashes") or profile.get("source_hashes") or {}
+    if isinstance(hashes, dict):
+        for r, expected in hashes.items():
+            p = Path(os.path.expanduser(str(r)))
+            if not p.is_absolute():
+                p = base / p
+            if not p.exists():
+                errs.append(f"{r} 不存在（哈希引用）")
+                continue
+            exp = str(expected).strip().lower()
+            if not exp or set(exp) <= {"0"}:
+                errs.append(f"{r} 哈希为零/空——引用已失效")
+                continue
+            try:
+                actual = hashlib.sha256(p.read_bytes()).hexdigest()
+            except OSError:
+                errs.append(f"{r} 不可读，无法核哈希")
+                continue
+            if actual != exp:
+                errs.append(f"{r} 哈希不匹配（期望 {exp[:12]}… 实际 {actual[:12]}…）")
+    return errs
+
+
 # ==================== evidence：单仓库缓存证据 ====================
 
 def cmd_evidence(args) -> int:
@@ -528,6 +576,14 @@ def cmd_research(args) -> int:
         return emit(envelope([], snapshot=snap,
                              errors=[f"项目 {args.project} 未登记：请先在 output/projects/{args.project}.json "
                                      f"登记目标需求（capabilities/needs/constraints）"]), 1)
+
+    # R5/J2：profile 若声明了源引用（source_ref/paths）+ 哈希，必须仍有效——
+    # 上游反例：引用 /definitely/missing 且哈希为零，research 仍返回 status=ok。
+    stale_errors = _verify_profile_refs(profile)
+    if stale_errors:
+        return emit(envelope([], snapshot=snap,
+                             errors=["失效的项目引用（research 不得对无效目标出包）: "]
+                                    + stale_errors), 1)
 
     # 用项目需求做召回（复用 match 逻辑）
     needs = profile.get("needs", [])

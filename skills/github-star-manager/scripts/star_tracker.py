@@ -312,10 +312,13 @@ class StarTracker:
 
             page += 1
 
-            # 获取数量已足够
+            # 获取数量已足够（R5/J5：limit 截断 ≠ 完整快照——上游 F01 反例：
+            # --check --limit 1 标 limit_truncated=true 却仍称 complete，把未抓到的
+            # 旧条目误判为「取消收藏」。截断时 complete 必须为 False。）
             if len(repos) >= limit:
                 repos = repos[:limit]
                 fetch_meta["limit_truncated"] = True
+                fetch_meta["complete"] = False   # 截断即非完整快照
                 break
 
         # 为每个仓库匹配分类
@@ -721,6 +724,10 @@ README 内容（前6000字）:
         if not snapshot:
             return False, "快照不存在"
         meta = snapshot.get("snapshot_meta") or {}
+        # R5/J5：limit 截断的快照不是完整基线（上游 F01：截断却称完整 → 误判取消）
+        if meta.get("limit_truncated") is True:
+            return False, ("快照为 limit 截断的子集（limit_truncated=true），"
+                           "不允许作为基线覆盖旧数据")
         if meta.get("complete") is True:
             return True, ""
         completeness = meta.get("completeness", "unknown")

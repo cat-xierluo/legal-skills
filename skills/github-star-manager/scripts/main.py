@@ -38,14 +38,17 @@ def init_command(tracker: StarTracker, args):
         pages = ", ".join(str(p["page"]) for p in fetch_meta["failed_pages"])
         print(f"⚠️ 有 {len(fetch_meta['failed_pages'])} 页抓取失败（页码: {pages}），本次数据不完整")
 
-    # F01: 抓取不完整时禁止覆盖既有基线
+    # F01 + R5/J5: 抓取不完整或 limit 截断时禁止覆盖既有基线
     if not fetch_meta.get("complete"):
         existing = tracker.load_latest()
+        reason = ("被 --limit 截断（子集）" if fetch_meta.get("limit_truncated")
+                  else "抓取不完整")
         if existing:
-            print("❌ 抓取不完整且已存在旧快照，已保留旧快照不被覆盖（审计 F01 守卫）")
-            print("   提示：请检查网络/Token 后重试，或删除 output/original_latest.json 强制重建基线")
+            print(f"❌ 本次{reason}且已存在旧快照，已保留旧快照不被覆盖（审计 F01 守卫）")
+            print("   提示：请检查网络/Token 或调整 --limit 后重试，"
+                  "或删除 output/original_latest.json 强制重建基线")
             return 1
-        print("⚠️ 抓取不完整且无旧快照，仍将保存（首次建基线，快照标记为 partial）")
+        print(f"⚠️ 本次{reason}且无旧快照，仍将保存（首次建基线，快照标记为 partial）")
 
     # 对 description 为 null 的项目重新抓取元数据
     repos = tracker.retry_null_descriptions(repos)
@@ -92,12 +95,16 @@ def check_command(tracker: StarTracker, args):
     fetch_meta = tracker.last_fetch_meta or {}
     print(f"当前 Star 数量: {len(current_repos)}")
 
-    # F01: 抓取不完整时保留旧基线，不做取消判定
+    # F01 + R5/J5: 抓取不完整或 limit 截断时保留旧基线，不做取消判定
     if not fetch_meta.get("complete"):
-        failed = fetch_meta.get("failed_pages", [])
-        pages = ", ".join(str(p["page"]) for p in failed)
-        print(f"❌ 本次抓取不完整（失败页: {pages}），已放弃保存与对比，旧快照保持不变")
-        print("   部分抓取无法区分「用户取消收藏」与「分页失败漏抓」，继续对比会产生误报")
+        if fetch_meta.get("limit_truncated"):
+            print("❌ 本次抓取被 --limit 截断（子集），已放弃保存与对比，旧快照保持不变")
+            print("   截断子集会把未抓到的旧条目误判为「取消收藏」——请提高 --limit 或去掉该参数")
+        else:
+            failed = fetch_meta.get("failed_pages", [])
+            pages = ", ".join(str(p["page"]) for p in failed)
+            print(f"❌ 本次抓取不完整（失败页: {pages}），已放弃保存与对比，旧快照保持不变")
+            print("   部分抓取无法区分「用户取消收藏」与「分页失败漏抓」，继续对比会产生误报")
         return 1
 
     # 加载历史数据

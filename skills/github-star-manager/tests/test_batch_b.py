@@ -256,7 +256,7 @@ def card_dict(**over):
                    "source": "抖音截图"},
         "target": {"project_id": "myproj", "capability": "字幕时间轴机制"},
         "evidence": {"url": "https://github.com/owner/subtitle-tool",
-                     "code_evidence": "src/cue.py 的换行算法"},
+                     "code_evidence": "commit abc1234 的 cue 换行实现"},
         "gap": "接入缺口",
         "hypothesis": "其 cue 换行机制可借鉴",
         "experiment": {"consumer": "code-video captions", "inputs": "中文长句",
@@ -501,7 +501,7 @@ def _card_with_evidence(run_ev):
     return {
         "signal": {"repo": "a/b", "starred_at": "2026-10-01T00:00:00Z", "source": "测试"},
         "target": {"project_id": "p", "capability": "c"},
-        "evidence": {"url": "https://github.com/a/b", "code_evidence": "src/x.py"},
+        "evidence": {"url": "https://github.com/a/b", "code_evidence": "commit abc1234 cue 换行"},
         "gap": "接入缺口", "hypothesis": "h", "experiment": {"consumer": "c"},
         "decision": {"status": "tested", "run_evidence": run_ev},
     }
@@ -527,11 +527,102 @@ with _tf.TemporaryDirectory() as td:
 
     ok, errs, warns = _opp.validate_card(_card_with_evidence(
         {"report": "https://example.com/report"}))
-    check("URL 证据降级为警告不阻断", ok and any("URL" in w for w in warns))
+    # R5/J2：URL 仅线索, 不能支撑 tested（无可核验文件 → 拒）
+    check("纯 URL 证据不能签 tested（R5/J2）", not ok and any("URL" in w for w in warns))
 
     ok, errs, warns = _opp.validate_card(_card_with_evidence({"note": "只写了文字"}))
-    check("无路径证据给警告", ok and any("未含任何可核验" in w for w in warns))
+    check("无路径证据拒绝（R5/J2）", not ok and any("未含任何可核验" in e for e in errs))
 
+
+    # F08 补强（自审发现）：裸文件名同样是路径主张，不能绕过
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"artifacts": "run.log"}))
+    check("裸文件名虚构产物被拒（F08 补强）", not ok and any("不存在" in e for e in errs))
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"log": "ok"}))
+    check("纯状态词不算路径主张（但无文件仍拒）", not ok and not any("不存在" in e for e in errs))
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"note": "只写了文字"}))
+    check("中文散文不算路径主张（但无文件仍拒）", not ok and not any("不存在" in e for e in errs))
+
+
+# ============ R5/J2 上游反例矩阵（证据绕过面全量回归） ============
+print("\n[R5] 上游 J2 证据绕过矩阵")
+with _tf.TemporaryDirectory() as td:
+    bd = Path(td)
+    (bd / "real.log").write_text("executed 3 cases, all pass", encoding="utf-8")
+    (bd / "empty.log").write_text("", encoding="utf-8")
+    (bd / "unrelated.txt").write_text("unrelated nonempty text", encoding="utf-8")
+    (bd / "link.txt").symlink_to(bd / "unrelated.txt")
+    (bd / "somedir").mkdir()
+
+    def _c(dec, ce="commit abc1234 cue"):
+        return {"signal": {"repo": "a/b", "starred_at": "2026-10-01T00:00:00Z", "source": "t"},
+                "target": {"project_id": "p", "capability": "c"},
+                "evidence": {"url": "https://x/y", "code_evidence": ce},
+                "gap": "接入缺口", "hypothesis": "h", "experiment": {"consumer": "c"},
+                "decision": dec}
+
+    matrix = [
+        ("裸相对文件名不存在", {"status": "tested", "run_evidence": {"log": "absent.log"}}),
+        ("纯 URL（adopted）", {"status": "adopted", "run_evidence": {"log": "ok"},
+                              "adoption_evidence": {"r": "https://x/y"}}),
+        ("目录而非文件", {"status": "tested", "run_evidence": {"log": "somedir"}}),
+        ("布尔值", {"status": "tested", "run_evidence": True}),
+        ("嵌套数组含不存在", {"status": "tested", "run_evidence": {"logs": ["ok", ["absent2.log"]]}}),
+        ("空文件", {"status": "tested", "run_evidence": {"log": "empty.log"}}),
+        ("无关非空文本", {"status": "tested", "run_evidence": {"log": "unrelated.txt"}}),
+        ("符号链接→无关文本", {"status": "tested", "run_evidence": {"log": "link.txt"}}),
+    ]
+    for name, dec in matrix:
+        ok, errs, _ = _opp.validate_card(_c(dec), base_dir=bd)
+        check(f"J2 反例拒收: {name}", not ok)
+
+    # 虚构源码路径（含行号）必须拒
+    ok, errs, _ = _opp.validate_card(
+        _c({"status": "tested", "run_evidence": {"log": "real.log"}},
+           ce="missing/source.py:999 fabricated quote"), base_dir=bd)
+    check("J2 反例拒收: 虚构源码路径", not ok and any("不存在" in e for e in errs))
+
+    # 合法正例：真产物 + 真源码（相对卡目录基准）
+    (bd / "src").mkdir()
+    (bd / "src" / "x.py").write_text("def f():\n    return 42\n", encoding="utf-8")
+    ok, errs, _ = _opp.validate_card(
+        _c({"status": "tested", "run_evidence": {"log": "real.log"}},
+           ce="src/x.py:42"), base_dir=bd)
+    check("J2 正例通过: 真产物+真源码", ok and not errs)
+    ok, errs, _ = _opp.validate_card(
+        _c({"status": "tested", "run_evidence": {"log": str(bd / "real.log")}}), base_dir=bd)
+    check("J2 正例通过: 绝对路径", ok and not errs)
+
+
+# ============ R5/J2：失效 profile 引用 ============
+print("\n[R5] 失效项目引用（research 不得出包）")
+import os as _os2
+with _tf.TemporaryDirectory() as td:
+    sq2, _ = make_env(Path(td))
+    proj = Path(td) / "projects"; proj.mkdir()
+    (proj / "bad.json").write_text(json.dumps({
+        "project_id": "bad", "needs": ["x"],
+        "source_ref": "/definitely/missing",
+        "hashes": {"/definitely/missing": "0" * 64}}), encoding="utf-8")
+    errs = sq2._verify_profile_refs(json.loads((proj / "bad.json").read_text(encoding="utf-8")))
+    check("失效引用被检出（不存在）", any("不存在" in e for e in errs))
+    # 路径不存在时先报「不存在」；零哈希检查在路径存在时生效（下段验证）
+    check("缺失引用至少一条错误", len(errs) >= 2)
+    check("无引用 profile 通过", sq2._verify_profile_refs({"project_id": "ok", "needs": ["x"]}) == [])
+    # 哈希不匹配
+    realf = Path(td) / "src.txt"; realf.write_text("hello", encoding="utf-8")
+    import hashlib as _hl
+    good = _hl.sha256(b"hello").hexdigest()
+    (proj / "h.json").write_text(json.dumps({
+        "project_id": "h", "needs": ["x"], "hashes": {str(realf): good}}), encoding="utf-8")
+    check("哈希匹配通过", sq2._verify_profile_refs(json.loads((proj / "h.json").read_text())) == [])
+    (proj / "z.json").write_text(json.dumps({
+        "project_id": "z", "needs": ["x"], "hashes": {str(realf): "0" * 64}}), encoding="utf-8")
+    check("路径存在但零哈希被检出",
+          any("零/空" in e for e in sq2._verify_profile_refs(json.loads((proj / "z.json").read_text()))))
+    (proj / "h2.json").write_text(json.dumps({
+        "project_id": "h2", "needs": ["x"], "hashes": {str(realf): "ab" * 32}}), encoding="utf-8")
+    check("哈希不匹配被检出",
+          any("不匹配" in e for e in sq2._verify_profile_refs(json.loads((proj / "h2.json").read_text()))))
 
 
 # ============ 汇总 ============

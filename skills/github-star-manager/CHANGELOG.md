@@ -4,6 +4,14 @@
 
 ---
 
+## [0.8.5] - 2026-10-16
+
+### 修复（R5：上游定向复审 UA:GSM-AUDIT-R1R4-REVIEW-261016 gsm 侧返修）
+
+- **F08 证据校验重做（J2，P1）**：`_verify_evidence_paths` 全面重做堵住上游反例矩阵——裸文件名（`run.log`）、目录、布尔/数字、嵌套数组均按类型拒收（此前 `run_evidence: true` 跳过检查）；相对路径以**卡文件目录**为基准（不是 cwd）；符号链接解析到实际目标；URL/状态短词/中文散文不算完成证据，整块无可核验文件时**拒绝**（此前仅 warning）；新增 `_verify_code_evidence` 要求源码证据可回查（`path:line`/commit 哈希，且 `path:line` 的源文件须真实存在——上游反例 `missing/source.py:999 fabricated quote` 被拒）；`_verify_evidence_content` 拒占位/无关文本（上游反例 `unrelated nonempty text` 被拒）
+- **F01 补全（J5，P1）**：`--limit` 截断的快照不再标记为完整——`get_starred_repos` 截断时 `complete=False`，`is_snapshot_submittable` 显式拒绝 `limit_truncated` 快照作基线，`check`/`init` 对截断子集放弃保存与取消判定（上游反例：`--check --limit 1` 曾把未抓到的旧条目误判为取消收藏）
+- **失效项目引用（J2，P1）**：`star_query research` 新增 `_verify_profile_refs`——profile 声明的 `source_ref`/`paths` 本地路径须存在、`hashes` 须匹配（零/空哈希与不匹配均判失效），失效即拒绝出包（上游反例：引用 `/definitely/missing` 且哈希为零仍返回 `status=ok`）
+
 ## [0.8.4] - 2026-10-16
 
 ### 修复（R3：上游终审计 F07 写入协议）
