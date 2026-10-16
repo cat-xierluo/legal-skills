@@ -1,2 +1,1 @@
-@include ./AGENTS.md
-
+@./AGENTS.md
