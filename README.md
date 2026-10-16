@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-16 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.2 | 项目AGENTS精简为行为与交接指引；发布配置及旧历史按需转入reference，通用规范去重，避免污染第三方Skill。 |
+| 2026-10-16 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.3 | 仓库发布配置和AGENTS历史迁至docs，项目入口按需转引；skill-lint保持通用审查职责。 |
 | 2026-10-16 | 更新 | [skill-manager](skills/skill-manager/) | v1.9.0 | 改名软链收敛工具链成型：安装即登记（链接创建自动写 registry install_links）+ relink-skill.py 查表秒级改名收敛（--from-registry），四类来源分级与项目集合目录子项目发现；源码待发布。 |
 | 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.8.6 | 审计 A/B/C/D + 上游复审返修：limit 截断守卫、Agent 查询接口、机会卡证据实质校验（8 类反例全拒）、事务 CAS+前向合并、跨进程写锁 fail-closed、失效引用拒绝。 |
 | 2026-10-15 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.0.1 | 退役删除冻结兼容旧目录，仓库收敛为单一目录名；私人配置与历史 archive 并入新目录，修复断链 hook 与 skill_root；wire schema 与状态路径兼容不变。 |
@@ -667,7 +667,7 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持具体 Harness 失效模式批量定位、旧版指令失稳识别、领域 checker 双向充分性边界、硬要求来源定位、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.9.2</td>
+<td style="text-align:center">v2.9.3</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-lint-2.9.1.zip">旧打包版 v2.9.1</a></td>
 <td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证；所属套件：[法律 Skill 对齐与评测](expert-suites/legal-skill-design-evaluation/)、[Skill 开发与质量保障](expert-suites/skill-development-quality/)、[Skill 发布与分发](expert-suites/skill-release-distribution/)</td></tr>
 <tr>

@@ -1,6 +1,6 @@
 # legal-skills 项目发布配置
 
-仅在维护 **legal-skills 公仓中的公开 Skill** 或审查其发布时读取。它承接根 AGENTS.md 原有项目配置，不是第三方、普通私有 Skill 或所有仓库的默认要求；不要复制到通用模板。通用写法/依赖/脚本防护见[开发指南](skill-dev-guide.md)和[工作流与输出](workflow-output-standards.md)，通用发布检查见[publishing-standards.md](publishing-standards.md)。
+仅在维护 **legal-skills 公仓中的公开 Skill** 或审查其发布时读取。它承接根 AGENTS.md 原有项目配置，不是第三方、普通私有 Skill 或所有仓库的默认要求；不要复制到通用模板。通用写法/依赖/脚本防护见[开发指南](../../skills/skill-lint/references/skill-dev-guide.md)和[工作流与输出](../../skills/skill-lint/references/workflow-output-standards.md)，通用发布检查见[publishing-standards.md](../../skills/skill-lint/references/publishing-standards.md)。
 
 ## 目录与发布来源
 

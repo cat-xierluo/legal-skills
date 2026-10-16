@@ -2,6 +2,13 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.9.3] - 2026-10-16
+
+### 文档完善
+
+- 将 legal-skills 专属发布配置和 AGENTS 旧历史迁至仓库 docs/agent-guides，由项目 AGENTS 按需引用；保留完整历史与发布要求。
+- 移除通用入口和索引中的项目专属路由，发布与元数据规则改为读取被审项目配置，保持 skill-lint 可独立复用。
+
 ## [2.9.2] - 2026-10-16
 
 ### 文档完善

@@ -30,7 +30,7 @@
 | 当前工作 | 权威入口 |
 |---|---|
 | 创建/修改 Skill，检查正文、依赖、脚本、结构与输出 | 使用已安装的 `skill-creator`；规范/验收读 [skill-lint](skills/skill-lint/SKILL.md)，按其索引选模块 |
-| 本仓公开 Skill 的许可、版权、版本、README 与发布字段 | [legal-skills 项目发布配置](skills/skill-lint/references/legal-skills-project-profile.md)，通用发布检查由 skill-lint 维护 |
+| 本仓公开 Skill 的许可、版权、版本、README 与发布字段 | [legal-skills 项目发布配置](docs/agent-guides/legal-skills-project-profile.md)，通用发布检查由 skill-lint 维护 |
 | Git/worktree/PR/合并/稳定采用 | [git-workflow](skills/git-workflow/SKILL.md)；敏感信息与提交隐私直接读其[隐私预检](skills/git-workflow/references/privacy-preflight.md)，泄露处置按其历史撤回流程及原授权 |
 | 上游审计与合并裁定、下游执行交接 | 已安装的 `upstream-audit`；实际派发使用当前已授权执行器，按原任务绑定唯一接续者 |
 | 公开平台同步 | [skill-publish-sync](skills/skill-publish-sync/SKILL.md)，按目标平台现行合同与已有授权执行 |
@@ -43,6 +43,7 @@
 
 | 版本 | 日期 | 更新内容 |
 |---|---|---|
+| v2.0.1 | 2026-10-16 | 项目发布配置与旧历史迁至docs/agent-guides；通用skill-lint只维护通用审查规则 |
 | v2.0.0 | 2026-10-16 | 聚焦任务、角色与交接行为；产物规范按需转引Skill，项目发布配置及旧历史移入skill-lint参考，保留工作树隔离与真实完成边界 |
 
-[v1.11.0及以前的完整记录](skills/skill-lint/references/legal-skills-agents-history.md)。
+[v1.11.0及以前的完整记录](docs/agent-guides/legal-skills-agents-history.md)。
