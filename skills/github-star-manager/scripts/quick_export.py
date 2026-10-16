@@ -57,19 +57,29 @@ def generate_data_js(output_path: Path, projects: List[Dict], categories: List[D
     # 生成分类数据
     categories_str = json.dumps(categories_map, ensure_ascii=False)
 
-    # 原子写（tmp + os.replace）：并发读者永不见半截 data.js（D-7 并发验收教训）
-    import os
+    # R3：与 star-board 共用 output/.gsm-write.lock（原子写 + 跨进程互斥）
+    import os, sys
+    from lockutil import write_lock
     text = f"const PROJECTS_DATA = {projects_str};\n\nconst CATEGORIES_DATA = {categories_str};\n"
-    tmp = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
-    try:
-        tmp.write_text(text, encoding="utf-8")
-        os.replace(tmp, output_path)
-    except OSError:
+
+    def _atomic():
+        tmp = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
         try:
-            tmp.unlink()
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, output_path)
         except OSError:
-            pass
-        raise
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            raise
+
+    try:
+        with write_lock(output_path.parent):
+            _atomic()
+    except TimeoutError as e:
+        print(f"⚠️ {e}；本次降级为原子写（无跨进程互斥）", file=sys.stderr)
+        _atomic()
 
 
 def quick_export(

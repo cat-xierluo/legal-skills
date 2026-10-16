@@ -4,6 +4,13 @@
 
 ---
 
+## [0.8.4] - 2026-10-16
+
+### 修复（R3：上游终审计 F07 写入协议）
+
+- **跨进程写锁（双仓共同协议）**：新增 `scripts/lockutil.py`——`<output>/.gsm-write.lock` + `fcntl.flock(LOCK_EX)` 排他锁，`save_latest`/`generate_dashboard`/`quick_export` 读-改-写全程持锁，闭合 mtime 复检与提交之间的 TOCTOU 竞隙（上游终审：真实双进程反例中技能新增被插件旧读覆盖）；star-board 插件用同一锁文件与同名协议；锁超时（默认 10s）降级为原子写并告警；无 fcntl 平台降级为 no-op
+- **真实双进程交错验收**：`tests/r3_dual_process_check.py`——技能写者与插件写者两真实进程、25 次读-改-写交错，验收最终态为双方并集；**判别力对照成立**（禁用锁时技能侧 0 条全丢 → FAIL；持锁时并集 → PASS）
+
 ## [0.8.3] - 2026-10-16
 
 ### 修复（R1：上游终审计 UA:GSM-AUDIT-ABCD-FINAL-261016 返修）

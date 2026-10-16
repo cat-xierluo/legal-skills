@@ -10,7 +10,10 @@ Dashboard 生成器 - 将 GitHub Star 数据导出为 HTML Dashboard
 
 import json
 import os
+import sys
 from pathlib import Path
+
+from lockutil import write_lock
 
 
 def _atomic_write(path: Path, text: str) -> None:
@@ -25,6 +28,16 @@ def _atomic_write(path: Path, text: str) -> None:
         except OSError:
             pass
         raise
+
+
+def _locked_write(output_dir: Path, path: Path, text: str) -> None:
+    """R3：与 star-board 共用 output/.gsm-write.lock，闭合 TOCTOU 竞隙。"""
+    try:
+        with write_lock(output_dir):
+            _atomic_write(path, text)
+    except TimeoutError as e:
+        print(f"⚠️ {e}；本次降级为原子写（无跨进程互斥）", file=sys.stderr)
+        _atomic_write(path, text)
 
 
 def generate_dashboard(projects: list, output_dir: str = "output") -> dict:
@@ -46,7 +59,7 @@ def generate_dashboard(projects: list, output_dir: str = "output") -> dict:
     json_str = json.dumps(projects, ensure_ascii=False)
     # 修复 JavaScript 不兼容的字符：U+2028 (Line Separator) 和 U+2029 (Paragraph Separator)
     json_str = json_str.replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
-    _atomic_write(data_js_path, f"const PROJECTS_DATA = {json_str};\n")
+    _locked_write(output_path, data_js_path, f"const PROJECTS_DATA = {json_str};\n")
 
     # 查找模板文件（锚定技能目录自身，避免随 cwd 漂移找不到模板）
     example_path = Path(__file__).parent.parent / "assets" / "dashboard.example.html"

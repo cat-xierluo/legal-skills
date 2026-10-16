@@ -32,6 +32,20 @@ from typing import List, Dict, Optional, Set
 from pathlib import Path
 
 
+def _atomic_replace(path: Path, text: str) -> None:
+    """tmp + os.replace 原子替换（读者永不见半截文件）。"""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
 class StarTracker:
     """GitHub Star 更新追踪器"""
 
@@ -663,19 +677,16 @@ README 内容（前6000字）:
             ],
         }
 
-        # 原子写（tmp + os.replace）：并发读者（如 star-board 插件）永不见半截快照
-        # ——D-7 并发验收发现技能端非原子 write 是半截窗口的根源
+        # R3 跨进程写锁（上游终审 F07）：与 star-board 插件共用 output/.gsm-write.lock，
+        # 读-改-写全程持锁——闭合 mtime 复检的 TOCTOU 竞隙。锁超时降级为仅原子写。
         payload = json.dumps(data, ensure_ascii=False, indent=2)
-        tmp = latest_file.with_name(f"{latest_file.name}.{os.getpid()}.tmp")
+        from lockutil import write_lock
         try:
-            tmp.write_text(payload, encoding="utf-8")
-            os.replace(tmp, latest_file)
-        except OSError:
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
-            raise
+            with write_lock(self.CACHE_DIR):
+                _atomic_replace(latest_file, payload)
+        except TimeoutError as e:
+            print(f"⚠️ {e}；本次降级为原子写（无跨进程互斥）")
+            _atomic_replace(latest_file, payload)
 
         return latest_file
 
