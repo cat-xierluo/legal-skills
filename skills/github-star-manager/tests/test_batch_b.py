@@ -625,6 +625,86 @@ with _tf.TemporaryDirectory() as td:
           any("不匹配" in e for e in sq2._verify_profile_refs(json.loads((proj / "h2.json").read_text()))))
 
 
+# ============ R6/J1 事务协议（fail-closed + CAS） ============
+print("\n[R6] J1 事务协议")
+import star_tracker as _st
+from star_tracker import SnapshotConflictError as _SCE
+
+# J1a CAS：基线推进后带旧 base 写被拒
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    def _mkt():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"
+        t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t)
+        t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    t = _mkt()
+    t.save_latest([{"full_name": "base/one", "id": 1}], fetch_meta=meta)
+    base_ts = json.loads((tmp / "original_latest.json").read_text())["timestamp"]
+    # 外部（插件）推进基线
+    t.save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "plugin/x", "id": 2}],
+                  fetch_meta=meta)
+    # skill 带旧 base_ts 写 → 应拒
+    try:
+        _mkt().save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "skill/y", "id": 3}],
+                           fetch_meta=meta, base_timestamp=base_ts)
+        check("J1a CAS 拒绝旧基线写", False)
+    except _SCE:
+        final = {r["full_name"] for r in json.loads((tmp / "original_latest.json").read_text())["repos"]}
+        check("J1a CAS 拒绝旧基线写", "plugin/x" in final)  # 插件确认条目保留
+
+# J1b fail-closed：锁被真实子进程持有时，save 抛 LockUnavailable 且不改数据
+import subprocess
+holder_code = (
+    "import sys,fcntl,os,time;"
+    "fd=os.open(sys.argv[1],os.O_CREAT|os.O_RDWR,0o644);"
+    "fcntl.flock(fd,fcntl.LOCK_EX);print('HELD',flush=True);time.sleep(5)"
+)
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    lk = tmp / ".gsm-write.lock"
+    def _mkt2():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    t = _mkt2()
+    t.save_latest([{"full_name": "base/one", "id": 1}], fetch_meta=meta)
+    before = (tmp / "original_latest.json").read_text()
+    holder = subprocess.Popen([sys.executable, "-c", holder_code, str(lk)],
+                              stdout=subprocess.PIPE, text=True)
+    holder.stdout.readline()  # 等 HELD
+    try:
+        import lockutil
+        # 缩短超时避免真等 10s：直接测 write_lock 超时抛 LockUnavailable
+        try:
+            with lockutil.write_lock(tmp, timeout=0.2):
+                pass
+            check("J1b 锁被持有时 write_lock 抛 LockUnavailable", False)
+        except lockutil.LockUnavailable:
+            check("J1b 锁被持有时 write_lock 抛 LockUnavailable", True)
+        # save 用极短超时也 fail-closed：数据不变
+        import unittest.mock as _m2
+        with _m2.patch("lockutil._DEFAULT_TIMEOUT", 0.2):
+            try:
+                _mkt2().save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "should/not/write", "id": 9}],
+                                    fetch_meta=meta)
+                rejected = False
+            except _SCE:
+                rejected = True
+        check("J1b save_latest 锁不可用 fail-closed 抛错", rejected)
+        check("J1b fail-closed 后旧数据不变",
+              (tmp / "original_latest.json").read_text() == before)
+    finally:
+        holder.terminate(); holder.wait(timeout=10)
+
+
 # ============ 汇总 ============
 print(f"\n{'=' * 50}")
 print(f"结果: {PASS} 通过 / {FAIL} 失败")

@@ -32,6 +32,11 @@ from typing import List, Dict, Optional, Set
 from pathlib import Path
 
 
+class SnapshotConflictError(RuntimeError):
+    """R6/J1a+J1b：基线被外部写者推进（CAS 失败）或跨进程锁不可用时，
+    save_latest fail-closed 拒绝写入的显式信号。调用方可重读最新基线后重试。"""
+
+
 def _atomic_replace(path: Path, text: str) -> None:
     """tmp + os.replace 原子替换（读者永不见半截文件）。"""
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
@@ -606,13 +611,22 @@ README 内容（前6000字）:
 **技术栈**: {repo_info.get('language', '未知')}
 **Stars**: {repo_info.get('stargazers_count', 0)}"""
 
-    def save_latest(self, repos: List[Dict], fetch_meta: Optional[Dict] = None) -> Path:
+    # R6/J1a：跨写者前向合并保留的插件扩展字段（技能全量快照不该丢这些）
+    FORWARD_MERGE_FIELDS = ("description_zh", "tags_zh", "_lite", "reason",
+                            "matched_keywords")
+
+    def save_latest(self, repos: List[Dict], fetch_meta: Optional[Dict] = None,
+                    base_timestamp: Optional[str] = None) -> Path:
         """保存最新数据（包含完整多维度信息，便于 AI 分析）
 
         Args:
             repos: 仓库列表
             fetch_meta: 抓取完整性元数据（来自 get_starred_repos 的 last_fetch_meta）。
                 不传时按「完整性未知」处理，快照标记为 partial 并说明原因。
+            base_timestamp: 调用方读取本次对比基线时的快照 timestamp（R6/J1a CAS）。
+                提供时，锁内重读当前快照：若 timestamp 已被外部写者推进 → 抛
+                SnapshotConflictError（fail-closed，调用方用最新数据重读后再写）；
+                否则在锁内做扩展字段前向合并（description_zh 等插件产物不被全量快照冲掉）。
         """
         latest_file = self.CACHE_DIR / "original_latest.json"
         fetch_time = datetime.now().isoformat()
@@ -680,16 +694,44 @@ README 内容（前6000字）:
             ],
         }
 
-        # R3 跨进程写锁（上游终审 F07）：与 star-board 插件共用 output/.gsm-write.lock，
-        # 读-改-写全程持锁——闭合 mtime 复检的 TOCTOU 竞隙。锁超时降级为仅原子写。
-        payload = json.dumps(data, ensure_ascii=False, indent=2)
-        from lockutil import write_lock
+        # R6/J1a + J1b：锁内重读 + CAS + 前向合并，fail-closed。
+        # 与 star-board 插件共用 output/.gsm-write.lock；读-改-写在同一锁内完成，
+        # 不再"锁外读、锁内盲覆盖"（上游 J1a 反例：插件确认条目被旧读覆盖）。
+        from lockutil import write_lock, LockUnavailable
+
+        def _commit_locked():
+            cur = None
+            if latest_file.exists():
+                try:
+                    cur = json.loads(latest_file.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    cur = None
+            # CAS：基线被外部写者推进则拒绝旧提交
+            if base_timestamp is not None and isinstance(cur, dict):
+                if cur.get("timestamp") != base_timestamp:
+                    raise SnapshotConflictError(
+                        f"快照基线已被外部写者推进（{base_timestamp} → "
+                        f"{cur.get('timestamp')}），本次基于旧读的写入被拒绝（fail-closed），"
+                        f"请用最新数据重读后再写")
+            merged = dict(data)
+            # 前向合并：保留 cur 中插件扩展字段（技能 repos 不含它们）
+            if isinstance(cur, dict) and isinstance(cur.get("repos"), list):
+                cur_extra = {r.get("full_name"): r for r in cur["repos"] if r.get("full_name")}
+                for r in merged["repos"]:
+                    ex = cur_extra.get(r.get("full_name"))
+                    if ex:
+                        for fld in self.FORWARD_MERGE_FIELDS:
+                            if r.get(fld) in (None, "", []) and fld in ex:
+                                r[fld] = ex[fld]
+            merged["timestamp"] = datetime.now().isoformat()
+            _atomic_replace(latest_file, json.dumps(merged, ensure_ascii=False, indent=2))
+
         try:
             with write_lock(self.CACHE_DIR):
-                _atomic_replace(latest_file, payload)
-        except TimeoutError as e:
-            print(f"⚠️ {e}；本次降级为原子写（无跨进程互斥）")
-            _atomic_replace(latest_file, payload)
+                _commit_locked()
+        except LockUnavailable as e:
+            # J1b fail-closed：锁不可用/超时绝不退回无锁写
+            raise SnapshotConflictError(f"跨进程写锁不可用（{e}），已拒绝写入，旧数据保持不变") from e
 
         return latest_file
 
