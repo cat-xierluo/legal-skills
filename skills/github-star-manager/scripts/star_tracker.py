@@ -663,8 +663,19 @@ README 内容（前6000字）:
             ],
         }
 
-        with open(latest_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        # 原子写（tmp + os.replace）：并发读者（如 star-board 插件）永不见半截快照
+        # ——D-7 并发验收发现技能端非原子 write 是半截窗口的根源
+        payload = json.dumps(data, ensure_ascii=False, indent=2)
+        tmp = latest_file.with_name(f"{latest_file.name}.{os.getpid()}.tmp")
+        try:
+            tmp.write_text(payload, encoding="utf-8")
+            os.replace(tmp, latest_file)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            raise
 
         return latest_file
 

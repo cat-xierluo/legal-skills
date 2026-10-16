@@ -57,9 +57,19 @@ def generate_data_js(output_path: Path, projects: List[Dict], categories: List[D
     # 生成分类数据
     categories_str = json.dumps(categories_map, ensure_ascii=False)
 
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(f"const PROJECTS_DATA = {projects_str};\n\n")
-        f.write(f"const CATEGORIES_DATA = {categories_str};\n")
+    # 原子写（tmp + os.replace）：并发读者永不见半截 data.js（D-7 并发验收教训）
+    import os
+    text = f"const PROJECTS_DATA = {projects_str};\n\nconst CATEGORIES_DATA = {categories_str};\n"
+    tmp = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, output_path)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def quick_export(

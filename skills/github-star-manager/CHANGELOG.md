@@ -4,6 +4,12 @@
 
 ---
 
+## [0.8.2] - 2026-10-16
+
+### 修复
+
+- **技能端写入原子化（批次 D 并发验收遗留卡）**：`save_latest`（original_latest.json）、`dashboard_generator.generate_dashboard`（data.js/dashboard.html）、`quick_export.generate_data_js`（data.js）三处非原子 write_text 改为 tmp+os.replace——并发读者（star-board 插件已切权威源读 original_latest）永不见半截文件，写失败旧文件原样保留且无 tmp 残留（D-7 验收抓到的技能端半截窗口根源闭合；插件读侧退避容错保留作双保险）
+
 ## [0.8.1] - 2026-10-15
 
 ### 新增
