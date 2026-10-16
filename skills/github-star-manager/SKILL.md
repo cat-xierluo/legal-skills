@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.8.2"
+version: "0.8.3"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -116,7 +116,7 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
 
 | 依赖 | 安装方式 |
 |------|----------|
-| Python 3.8+ | macOS: `brew install python3`<br>Linux: `sudo apt-get install python3` |
+| Python 3.9+ | macOS: `brew install python3`<br>Linux: `sudo apt-get install python3` |
 
 ### Python 包
 
@@ -141,7 +141,7 @@ pip install -r assets/requirements.txt
 
 ```bash
 # 1. 复制示例配置文件
-cp assets/.env.example .env
+cp assets/.env.example assets/.env
 
 # 2. 编辑 .env 文件，填入你的 API 密钥
 # GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxx
@@ -204,7 +204,7 @@ python scripts/main.py --check --user 你的用户名
 
 ### 5. 生成完整报告
 ```bash
-python scripts/main.py --report --user 你的用户名 --days 7
+python scripts/main.py --report --user 你的用户名 --report-days 7
 ```
 生成包含项目摘要和更新状态的完整报告。
 

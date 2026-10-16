@@ -19,6 +19,7 @@
 """
 
 import sys
+import os
 import json
 import argparse
 import re
@@ -59,6 +60,35 @@ def load_card(path: str) -> Optional[Dict]:
     except Exception as e:
         print(f"❌ 读取失败 {path}: {e}", file=sys.stderr)
         return None
+
+
+def _verify_evidence_paths(block: Dict, label: str,
+                           errors: List[str], warnings: List[str]) -> None:
+    """R1/F08 实质校验：tested/adopted 声称的运行产物与回执里，凡形如本地路径的
+    字符串值必须真实存在且非空——虚构文件不再仅凭字段存在就过关。
+
+    URL 形态无法离线核验，降级为 warning（不做通过依据之外的背书）。
+    """
+    checked = 0
+    for k, v in block.items():
+        if not isinstance(v, str) or not v:
+            continue
+        val = v.strip()
+        if val.startswith(("http://", "https://")):
+            warnings.append(f"{label}.{k}=URL 无法离线核验，采信需人工抽查")
+            continue
+        if "/" not in val and not val.startswith("~"):
+            continue  # 非路径形态（如 'ok'、commit sha），不适用文件校验
+        path = Path(os.path.expanduser(val))
+        checked += 1
+        if not path.exists():
+            errors.append(f"{label}.{k} 指向不存在的路径: {val}——"
+                          f"虚构运行产物/回执不能作为 tested/adopted 证据")
+        elif path.is_file() and path.stat().st_size == 0:
+            errors.append(f"{label}.{k} 指向空文件: {val}——空产物不构成可核实证据")
+    if checked == 0:
+        warnings.append(f"{label} 未含任何可核验的本地路径——按审计红线，"
+                        f"只有字段没有产物时请降级为 experiment_proposed")
 
 
 def validate_card(card: Dict) -> Tuple[bool, List[str], List[str]]:
@@ -126,6 +156,12 @@ def validate_card(card: Dict) -> Tuple[bool, List[str], List[str]]:
                     f"decision.status={status} 缺少 {req}——"
                     f"{'运行产物与验证日志' if req == 'run_evidence' else '采纳产物/提交与验收回执'}"
                     f"不可省略；没有证据时请用 experiment_proposed")
+                continue
+            # R1/F08：字段存在还不够——里面的路径类产物做实质校验（虚构文件拒收）
+            if isinstance(decision[req], dict):
+                _verify_evidence_paths(decision[req], f"decision.{req}", errors, warnings)
+            elif isinstance(decision[req], str) and decision[req].strip():
+                _verify_evidence_paths({req: decision[req]}, f"decision", errors, warnings)
 
     return len(errors) == 0, errors, warnings
 

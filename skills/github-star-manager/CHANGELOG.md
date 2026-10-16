@@ -4,6 +4,14 @@
 
 ---
 
+## [0.8.3] - 2026-10-16
+
+### 修复（R1：上游终审计 UA:GSM-AUDIT-ABCD-FINAL-261016 返修）
+
+- **机会卡证据实质校验（F08 P1）**：tested/adopted 的 run_evidence/adoption_evidence 中凡形如本地路径的值必须真实存在且非空——虚构运行产物/验收回执不再仅凭字段存在过关（空文件同样拒收）；URL 形态离线不可核验降级为警告；无任何可核验路径时提示降级为 experiment_proposed
+- **min_stars/ignore_repos 实际消费（§6 缺口）**：`common.assess_value` 接入两项配置——星数低于 min_stars 判 low；ignore_repos 名单命中（大小写不敏感）判 ignored（显式忽略不参与评级）
+- **文档漂移三处（§6 缺口）**：`--days 7`→`--report-days 7`；`.env` 复制位置改为 `assets/.env`（与 main.py 实际加载路径一致）；Python 声明 3.8+→3.9+（与 `tuple[...]` 类型注解一致）
+
 ## [0.8.2] - 2026-10-16
 
 ### 修复

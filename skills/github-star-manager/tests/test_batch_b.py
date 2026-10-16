@@ -294,9 +294,11 @@ with tempfile.TemporaryDirectory() as td:
         card_dict(decision={"status": "adopted", "run_evidence": {"log": "x"}}))
     check("无 adoption_evidence 的 adopted 被拒", not ok and any("adoption_evidence" in e for e in errors))
 
-    # 带证据的 tested/adopted 通过
+    # 带证据的 tested/adopted 通过（R1 后证据路径必须真实存在——用本临时目录真文件）
+    _real_ev = Path(td) / "run-ev.log"
+    _real_ev.write_text("3 cases pass", encoding="utf-8")
     ok, errors, _ = opp.validate_card(card_dict(decision={
-        "status": "tested", "run_evidence": {"artifacts": "/tmp/run.log", "log": "ok"}}))
+        "status": "tested", "run_evidence": {"artifacts": str(_real_ev), "log": "ok"}}))
     check("带 run_evidence 的 tested 通过", ok)
 
     # starred_at 缺失 → 警告不得声称近期关注
@@ -456,6 +458,80 @@ for s in samples:
     check(f"单分类=多标签首个 ({s['full_name']})",
           (single or {}).get("id") == (expected_first or {}).get("id"))
 check("无匹配时返回 None", t_probe._match_category(samples[3], cat_map) is None)
+
+
+# ============ R1 返修回归（上游终审计 UA:GSM-AUDIT-ABCD-FINAL-261016） ============
+print("\n[R1] min_stars/ignore_repos 消费 + 证据实质校验")
+import common as _common
+import os as _os
+import tempfile as _tf
+
+# min_stars：低于阈值 → low（即便命中关键词也不抬升？不——关键词命中仍 high，只挡纯低星路径）
+cfg = _common.load_value_config(Path("/nonexistent.json"))
+cfg_ms = dict(cfg, min_stars=50)
+check("min_stars 低于阈值判 low",
+      _common.assess_value({"stargazers_count": 10, "language": "Rust", "description": "misc",
+                            "full_name": "a/tiny"}, cfg_ms) == "low")
+check("min_stars 高于阈值不受影响",
+      _common.assess_value({"stargazers_count": 9000, "full_name": "a/big"}, cfg_ms) == "high")
+
+# ignore_repos：忽略名单命中 → ignored（优先于一切评级）
+cfg_ig = dict(cfg, ignore_repos={"ghost/old"})
+check("ignore_repos 命中判 ignored",
+      _common.assess_value({"stargazers_count": 9000, "full_name": "Ghost/Old",
+                            "description": "claude"}, cfg_ig) == "ignored")
+check("ignore_repos 未命中不受影响",
+      _common.assess_value({"stargazers_count": 9000, "full_name": "a/keep"}, cfg_ig) == "high")
+
+# load_value_config 读取完整配置
+with _tf.TemporaryDirectory() as td:
+    _cfg_file = Path(td) / "user_settings.json"
+    _cfg_file.write_text(json.dumps({"value_keywords": ["law"], "min_stars": 30,
+                                     "ignore_repos": ["x/y"]}), encoding="utf-8")
+    c = _common.load_value_config(_cfg_file)
+    check("min_stars 从设置读取", c["min_stars"] == 30)
+    check("ignore_repos 从设置读取并归一大小写", c["ignore_repos"] == {"x/y"})
+
+# 证据实质校验（F08）：虚构路径拒收、空文件拒收、真路径通过
+import opportunity as _opp
+import contextlib as _cl
+import io as _io
+
+def _card_with_evidence(run_ev):
+    return {
+        "signal": {"repo": "a/b", "starred_at": "2026-10-01T00:00:00Z", "source": "测试"},
+        "target": {"project_id": "p", "capability": "c"},
+        "evidence": {"url": "https://github.com/a/b", "code_evidence": "src/x.py"},
+        "gap": "接入缺口", "hypothesis": "h", "experiment": {"consumer": "c"},
+        "decision": {"status": "tested", "run_evidence": run_ev},
+    }
+
+with _tf.TemporaryDirectory() as td:
+    real = Path(td) / "run.log"
+    real.write_text("executed 3 cases, all pass", encoding="utf-8")
+    empty = Path(td) / "empty.log"
+    empty.write_text("", encoding="utf-8")
+
+    buf = _io.StringIO()
+    with _cl.redirect_stdout(buf):
+        ok, errs, warns = _opp.validate_card(_card_with_evidence(
+            {"artifacts": str(real), "log": "ok"}))
+    check("真实产物路径的 tested 通过", ok)
+
+    ok, errs, _ = _opp.validate_card(_card_with_evidence(
+        {"artifacts": str(Path(td) / "ghost" / "fabricated.log")}))
+    check("虚构路径的 tested 被拒", not ok and any("不存在" in e for e in errs))
+
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"artifacts": str(empty)}))
+    check("空文件产物被拒", not ok and any("空文件" in e for e in errs))
+
+    ok, errs, warns = _opp.validate_card(_card_with_evidence(
+        {"report": "https://example.com/report"}))
+    check("URL 证据降级为警告不阻断", ok and any("URL" in w for w in warns))
+
+    ok, errs, warns = _opp.validate_card(_card_with_evidence({"note": "只写了文字"}))
+    check("无路径证据给警告", ok and any("未含任何可核验" in w for w in warns))
+
 
 
 # ============ 汇总 ============
