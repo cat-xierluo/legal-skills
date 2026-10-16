@@ -6,6 +6,9 @@
 2. **任何意外异常 → runner 退出码非零**（旧版吞 Exception 仍 exit0 = 假绿）
 3. 最终态精确核对：每个成功提交的新增/删除必须反映到终态；显式冲突的提交不得在终态
 4. 覆盖新增/取消（删除）/改名（full_name 变、id 不变）/翻译（zh 字段）四类语义
+5. B 单写者模式判别：插件子进程通过 GITHUB_STAR_BOARD_DATA 指向**被测技能**，
+   并回执实际走的写路径（single-writer / fallback）。被测技能协议 ≥2 时要求
+   single-writer——否则这次交错验的还是 R9 直写，不能当 B 的证据。
 
 用法：python3 r3_dual_process_check.py <skill_dir> <plugin_dir> <workdir> [rounds]
 """
@@ -65,9 +68,22 @@ sys.path.insert(0, sys.argv[1])
 import plugin_api as api
 out = Path(sys.argv[2])
 receipt = Path(sys.argv[4])
+mode_file = Path(sys.argv[5])
 api._data_js_path = lambda: out / "data.js"
+# 回执实际写路径：不只看引擎协议——包一层 _save_authoritative 计数，证明每次提交
+# 真的经过了单写者入口（旧插件没有该函数 / 新插件走回退时计数为 0）
+_st, _ = api._load_engine()
+_proto = getattr(_st, "SNAPSHOT_WRITER_PROTOCOL", 0) if _st is not None else 0
+_hits = {"authoritative": 0}
+_orig_sa = getattr(api, "_save_authoritative", None)
+if _orig_sa is not None:
+    def _counted(*a, **k):
+        _hits["authoritative"] += 1
+        return _orig_sa(*a, **k)
+    api._save_authoritative = _counted
 n = int(sys.argv[3])
 fh = open(receipt, "w", encoding="utf-8")
+_ok = _conf = 0
 for i in range(n):
     op = f"plug/{i}"
     try:
@@ -78,15 +94,22 @@ for i in range(n):
             if i % 3 == 0:
                 by.pop(f"plug/{i-3}", None)
             api._dump_projects(list(by.values()), base_mtime_ns=mt)
-        fh.write(json.dumps({"op": op, "result": "ok"}) + "\n")
+        fh.write(json.dumps({"op": op, "result": "ok"}) + "\n"); _ok += 1
     except api._ExternalWriteConflict:
-        fh.write(json.dumps({"op": op, "result": "conflict"}) + "\n")
+        fh.write(json.dumps({"op": op, "result": "conflict"}) + "\n"); _conf += 1
     except TimeoutError:
-        fh.write(json.dumps({"op": op, "result": "conflict"}) + "\n")
+        fh.write(json.dumps({"op": op, "result": "conflict"}) + "\n"); _conf += 1
     except Exception as e:
         fh.write(json.dumps({"op": op, "result": "error", "detail": f"{type(e).__name__}: {e}"}) + "\n")
     time.sleep(0.01)
 fh.close()
+_attempts = _ok + _conf
+_mode = ("single-writer" if (_orig_sa is not None and _attempts > 0
+                             and _hits["authoritative"] == _attempts)
+         else ("no-routing" if _orig_sa is None else "fallback"))
+mode_file.write_text(json.dumps({"mode": _mode, "protocol": _proto,
+                                 "authoritative_calls": _hits["authoritative"],
+                                 "attempts": _attempts}), encoding="utf-8")
 print("PLUGIN_DONE")
 '''
 
@@ -99,15 +122,19 @@ skill_out.mkdir(exist_ok=True)
 
 py = sys.executable
 env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+# 插件子进程的引擎定位 = GITHUB_STAR_BOARD_DATA 的父目录/scripts → 指向被测技能，
+# 否则它会加载机器上已安装的技能（版本不受控，B 路径是否激活就不可判）。
+plugin_env = dict(env, GITHUB_STAR_BOARD_DATA=str(SKILL / "output"))
 sk_receipt = work / "skill.receipt"
 pl_receipt = work / "plugin.receipt"
+pl_mode = work / "plugin.mode"
 
 a = subprocess.Popen([py, str(skill_out / "_sw.py"), str(SKILL / "scripts"), str(skill_out),
                       str(ROUNDS), str(sk_receipt)],
                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
 b = subprocess.Popen([py, str(work / "_pw.py"), str(PLUGIN / "dashboard"), str(skill_out),
-                      str(ROUNDS), str(pl_receipt)],
-                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+                      str(ROUNDS), str(pl_receipt), str(pl_mode)],
+                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=plugin_env)
 ao, ae = a.communicate(timeout=180)
 bo, be = b.communicate(timeout=180)
 
@@ -135,6 +162,27 @@ if be.strip():
 
 snap = skill_out / "original_latest.json"
 problems = []
+
+# 0. B 单写者模式判别：被测技能协议 ≥2 时插件必须走 single-writer，否则这次交错
+#    验证的是 R9 直写回退（两套写者各自持锁），不能充当 B 的证据。
+sys.path.insert(0, str(SKILL / "scripts"))
+import star_tracker as _st_probe  # noqa: E402
+skill_proto = getattr(_st_probe.StarTracker, "SNAPSHOT_WRITER_PROTOCOL", 0)
+mode_info = {}
+if pl_mode.exists():
+    try:
+        mode_info = json.loads(pl_mode.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        mode_info = {}
+plugin_mode = mode_info.get("mode", "unknown")
+print(f"被测技能协议={skill_proto} | 插件实际写路径={plugin_mode}"
+      f"（单写者入口调用 {mode_info.get('authoritative_calls', '?')}/"
+      f"{mode_info.get('attempts', '?')} 次提交尝试）")
+if isinstance(skill_proto, int) and skill_proto >= 2 and plugin_mode != "single-writer":
+    problems.append(f"技能协议 {skill_proto} ≥2 但插件实际走了 {plugin_mode}（B 路径未激活，"
+                    f"交错验证无效）")
+if not pl_mode.exists():
+    problems.append("插件子进程未回执写路径（_load_engine 可能失败或子进程中途退出）")
 
 # 1. 无意外异常（J1c 核心：error 非空即失败；rc 非零也失败）
 if a.returncode != 0:

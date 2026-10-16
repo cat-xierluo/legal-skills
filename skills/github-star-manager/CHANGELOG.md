@@ -4,6 +4,20 @@
 
 ---
 
+## [0.9.0] - 2026-10-16
+
+### 新增（B 单权威写者协议：R9 收敛后的架构收口，双仓同步 Hermes star-board 0.8.0）
+
+- **`StarTracker.SNAPSHOT_WRITER_PROTOCOL = 2`**：声明 `save_latest` 可作为 `original_latest.json` 的**唯一写入口**——star-board 插件读到协议 ≥2 即把 sync/unstar/translate 的全部写入路由给 `save_latest`，flock + 锁内 timestamp CAS + 前向合并 + fail-closed 收敛到技能侧一处实现（此前两仓各持一套锁/复检/代际推进逻辑，R9 验证的是"两套写者互不踩"，B 验证的是"只有一个写者"）。协议缺失/过旧的技能（≤0.8.7）插件自动走原 R9 直写回退，行为不变
+- **zh/_lite 直通规范化**：`save_latest` 的 repos 规范化新增 `description_zh`/`tags_zh`/`_lite`（输入有则写入，无则 None/False；`_lite` 非 bool 归 False）——此前这三项只能靠前向合并从旧快照回填，插件新产出的译文经技能写入会丢。前向合并继续兜底技能 CLI 全量写（不带 zh）的场景
+- **跨仓 runner 模式判别**：`tests/r3_dual_process_check.py` 插件子进程经 `GITHUB_STAR_BOARD_DATA` 指向**被测技能**（此前加载的是机器上已安装的技能，版本不受控），并计数 `_save_authoritative` 实际调用次数回执写路径——被测技能协议 ≥2 时要求 `single-writer`（每次提交尝试都经单写者入口），否则 FAIL。**判别力验证**：新技能+新插件 40/40 PASS；新技能+旧插件(ee3f9dd) 0/25 → `no-routing` FAIL
+- 测试：`test_batch_b.py` 新增 `[B]` 段 9 项（协议常量、首写无基线 zh/_lite 直通、输入优先覆盖、缺字段回填、技能全量写不丢 zh、脏 `_lite` 归 False），115/115
+
+### 边界（NOT_VERIFIED / 诚实声明）
+
+- 负控（R9 旧插件 + 新技能）交错下数据完整性同样成立——B 的价值是**消除第二套写者实现**（单锁/单 CAS/单规范化），不是修复一个已观察到的丢失
+- B 路径在真实部署激活需两仓都采用：技能 ≥0.9.0 **且** 插件 ≥0.8.0；任一侧旧版即回退 R9 直写（兼容但非单写者）
+
 ## [0.8.7] - 2026-10-16
 
 ### 修复（R9 = 上游 R5R8 复审返修，方案 C 有界收敛）

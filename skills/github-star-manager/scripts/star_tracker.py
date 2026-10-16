@@ -615,6 +615,12 @@ README 内容（前6000字）:
     FORWARD_MERGE_FIELDS = ("description_zh", "tags_zh", "_lite", "reason",
                             "matched_keywords")
 
+    # B 方案（单权威写者）协议版本：save_latest 的规范化已直通上述插件扩展字段
+    # （description_zh/tags_zh/_lite 输入有则写入），star-board 插件据此把
+    # original_latest.json 的全部写入路由给 save_latest 而无需锁外补写。
+    # v2 = zh/_lite 直通入规范化 + 接受 base_timestamp CAS（R6 起）。
+    SNAPSHOT_WRITER_PROTOCOL = 2
+
     def save_latest(self, repos: List[Dict], fetch_meta: Optional[Dict] = None,
                     base_timestamp: Optional[str] = None) -> Path:
         """保存最新数据（包含完整多维度信息，便于 AI 分析）
@@ -689,6 +695,12 @@ README 内容（前6000字）:
                     # 其他
                     "default_branch": r.get("default_branch"),
                     "size": r.get("size", 0),  # KB
+
+                    # B 方案：插件扩展字段直接入规范化（输入有则写入，无则 None）；
+                    # 前向合并继续兜底（技能 CLI 不带 zh 时从现有快照恢复）
+                    "description_zh": r.get("description_zh"),
+                    "tags_zh": r.get("tags_zh"),
+                    "_lite": r.get("_lite", False) if isinstance(r.get("_lite"), bool) else False,
                 }
                 for r in repos
             ],

@@ -784,6 +784,45 @@ with _tf.TemporaryDirectory() as td:
         h.terminate(); h.wait(timeout=10)
 
 
+# ============ B 单权威写者协议（插件把写入全部路由给 save_latest） ============
+print("\n[B] 单权威写者协议")
+check("B 协议常量 SNAPSHOT_WRITER_PROTOCOL == 2",
+      getattr(_st.StarTracker, "SNAPSHOT_WRITER_PROTOCOL", 0) == 2)
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    def _mkt3():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    _rd = lambda: {r["full_name"]: r for r in json.loads((tmp / "original_latest.json").read_text())["repos"]}
+    # 1) 无现有快照 → zh/_lite 仍写入：证明是规范化直通，不是前向合并兜的底
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "description_zh": "中文说明",
+                          "tags_zh": ["标签"], "_lite": True},
+                         {"full_name": "a/y", "id": 2}], fetch_meta=meta)
+    got = _rd()
+    check("B zh 直通: 首写无基线 description_zh 入快照", got["a/x"].get("description_zh") == "中文说明")
+    check("B zh 直通: tags_zh 入快照", got["a/x"].get("tags_zh") == ["标签"])
+    check("B zh 直通: _lite=True 入快照", got["a/x"].get("_lite") is True)
+    check("B zh 直通: 无输入时 zh 为 None、_lite 为 False",
+          got["a/y"].get("description_zh") is None and got["a/y"].get("_lite") is False)
+    # 2) 输入 zh 非空 → 覆盖旧值（翻译重跑语义，输入优先）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "description_zh": "新译文"},
+                         {"full_name": "a/y", "id": 2}], fetch_meta=meta)
+    got = _rd()
+    check("B 输入优先: 新 zh 覆盖旧 zh", got["a/x"].get("description_zh") == "新译文")
+    check("B 前向合并: 输入缺 tags_zh 时从现有快照回填", got["a/x"].get("tags_zh") == ["标签"])
+    # 3) 输入不带 zh（技能 CLI 全量写）→ 现有 zh 全部保留（插件依赖此保证）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1}, {"full_name": "a/y", "id": 2}], fetch_meta=meta)
+    got = _rd()
+    check("B 前向合并: 技能全量写不丢插件 zh", got["a/x"].get("description_zh") == "新译文")
+    # 4) _lite 非 bool 输入防御为 False（不把脏值写进权威源）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "_lite": "yes"}], fetch_meta=meta)
+    check("B _lite 非 bool 输入归 False", _rd()["a/x"].get("_lite") is False)
+
+
 # ============ 汇总 ============
 print(f"\n{'=' * 50}")
 print(f"结果: {PASS} 通过 / {FAIL} 失败")
