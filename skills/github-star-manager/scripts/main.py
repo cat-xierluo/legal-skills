@@ -56,8 +56,19 @@ def init_command(tracker: StarTracker, args):
     # 记录数据质量日志
     tracker.log_null_descriptions(repos, source="init")
 
-    # 保存快照（携带完整性元数据）
-    snapshot_file = tracker.save_latest(repos, fetch_meta=fetch_meta or None)
+    # 保存快照（携带完整性元数据 + 基线代际 CAS——R9/G1 接活：插件写方现会 bump
+    # timestamp，若本次 fetch 期间有外部写者提交，save_latest 在锁内检出并拒绝）
+    from star_tracker import SnapshotConflictError as _SCE
+    existing = tracker.load_latest()
+    try:
+        snapshot_file = tracker.save_latest(
+            repos, fetch_meta=fetch_meta or None,
+            base_timestamp=(existing or {}).get("timestamp"))
+    except _SCE as e:
+        print(f"❌ {e}")
+        print("   另一写者（star-board 插件）在本次抓取期间已提交。请直接重跑本命令——"
+              "重跑会读到最新基线，通常一次即成功。")
+        return 1
     print(f"✓ 原始数据已保存: {snapshot_file}")
 
     # 生成项目摘要（可选）
@@ -163,8 +174,16 @@ def check_command(tracker: StarTracker, args):
     # === 新增：数据质量日志 ===
     tracker.log_null_descriptions(current_repos, source="check_incremental")
 
-    # 保存新数据（包含刷新后的元数据与抓取完整性元数据，此时已确认 complete）
-    tracker.save_latest(current_repos, fetch_meta=fetch_meta)
+    # 保存新数据（R9/G1 接活 CAS：传入本次对比开始时的基线 timestamp，
+    # 锁内若检出插件在 fetch 期间已提交则 fail-closed，旧数据保留）
+    from star_tracker import SnapshotConflictError as _SCE
+    try:
+        tracker.save_latest(current_repos, fetch_meta=fetch_meta,
+                           base_timestamp=snapshot.get("timestamp"))
+    except _SCE as e:
+        print(f"❌ {e}")
+        print("   另一写者（star-board 插件）在本次检查期间已提交。请直接重跑本命令。")
+        return 1
 
     # 输出结果
     print("\n" + "=" * 50)

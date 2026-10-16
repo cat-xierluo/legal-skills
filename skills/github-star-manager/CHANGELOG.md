@@ -4,6 +4,15 @@
 
 ---
 
+## [0.8.7] - 2026-10-16
+
+### 修复（R9 = 上游 R5R8 复审返修，方案 C 有界收敛）
+
+- **G1 接活 CAS**：`init_command`/`check_command` 传 `base_timestamp` 到 `save_latest`——上游反例「插件提交后技能旧读覆盖不被拦」现被 CAS 拒；配合 Hermes H1（插件 bump timestamp），跨仓写者代际检测真正生效（跨仓 runner 实测 conflict=1 → 旧读被拒、终态保留全部成功条目）
+- **G3 flag 收窄**：`GSM_ALLOW_UNLOCKED_WRITE=1` 仅放行无 fcntl 平台——超时/打不开锁时无论 flag 与否一律 fail-closed（上游实测旧实现连活锁都能绕）
+- **G4 证据绑定**：tested/adopted 产物须含运行结论结构（exit_code/verdict/tests passed/RESULT/STATUS 模式——会议议程不构成运行证据）；失败指标拒（exit_code≠0/verdict=failed 的回执不签完成）；code_evidence 行号界核验（path:line 不超文件实际行数——999999 虚构行拒）；列表内中文路径不豁免散文规则（合法文件旁夹带不存在中文路径拒）；profile 标量 source_sha256 绑定首个 source_ref 校验
+- **G2 runner 完整性**：逐成功操作核终态（非仅最后一次）——上游变异测试「删掉较早成功的 plug/1 仍 PASS」现被检出（判别力验证：注入删除→FAIL）
+
 ## [0.8.6] - 2026-10-16
 
 ### 修复（R6：上游定向复审 J1 事务协议，gsm 侧）

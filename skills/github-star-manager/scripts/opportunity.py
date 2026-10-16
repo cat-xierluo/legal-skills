@@ -92,7 +92,7 @@ def _verify_evidence_paths(block: Dict, label: str,
     """
     checked = 0
 
-    def _walk(v, path_key: str):
+    def _walk(v, path_key: str, in_list: bool = False):
         nonlocal checked
         if isinstance(v, bool) or isinstance(v, (int, float)) or v is None:
             errors.append(f"{path_key} 类型不支持（{type(v).__name__}）——"
@@ -102,7 +102,7 @@ def _verify_evidence_paths(block: Dict, label: str,
             if not v:
                 warnings.append(f"{path_key} 为空列表")
             for i, item in enumerate(v):
-                _walk(item, f"{path_key}[{i}]")
+                _walk(item, f"{path_key}[{i}]", in_list=True)
             return
         if isinstance(v, dict):
             if not v:
@@ -120,8 +120,13 @@ def _verify_evidence_paths(block: Dict, label: str,
             warnings.append(f"{path_key}=URL 无法离线核验，仅作候选线索，"
                             f"不构成 tested/adopted 证据")
             return
-        if re.search(r"[\u4e00-\u9fff]", val):
-            return  # 中文散文说明
+        if re.search(r"[\u4e00-\u9fff]", val) and not in_list:
+            return  # 中文散文说明（仅限顶层标量字段；列表元素是路径主张，不豁免——R9/J2）
+        if in_list and re.search(r"[\u4e00-\u9fff]", val) and ("/" in val or "\\" in val or Path(val).suffix):
+            # 列表中的中文路径：按路径校验（上游反例：合法文件旁夹带不存在的中文路径）
+            pass  # 落入下方路径校验
+        elif re.search(r"[\u4e00-\u9fff]", val) and in_list:
+            return  # 列表中的中文散文仍豁免（不是路径形态）
         # 状态短词白名单（明确列举，不用通配——否则 "somedir" 这类目录名会被误豁免）
         if val.lower() in _STATUS_WORDS:
             return
@@ -136,6 +141,9 @@ def _verify_evidence_paths(block: Dict, label: str,
             errors.append(f"{path_key} 指向空文件: {val}——空产物不构成可核实证据")
         elif p.is_file():
             _verify_evidence_content(p, path_key, errors)
+            # R9/J2 最小结构绑定：tested/adopted 的产物文件须含可识别的运行结论行
+            # （上游反例：普通会议议程被当运行证据——议程不含 exit_code/verdict 等结构）
+            _verify_run_conclusion(p, path_key, errors)
 
     for k, v in block.items():
         _walk(v, f"{label}.{k}")
@@ -146,6 +154,41 @@ def _verify_evidence_paths(block: Dict, label: str,
         errors.append(f"{label} 未含任何可核验的本地文件——"
                       f"URL/状态词/散文不足以支撑 tested/adopted，"
                       f"请补真实产物路径或降级为 experiment_proposed")
+
+
+# R9/J2 运行结论结构模式（要求 tested/adopted 的证据文件含至少一行结构化结论）
+_RUN_CONCLUSION_RE = re.compile(
+    r"exit[_\s]?code\s*[=:]\s*\d+"          # exit_code=0 / exit code: 1
+    r"|exit[_\s]?status\s*[=:]"               # exit_status=
+    r"|verdict\s*[=:]\s*\w+"                  # verdict=pass
+    r"|tests?\s+\d+\s+(?:passed|failed)"      # tests 5 passed
+    r"|RESULT\s*[=:]"                         # RESULT=PASS
+    r"|STATUS\s*[=:]\s*(?:PASS|FAIL|OK|SUCCESS|FAILED)"  # STATUS=PASS
+    r"|\b(?:passed|failed)\s*[:：]?\s*\d+"    # passed: 5
+, re.I)
+
+# R9/J2 失败指标（出现即拒——上游反例：exit_code=1/verdict=failed 的回执）
+_FAILURE_RE = re.compile(
+    r"exit[_\s]?code\s*[=:]\s*[^0\s]"         # exit_code=非零
+    r"|verdict\s*[=:]\s*(?:fail\w*|error\w*)"  # verdict=failed/error
+    r"|exit[_\s]?status\s*[=:]\s*(?:fail\w*|error\w*)"
+    r"|\bFAILED\s*$"                           # 行尾 FAILED（避免误中 FAILED 案例——限定行尾）
+    r"|STATUS\s*[=:]\s*FAIL"
+, re.I | re.M)
+
+
+def _verify_run_conclusion(path: Path, path_key: str, errors: List[str]) -> None:
+    """R9/J2：tested/adopted 的产物文件须含可识别的运行结论行（最小结构）。"""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    if not _RUN_CONCLUSION_RE.search(text):
+        errors.append(f"{path_key} 文件无运行结论结构（缺 exit_code/verdict/tests/RESULT/"
+                      f"STATUS 等模式）——会议议程或散文不构成运行产物证据")
+    elif _FAILURE_RE.search(text):
+        errors.append(f"{path_key} 文件含失败指标（exit_code 非零/verdict=failed）——"
+                      f"失败回执不能签 tested/adopted，请降级或修复后重试")
 
 
 def _verify_code_evidence(evidence: Dict, errors: List[str],
@@ -165,6 +208,17 @@ def _verify_code_evidence(evidence: Dict, errors: List[str],
                               f"——虚构源码摘录不能作为代码证据")
             elif src.is_dir():
                 errors.append(f"evidence.code_evidence 引用的是目录: {m.group(1)}")
+            elif src.is_file():
+                # R9/J2 行界核验：path:line 的行号不得超文件实际行数
+                try:
+                    n_lines = sum(1 for _ in src.open(encoding="utf-8", errors="replace"))
+                    line_no = int(m.group(2))
+                    if line_no > n_lines:
+                        errors.append(
+                            f"evidence.code_evidence 行号越界: {m.group(1)}:{line_no}"
+                            f"（文件仅 {n_lines} 行）——虚构摘录不能作为代码证据")
+                except OSError:
+                    pass
             return
         if not re.search(r"@[0-9a-f]{7,}|\b[0-9a-f]{7,40}\b", ce):
             errors.append("evidence.code_evidence 无可回查锚点"

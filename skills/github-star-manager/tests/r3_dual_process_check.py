@@ -164,21 +164,41 @@ if snap.exists():
 else:
     problems.append("无终态快照")
 
+# R9/J2 完整性判定：**每个**侧成功提交的条目（未被同侧后续显式删除）必须在终态。
+# 上游反例：删掉较早成功的 plug/1（从未被显式删除），旧 runner 只核最后一次 → PASS 假绿。
 for side, ops in (("skill", sk), ("plugin", pl)):
-    if ops["ok"]:
-        last = ops["ok"][-1]
-        if last not in final:
-            problems.append(f"{side} 最后一次成功提交 {last} 丢失于终态")
+    ok_ops = ops["ok"]
+    if not ok_ops:
+        problems.append(f"{side} 无任何成功提交")
+        continue
+    for op_name in ok_ops:
+        # 该 op 是 "side/N"；同侧后续 op "side/M"（M>N 且 M%3==0）会显式删 side/M-3
+        n = int(op_name.split("/")[1])
+        explicitly_deleted = any(
+            int(later.split("/")[1]) > n
+            and int(later.split("/")[1]) % 3 == 0
+            and int(later.split("/")[1]) - 3 == n
+            for later in ok_ops
+        )
+        if not explicitly_deleted and op_name not in final:
+            problems.append(f"{side} 成功提交 {op_name} 丢失于终态（未被显式删除却不在）")
 
-# 4. 翻译字段保真：插件成功写入且未被更新的 zh，在终态存在（前向合并/CAS 生效）
+# 意外成功也不行：终态中出现从未被任何侧成功提交的条目 → 说明有静默污染
+all_ok = {op for ops in (sk["ok"], pl["ok"]) for op in ops}
+unexpected = {f for f in final if not f.startswith(("skill/", "plug/"))}
+if unexpected:
+    problems.append(f"终态含未由任何成功提交写入的条目: {sorted(unexpected)[:5]}")
+
+# 翻译字段保真：插件成功写入且未被更新的 zh，在终态存在（前向合并/CAS 生效）
 zh_kept = 0
 if snap.exists():
     for r in data.get("repos", []):
         if r.get("description_zh"):
             zh_kept += 1
-print("终态条目数:", len(final), "| 含 zh 翻译字段:", zh_kept)
+print("终态条目数:", len(final), "| 含 zh 翻译字段:", zh_kept,
+      "| 成功集合核验:", len([p for p in problems if "丢失" in p]) == 0)
 
-# 5. complete 语义：终态快照来自全量读时不应 limit_truncated
+# complete 语义：终态快照来自全量读时不应 limit_truncated
 if snap.exists():
     fm = data.get("snapshot_meta", {})
     if fm.get("limit_truncated"):

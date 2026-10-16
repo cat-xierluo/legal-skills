@@ -439,6 +439,8 @@ def _verify_profile_refs(profile: Dict) -> List[str]:
     支持的声明形态：
     - `source_ref` / `paths`：字符串或列表，本地路径须存在（~ 展开、相对项目目录）
     - `hashes` / `source_hashes`：{路径: sha256}，路径存在且哈希须匹配（零/全零视为失效）
+    - `source_sha256`：标量字符串——视为**首个 source_ref 路径**的哈希 pin
+      （R9/J2：上游指出单独声明的 source_sha256 此前被忽略；现与首个引用绑定校验）
 
     失效即返回错误清单——research 不得对无效目标出包。
     """
@@ -459,6 +461,9 @@ def _verify_profile_refs(profile: Dict) -> List[str]:
         if not p.exists():
             errs.append(f"{r} 不存在")
     hashes = profile.get("hashes") or profile.get("source_hashes") or {}
+    # R9/J2：标量 source_sha256 → 绑定首个 source_ref 路径校验（上游：此前被忽略）
+    if not hashes and refs and profile.get("source_sha256"):
+        hashes = {refs[0]: profile["source_sha256"]}
     if isinstance(hashes, dict):
         for r, expected in hashes.items():
             p = Path(os.path.expanduser(str(r)))

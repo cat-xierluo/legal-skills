@@ -296,7 +296,7 @@ with tempfile.TemporaryDirectory() as td:
 
     # 带证据的 tested/adopted 通过（R1 后证据路径必须真实存在——用本临时目录真文件）
     _real_ev = Path(td) / "run-ev.log"
-    _real_ev.write_text("3 cases pass", encoding="utf-8")
+    _real_ev.write_text("3 cases pass\nexit_code=0", encoding="utf-8")
     ok, errors, _ = opp.validate_card(card_dict(decision={
         "status": "tested", "run_evidence": {"artifacts": str(_real_ev), "log": "ok"}}))
     check("带 run_evidence 的 tested 通过", ok)
@@ -508,7 +508,7 @@ def _card_with_evidence(run_ev):
 
 with _tf.TemporaryDirectory() as td:
     real = Path(td) / "run.log"
-    real.write_text("executed 3 cases, all pass", encoding="utf-8")
+    real.write_text("executed 3 cases\nRESULT: PASS\nexit_code=0", encoding="utf-8")
     empty = Path(td) / "empty.log"
     empty.write_text("", encoding="utf-8")
 
@@ -547,7 +547,7 @@ with _tf.TemporaryDirectory() as td:
 print("\n[R5] 上游 J2 证据绕过矩阵")
 with _tf.TemporaryDirectory() as td:
     bd = Path(td)
-    (bd / "real.log").write_text("executed 3 cases, all pass", encoding="utf-8")
+    (bd / "real.log").write_text("executed 3 cases\nRESULT: PASS\nexit_code=0", encoding="utf-8")
     (bd / "empty.log").write_text("", encoding="utf-8")
     (bd / "unrelated.txt").write_text("unrelated nonempty text", encoding="utf-8")
     (bd / "link.txt").symlink_to(bd / "unrelated.txt")
@@ -586,8 +586,8 @@ with _tf.TemporaryDirectory() as td:
     (bd / "src" / "x.py").write_text("def f():\n    return 42\n", encoding="utf-8")
     ok, errs, _ = _opp.validate_card(
         _c({"status": "tested", "run_evidence": {"log": "real.log"}},
-           ce="src/x.py:42"), base_dir=bd)
-    check("J2 正例通过: 真产物+真源码", ok and not errs)
+           ce="src/x.py:2"), base_dir=bd)
+    check("J2 正例通过: 真产物+真源码(行界内)", ok and not errs)
     ok, errs, _ = _opp.validate_card(
         _c({"status": "tested", "run_evidence": {"log": str(bd / "real.log")}}), base_dir=bd)
     check("J2 正例通过: 绝对路径", ok and not errs)
@@ -703,6 +703,85 @@ with _tf.TemporaryDirectory() as td:
               (tmp / "original_latest.json").read_text() == before)
     finally:
         holder.terminate(); holder.wait(timeout=10)
+
+
+# ============ R9 上游反例判别（UA:GSM-R5R8-REVIEW 追加） ============
+print("\n[R9] 上游 R5R8 复审反例")
+with _tf.TemporaryDirectory() as td:
+    bd = Path(td)
+    (bd / "agenda.txt").write_text(
+        "团队周会\n议程：1) 上周进展 2) 本周计划\n与会人：张三、李四\n下次会议：周五",
+        encoding="utf-8")
+    (bd / "failed.log").write_text(
+        "running tests...\nexit_code=1\nverdict=failed", encoding="utf-8")
+    (bd / "src").mkdir()
+    (bd / "src" / "real.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    (bd / "good.log").write_text("tests 5 passed\nexit_code=0", encoding="utf-8")
+    (bd / "中文路径不存在的.log").unlink(missing_ok=True)
+
+    def _c9(dec, ce="commit abc1234"):
+        return {"signal": {"repo": "a/b", "starred_at": "2026-10-01T00:00:00Z", "source": "t"},
+                "target": {"project_id": "p", "capability": "c"},
+                "evidence": {"url": "https://x/y", "code_evidence": ce},
+                "gap": "接入缺口", "hypothesis": "h", "experiment": {"consumer": "c"},
+                "decision": dec}
+
+    # 1. 会议议程作为运行证据 → 拒（无运行结论结构）
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "agenda.txt"}}), base_dir=bd)
+    check("R9 反例拒: 会议议程无运行结论", not ok and any("运行结论" in e for e in errs))
+
+    # 2. 失败回执 → 拒
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "failed.log"}}), base_dir=bd)
+    check("R9 反例拒: exit_code=1/verdict=failed", not ok and any("失败指标" in e for e in errs))
+
+    # 3. 行号越界 → 拒（src/real.py 只有 2 行，引用 :999999）
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "good.log"}},
+            ce="src/real.py:999999 fabricated quote"), base_dir=bd)
+    check("R9 反例拒: 行号 999999 越界", not ok and any("越界" in e for e in errs))
+
+    # 4. 列表夹带不存在的中文路径 → 拒
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested",
+             "run_evidence": {"logs": ["good.log", "中文路径不存在的.log"]}}), base_dir=bd)
+    check("R9 反例拒: 列表夹带不存在中文路径",
+          not ok and any("不存在" in e for e in errs))
+
+    # 正例：合法运行产物+行界内源码 → 过
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "good.log"}},
+            ce="src/real.py:2"), base_dir=bd)
+    check("R9 正例: 合法产物+行界内源码", ok and not errs)
+
+# R9/G3 flag 收窄：活锁下 flag 也不放行
+import subprocess as _sp
+_holder = (
+    "import sys,fcntl,os,time;"
+    "fd=os.open(sys.argv[1],os.O_CREAT|os.O_RDWR,0o644);"
+    "fcntl.flock(fd,fcntl.LOCK_EX);print('HELD',flush=True);time.sleep(5)"
+)
+with _tf.TemporaryDirectory() as td:
+    lk = Path(td) / ".gsm-write.lock"
+    h = _sp.Popen([sys.executable, "-c", _holder, str(lk)],
+                  stdout=_sp.PIPE, text=True)
+    h.stdout.readline()
+    try:
+        import os as _os
+        _os.environ["GSM_ALLOW_UNLOCKED_WRITE"] = "1"
+        import lockutil as _lu
+        import unittest.mock as _m
+        with _m.patch.object(_lu, "_DEFAULT_TIMEOUT", 0.2):
+            try:
+                with _lu.write_lock(Path(td)):
+                    pass
+                check("R9/G3 flag 不放行活锁", False)  # 不应成功
+            except _lu.LockUnavailable:
+                check("R9/G3 flag 不放行活锁", True)
+        del _os.environ["GSM_ALLOW_UNLOCKED_WRITE"]
+    finally:
+        h.terminate(); h.wait(timeout=10)
 
 
 # ============ 汇总 ============

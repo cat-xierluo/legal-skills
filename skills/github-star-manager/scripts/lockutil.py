@@ -63,6 +63,8 @@ def write_lock(output_dir: Path, timeout: Optional[float] = None):
     global _warned_no_flock
     if timeout is None:
         timeout = _DEFAULT_TIMEOUT
+    # R9/G3 收窄：该 flag 仅放行"平台无 fcntl"——上游实测旧实现连活锁都能绕。
+    # 锁被另一进程持有时（超时/打不开），**无论 flag 与否一律 fail-closed**。
     allow_unlocked = os.environ.get("GSM_ALLOW_UNLOCKED_WRITE") == "1"
     if not HAS_FLOCK:
         if allow_unlocked:
@@ -70,16 +72,13 @@ def write_lock(output_dir: Path, timeout: Optional[float] = None):
             return
         raise LockUnavailable(
             "平台无 fcntl，无法保证跨进程互斥"
-            "（确需降级请设 GSM_ALLOW_UNLOCKED_WRITE=1）")
+            "（确需降级请设 GSM_ALLOW_UNLOCKED_WRITE=1，仅限无 fcntl 平台）")
 
     path = lock_path(output_dir)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(str(path), os.O_CREAT | os.O_RDWR, 0o644)
     except OSError as e:
-        if allow_unlocked:
-            yield False
-            return
         raise LockUnavailable(f"无法打开锁文件 {path}: {e}") from e
     deadline = time.monotonic() + max(0.0, timeout)
     acquired = False
@@ -91,12 +90,9 @@ def write_lock(output_dir: Path, timeout: Optional[float] = None):
                 break
             except OSError:
                 if time.monotonic() >= deadline:
-                    if allow_unlocked:
-                        yield False
-                        return
                     raise LockUnavailable(
                         f"等待写锁超时（{timeout}s）：{path}——另一写者持有中，"
-                        f"已拒绝无锁写入")
+                        f"已拒绝无锁写入（GSM_ALLOW_UNLOCKED_WRITE 不放行活锁）")
                 time.sleep(0.05)
         yield True
     finally:
