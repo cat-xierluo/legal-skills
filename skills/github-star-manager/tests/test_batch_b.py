@@ -785,7 +785,7 @@ with _tf.TemporaryDirectory() as td:
 
 
 # ============ B 单权威写者协议（插件把写入全部路由给 save_latest） ============
-print("\n[B] 单权威写者协议")
+print("\n[B] 单权威写者协议（协议 2 合同 a/b/c/d）")
 check("B 协议常量 SNAPSHOT_WRITER_PROTOCOL == 2",
       getattr(_st.StarTracker, "SNAPSHOT_WRITER_PROTOCOL", 0) == 2)
 with _tf.TemporaryDirectory() as td:
@@ -798,7 +798,8 @@ with _tf.TemporaryDirectory() as td:
         return t
     meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
     _rd = lambda: {r["full_name"]: r for r in json.loads((tmp / "original_latest.json").read_text())["repos"]}
-    # 1) 无现有快照 → zh/_lite 仍写入：证明是规范化直通，不是前向合并兜的底
+    # ── 合同 d：zh/_lite 直通 ──
+    # 1) 无现有快照 → zh 仍写入：证明是规范化直通，不是前向合并兜的底；_lite 缺省 → None（B3）
     _mkt3().save_latest([{"full_name": "a/x", "id": 1, "description_zh": "中文说明",
                           "tags_zh": ["标签"], "_lite": True},
                          {"full_name": "a/y", "id": 2}], fetch_meta=meta)
@@ -806,21 +807,105 @@ with _tf.TemporaryDirectory() as td:
     check("B zh 直通: 首写无基线 description_zh 入快照", got["a/x"].get("description_zh") == "中文说明")
     check("B zh 直通: tags_zh 入快照", got["a/x"].get("tags_zh") == ["标签"])
     check("B zh 直通: _lite=True 入快照", got["a/x"].get("_lite") is True)
-    check("B zh 直通: 无输入时 zh 为 None、_lite 为 False",
-          got["a/y"].get("description_zh") is None and got["a/y"].get("_lite") is False)
+    check("B3 新行缺省 _lite → None（非 False，留给前向合并）",
+          got["a/y"].get("description_zh") is None and got["a/y"].get("_lite") is None)
     # 2) 输入 zh 非空 → 覆盖旧值（翻译重跑语义，输入优先）
     _mkt3().save_latest([{"full_name": "a/x", "id": 1, "description_zh": "新译文"},
                          {"full_name": "a/y", "id": 2}], fetch_meta=meta)
     got = _rd()
     check("B 输入优先: 新 zh 覆盖旧 zh", got["a/x"].get("description_zh") == "新译文")
     check("B 前向合并: 输入缺 tags_zh 时从现有快照回填", got["a/x"].get("tags_zh") == ["标签"])
+    # ── B3 矩阵：旧 true + 技能 CLI 形态输入（不带 _lite）→ 保留 true ──
+    check("B3 旧 _lite=true + 缺省输入 → 前向合并保留 true（上游反例）", got["a/x"].get("_lite") is True)
+    # 旧 true + 显式 False → False（明确输入优先）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "_lite": False}], fetch_meta=meta)
+    check("B3 旧 true + 显式 False → False", _rd()["a/x"].get("_lite") is False)
+    # 旧 False + 非法类型 → 按缺省处理 → 回填旧值 False（不把脏值写进权威源）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "_lite": "yes"}], fetch_meta=meta)
+    check("B3 非法 _lite 按缺省处理（回填旧值，不写脏值）", _rd()["a/x"].get("_lite") is False)
     # 3) 输入不带 zh（技能 CLI 全量写）→ 现有 zh 全部保留（插件依赖此保证）
     _mkt3().save_latest([{"full_name": "a/x", "id": 1}, {"full_name": "a/y", "id": 2}], fetch_meta=meta)
-    got = _rd()
-    check("B 前向合并: 技能全量写不丢插件 zh", got["a/x"].get("description_zh") == "新译文")
-    # 4) _lite 非 bool 输入防御为 False（不把脏值写进权威源）
-    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "_lite": "yes"}], fetch_meta=meta)
-    check("B _lite 非 bool 输入归 False", _rd()["a/x"].get("_lite") is False)
+    check("B 前向合并: 技能全量写不丢插件 zh", _rd()["a/x"].get("description_zh") == "新译文")
+
+# ── 合同 a/b：双形态 + normalized_rows 直通（B1 上游反例：v2 行往返 owner/license 变 null、
+#    is_fork/is_archived 变 false、category/value/avatar_url/has_new_release 丢失）──
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    def _mkt4():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    _rd = lambda: {r["full_name"]: r for r in json.loads((tmp / "original_latest.json").read_text())["repos"]}
+    # raw GitHub 对象形态（技能 CLI 路径）：行为与 R9 一致——dict 取 login/spdx_id、fork/archived 原始键、未知键剥离
+    raw = {"full_name": "o/r", "id": 7, "owner": {"login": "o", "avatar_url": "x"}, "license": {"spdx_id": "MIT"},
+           "fork": True, "archived": True, "permissions": {"admin": False}, "node_id": "junk"}
+    _mkt4().save_latest([raw], fetch_meta=meta)
+    g = _rd()["o/r"]
+    check("B1 raw: owner dict → login", g["owner"] == "o")
+    check("B1 raw: license dict → spdx_id", g["license"] == "MIT")
+    check("B1 raw: fork/archived 原始键 → is_fork/is_archived", g["is_fork"] is True and g["is_archived"] is True)
+    check("B1 raw: 未知键剥离（permissions/node_id 不入快照）", "permissions" not in g and "node_id" not in g)
+    check("B1 raw: local_fetched_at 取本次时间", isinstance(g.get("local_fetched_at"), str))
+    # v2 快照行形态（插件 B 路径）：读出的行加扩展字段原样写回 → 全部保真
+    v2 = dict(g)  # 上一步产出的规范化行 = 真实 v2 形态（owner str / license str / is_fork bool）
+    v2.update({"category": "工具", "value": "A", "avatar_url": "https://a/x.png", "has_new_release": True,
+               "description_zh": "译文", "_lite": True, "local_fetched_at": "2026-10-01T00:00:00"})
+    _mkt4().save_latest([v2], fetch_meta=meta, normalized_rows=True)
+    g2 = _rd()["o/r"]
+    check("B1 v2 往返: owner str 保真（不变 null）", g2["owner"] == "o")
+    check("B1 v2 往返: license str 保真", g2["license"] == "MIT")
+    check("B1 v2 往返: is_fork/is_archived 保真（不变 false）", g2["is_fork"] is True and g2["is_archived"] is True)
+    check("B1 v2 直通: category/value 保留", g2.get("category") == "工具" and g2.get("value") == "A")
+    check("B1 v2 直通: avatar_url/has_new_release 保留",
+          g2.get("avatar_url") == "https://a/x.png" and g2.get("has_new_release") is True)
+    check("B1 v2 往返: local_fetched_at 保留（插件写入不是重新抓取）", g2["local_fetched_at"] == "2026-10-01T00:00:00")
+    check("B1 v2 往返: zh/_lite 随行", g2["description_zh"] == "译文" and g2["_lite"] is True)
+    # 二次往返不退化（canonical 行再规范化幂等）
+    _mkt4().save_latest([dict(g2)], fetch_meta=meta, normalized_rows=True)
+    g3 = _rd()["o/r"]
+    check("B1 v2 二次往返幂等", {k: v for k, v in g3.items()} == {k: v for k, v in g2.items()})
+    # 不带 flag 的 v2 行：已知映射仍双形态兼容（owner/license/is_* 不降级），但未知键按 raw 规则剥离
+    _mkt4().save_latest([dict(g2)], fetch_meta=meta)
+    g4 = _rd()["o/r"]
+    check("B1 无 flag 的 v2 行: 已知字段不降级", g4["owner"] == "o" and g4["is_fork"] is True)
+    check("B1 无 flag: 未知扩展键由前向合并兜底（已知合并集之外的不保证）",
+          g4.get("description_zh") == "译文" and g4.get("_lite") is True)
+
+# ── 合同 c：lock_timeout 显式参数（B4：不再要求调用方临时改 lockutil 全局）──
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    lk = tmp / ".gsm-write.lock"
+    def _mkt5():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    _mkt5().save_latest([{"full_name": "base/one", "id": 1}], fetch_meta=meta)
+    before = (tmp / "original_latest.json").read_text()
+    h = _sp.Popen([sys.executable, "-c", _holder, str(lk)], stdout=_sp.PIPE, text=True)
+    h.stdout.readline()
+    try:
+        import lockutil as _lu2
+        _default_before = _lu2._DEFAULT_TIMEOUT
+        t0 = __import__("time").monotonic()
+        try:
+            _mkt5().save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "x/y", "id": 2}],
+                                fetch_meta=meta, lock_timeout=0.2)
+            rejected = False
+        except _SCE:
+            rejected = True
+        dt = __import__("time").monotonic() - t0
+        check("B4 lock_timeout=0.2 持锁时 fail-closed 抛 SnapshotConflictError", rejected)
+        check("B4 lock_timeout 确实生效（<2s 返回，而非等 10s 默认）", dt < 2.0, f"dt={dt:.2f}")
+        check("B4 旧数据不变", (tmp / "original_latest.json").read_text() == before)
+        check("B4 未触碰 lockutil 全局默认值", _lu2._DEFAULT_TIMEOUT == _default_before)
+    finally:
+        h.terminate(); h.wait(timeout=10)
 
 
 # ============ 汇总 ============

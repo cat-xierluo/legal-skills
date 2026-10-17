@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.9.0 | B 单权威写者协议：`SNAPSHOT_WRITER_PROTOCOL=2` + zh/_lite 直通规范化，star-board 插件把全部写入路由给 `save_latest`（单锁/单 CAS/单规范化）；跨仓 runner 按实际调用计数判别写路径（负控旧插件 0/25 FAIL）。 |
+| 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.9.0 | B 单权威写入口协议：`SNAPSHOT_WRITER_PROTOCOL=2`——save_latest 双形态规范化（raw/v2 行往返保真）+ `normalized_rows` 扩展字段直通 + `lock_timeout` 显式参数 + `_lite` 缺省可回填；star-board 插件把全部写入路由给它（单锁/单 CAS/单规范化）；跨仓 runner 按实际调用计数判别写路径（新+新 PASS / 新技能+旧插件 FAIL / 旧技能+新插件回退 PASS）。 |
 | 2026-10-16 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.3 | 仓库发布配置和AGENTS历史迁至docs，项目入口按需转引；skill-lint保持通用审查职责。 |
 | 2026-10-16 | 更新 | [skill-manager](skills/skill-manager/) | v1.9.0 | 改名软链收敛工具链成型：安装即登记（链接创建自动写 registry install_links）+ relink-skill.py 查表秒级改名收敛（--from-registry），四类来源分级与项目集合目录子项目发现；源码待发布。 |
 | 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.8.6 | 审计 A/B/C/D + 上游复审返修：limit 截断守卫、Agent 查询接口、机会卡证据实质校验（8 类反例全拒）、事务 CAS+前向合并、跨进程写锁 fail-closed、失效引用拒绝。 |
