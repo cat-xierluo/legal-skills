@@ -2,7 +2,7 @@
 name: slides
 license: MIT
 metadata:
-  version: "1.5.15"
+  version: "1.5.16"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 description: 幻灯片全流程创作工具。本技能应在需要从文稿或主题生成精美幻灯片、将 HTML 转换为可编辑 PPTX/PDF、从现有课件提取风格、或围绕主题做结构化研究时使用。不要用于纯文档排版（用 md2word）或图片处理（用 imagemagick）。

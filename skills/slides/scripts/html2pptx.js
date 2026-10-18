@@ -38,6 +38,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
+const { fileURLToPath, pathToFileURL } = require('node:url');
 const sharp = require('sharp');
 
 const PT_PER_PX = 0.75;
@@ -265,7 +266,7 @@ function validateTextBoxPosition(slideData, bodyDimensions) {
 async function addBackground(slideData, targetSlide, pres) {
   if (slideData.background.type === 'image' && slideData.background.path) {
     let imagePath = slideData.background.path.startsWith('file://')
-      ? slideData.background.path.replace('file://', '')
+      ? fileURLToPath(slideData.background.path)
       : slideData.background.path;
     const width = pres?.presLayout?.width ? pres.presLayout.width / EMU_PER_IN : 10;
     const height = pres?.presLayout?.height ? pres.presLayout.height / EMU_PER_IN : 5.625;
@@ -281,7 +282,7 @@ async function addBackground(slideData, targetSlide, pres) {
 function addElements(slideData, targetSlide, pres) {
   for (const el of slideData.elements) {
     if (el.type === 'image') {
-      let imagePath = el.src.startsWith('file://') ? el.src.replace('file://', '') : el.src;
+      let imagePath = el.src.startsWith('file://') ? fileURLToPath(el.src) : el.src;
       targetSlide.addImage({
         path: imagePath,
         x: el.position.x,
@@ -1181,7 +1182,7 @@ async function html2pptx(htmlFile, pres, options = {}) {
         console.log(`Browser console: ${msg.text()}`);
       });
 
-      await page.goto(`file://${filePath}`);
+      await page.goto(pathToFileURL(filePath).href);
 
       if (forceViewport) {
         // Force viewport to match PPTX layout dimensions
@@ -1222,7 +1223,7 @@ async function html2pptx(htmlFile, pres, options = {}) {
       });
 
       if (frozenBackgroundPath) {
-        await page.goto(`file://${filePath}`);
+        await page.goto(pathToFileURL(filePath).href);
         await page.setViewportSize({ width: Math.round(targetWidth), height: Math.round(targetHeight) });
         await page.evaluate((w, h) => {
           const style = document.createElement('style');
@@ -1333,7 +1334,7 @@ async function html2pptxMulti(htmlFile, pres, options = {}) {
       console.log(`Browser console: ${msg.text()}`);
     });
 
-    await page.goto(`file://${filePath}`);
+    await page.goto(pathToFileURL(filePath).href);
 
     // Detect slide containers and their dimensions
     const slideInfo = await page.evaluate(({ sel }) => {
@@ -1401,7 +1402,7 @@ async function html2pptxMulti(htmlFile, pres, options = {}) {
 
       try {
         await slidePage.setViewportSize({ width: Math.round(targetWidth), height: Math.round(targetHeight) });
-        await slidePage.goto(`file://${filePath}`);
+        await slidePage.goto(pathToFileURL(filePath).href);
         await waitForStablePaint(slidePage, 0);
 
         const selector = slideSelector || '.slide, section[class*="slide"], section';
@@ -1417,7 +1418,7 @@ async function html2pptxMulti(htmlFile, pres, options = {}) {
         });
 
         if (frozenBackgroundPath) {
-          await slidePage.goto(`file://${filePath}`);
+          await slidePage.goto(pathToFileURL(filePath).href);
           await slidePage.setViewportSize({ width: Math.round(targetWidth), height: Math.round(targetHeight) });
           await waitForStablePaint(slidePage, 0);
         }

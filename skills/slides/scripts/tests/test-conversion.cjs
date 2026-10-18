@@ -70,4 +70,22 @@ with zipfile.ZipFile(sys.argv[1]) as z:
  // Text boxes include a small vertical font-metric adjustment, but must retain padding.
  assert.ok(Math.abs(actual.y-expected.y)<8,JSON.stringify({expected,actual}));
 });
+test('local file URLs preserve spaces, Unicode, hash and percent characters',{timeout:90000},()=>{
+ const {pathToFileURL}=require('node:url');
+ const dir=path.join(tmp,'本地 素材 #50%');fs.mkdirSync(dir);
+ const img=path.join(dir,'图片 #1%.png');
+ // Tiny synthetic PNG; no personal material enters the fixture or package.
+ fs.writeFileSync(img,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6s3sAAAAASUVORK5CYII=','base64'));
+ const html=path.join(dir,'课件 #1%.html');const uri=pathToFileURL(img).href;
+ fs.writeFileSync(html,`<!doctype html><style>body{margin:0}.slide{width:1280px;height:720px;position:relative;display:flex;flex-direction:column;overflow:hidden}p{font:24px Arial;margin:30px}img{width:100px;height:100px}</style><section class="slide"><p>Local image</p><img src="${uri}"></section><section class="slide" style="background-image:url('${uri}')"><p>Local background</p></section>`);
+ const out=path.join(dir,'结果 #1%');
+ const result=run([html,'-o',out,'--format','both']);assert.equal(result.status,0,result.stdout+result.stderr);
+ inspectPdf(out+'.pdf');
+ execFileSync('python3',['-c',`import zipfile,sys
+with zipfile.ZipFile(sys.argv[1]) as z:
+ media=[z.read(n) for n in z.namelist() if n.startswith('ppt/media/')]
+ original=open(sys.argv[2],'rb').read()
+ assert media.count(original)>=2, 'Both inline image and background must retain original bytes'
+`,out+'.pptx',img]);
+});
 process.on('exit',()=>{fs.rmSync(tmp,{recursive:true,force:true});});

@@ -1,6 +1,6 @@
 {
   "name": "html2pptx",
-  "version": "1.5.15",
+  "version": "1.5.16",
   "description": "将 HTML 幻灯片转换为高保真可编辑 PPTX 或 PDF",
   "main": "html2pptx.js",
   "scripts": {
