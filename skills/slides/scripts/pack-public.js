@@ -12,7 +12,7 @@
  * USAGE:
  *   node pack-public.js --list            # 打印纳入/排除/缺失，并扫描（不写盘）
  *   node pack-public.js --out-dir <dir>   # 解包到目录，便于逐项检查
- *   node pack-public.js --out <zip>       # 生成 zip（需系统 zip 命令）
+ *   node pack-public.js --out <zip>       # 生成 zip（需 Python 3 标准库，保留中文文件名）
  *
  * 公私区分约定：Git 跟踪的 = 可发布通用内容；被 .gitignore 忽略的
  * （config/local/、config/*.local.*、assets/local/ 等）= 使用者私有，永不入包。
@@ -247,7 +247,7 @@ function main() {
     if (args.outZip) {
       const zipPath = path.resolve(args.outZip);
       const stagedZip = path.join(stage, 'release.zip');
-      execFileSync('zip', ['-r', '-q', stagedZip, 'slides'], { cwd: stage });
+      execFileSync('python3', ['-m', 'zipfile', '-c', stagedZip, 'slides'], { cwd: stage });
       fs.copyFileSync(stagedZip, zipPath, fs.constants.COPYFILE_EXCL);
       console.log(`\n已生成压缩包: ${zipPath}`);
     }

@@ -22,6 +22,9 @@ test('packaging blocks leakage, missing links, symlinks and destructive destinat
  try{
   for(const rel of baseline.files){const dest=path.join(stage,rel);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.copyFileSync(path.join(root,rel),dest);}
   const clean=run(stage,['--out-dir',path.join(tmp,'bundle')]);assert.equal(clean.status,0,clean.stdout+clean.stderr);
+  const zip=path.join(tmp,'bundle.zip');const zipped=run(stage,['--out',zip]);assert.equal(zipped.status,0,zipped.stdout+zipped.stderr);
+  const zipCheck=spawnSync('python3',['-c',"import sys,zipfile,pathlib; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; names=[n for n in z.namelist() if not n.endswith('/')]; assert len(names)==int(sys.argv[3]); assert all(z.read(n)==(pathlib.Path(sys.argv[2])/n.removeprefix('slides/')).read_bytes() for n in names)",zip,stage,String(baseline.files.length)],{encoding:'utf8'});
+  assert.equal(zipCheck.status,0,zipCheck.stdout+zipCheck.stderr);
   const sentinel=path.join(tmp,'bundle','sentinel');fs.writeFileSync(sentinel,'keep');
   assert.notEqual(run(stage,['--out-dir',path.join(tmp,'bundle')]).status,0);assert.equal(fs.readFileSync(sentinel,'utf8'),'keep');
   assert.notEqual(run(stage,['--out-dir']).status,0);assert.notEqual(run(stage,['--unknown']).status,0);

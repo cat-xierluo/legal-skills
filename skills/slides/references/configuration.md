@@ -121,9 +121,9 @@ node scripts/load-profile.js --footer   # 仅页脚文本
 - 技能作者署名与 LICENSE 中的版权信息属发布元数据，与「生成课件的讲者身份」分开，去个人化时不删必要署名。
 - 发布打包过**「具体名称门禁」**（`scripts/check-privacy.js`，随包分发）：通用模式检测，不依赖任何私有名单——具体机构名（地名+机构后缀）、人名+职称、绝对机路径、内部编号/memo、联系方式、个人素材文件名、真实课程路径，以及日期与项目语境、来源标签与版本/页码的组合标识；**配置文件从严**（config/ 与 profile 类文件的身份、联系、素材字段必须为空模板）。有意保留的作者署名通过 INTENTIONAL 登记表豁免（逐条 file+正则+理由，可审计）。门禁不过则拒绝打包。
 
-- 运行 `node scripts/pack-public.js --list` 核对公开清单，或 `--out <新的 zip 路径>` / `--out-dir <新的目录路径>` 生成包；输出必须在技能目录外且不存在。打包器同时核对相对 Markdown 链接，拒绝符号链接，并复扫实际暂存字节。
+- 运行 `node scripts/pack-public.js --list` 核对公开清单，或 `--out <新的 zip 路径>` / `--out-dir <新的目录路径>` 生成包；输出必须在技能目录外且不存在；ZIP 打包使用 Python 3 标准库，以正确记录中文文件名编码。打包器同时核对相对 Markdown 链接，拒绝符号链接，并复扫实际暂存字节。
 - 模式扫描不识别所有简称、跨段组合或图片内文字。发布前仍须人工复核纳入文件与素材；发现具体来源时保留技术经验、泛化识别信息，不通过扩大署名豁免绕过检查。
 
 ### 维护者回归
 
-在 `scripts/` 运行 `npm run test:privacy`、`npm run test:publication`、`npm run test:conversion`。前两项只需 Node.js；转换回归需要已安装的 npm 依赖和 Playwright Chromium，以及 Python 3（检查 PPTX ZIP/XML）、Poppler 的 `pdfinfo`（检查 PDF 页数）。这些额外工具仅用于维护者回归，不是日常转换依赖。PDF 专项回归为 `node tests/test-html2pdf-fidelity.mjs`。
+在 `scripts/` 运行 `npm run test:privacy`、`npm run test:publication`、`npm run test:conversion`。隐私回归只需 Node.js；打包回归还需 Python 3 校验 ZIP 中文文件名；转换回归需要已安装的 npm 依赖和 Playwright Chromium，以及 Python 3（检查 PPTX ZIP/XML）、Poppler 的 `pdfinfo`（检查 PDF 页数）。这些额外工具仅用于维护者回归，不是日常转换依赖。PDF 专项回归为 `node tests/test-html2pdf-fidelity.mjs`。
