@@ -1,0 +1,107 @@
+{
+  "name": "赛博朋克",
+  "description": "赛博朋克霓虹风格。深黑底 + 霓虹粉/青/紫高亮，未来感强。适合科技创意、游戏发布、数字艺术。",
+  "source": "cyberpunk design language",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#0A0A0F",
+      "#12121A"
+    ],
+    "textColors": [
+      "#E0E0FF",
+      "#8888AA"
+    ],
+    "accents": [
+      "#FF0080",
+      "#00FFFF",
+      "#8B5CF6"
+    ],
+    "dividers": [
+      "#2A2A3A"
+    ],
+    "palette": [
+      "#0A0A0F",
+      "#12121A",
+      "#FF0080",
+      "#00FFFF",
+      "#8B5CF6",
+      "#E0E0FF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "JetBrains Mono",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'JetBrains Mono', monospace",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      44,
+      32
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "52px",
+    "sectionGap": "24px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "asymmetric-tech",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "未来",
+      "霓虹",
+      "数字",
+      "反叛"
+    ]
+  },
+  "prohibited": [
+    "pastel",
+    "serif-fonts",
+    "natural-colors",
+    "light-background"
+  ],
+  "promptSnippet": "Cyberpunk style. Near-black (#0A0A0F / #12121A) with neon magenta (#FF0080), cyan (#00FFFF) and violet (#8B5CF6) as signage light, plus pale text (#E0E0FF). JetBrains Mono throughout, scanlines and chromatic edges used sparingly. Loud, digital, deliberately excessive.",
+  "components": [
+    {
+      "type": "glitch-title",
+      "usage": "故障风标题",
+      "style": "border-left: 3px solid #FF0080; padding: 6px 0 6px 20px; font-family: 'JetBrains Mono', monospace; font-size: 24px; color: #E0E0FF"
+    },
+    {
+      "type": "terminal-block",
+      "usage": "终端输出块",
+      "style": "background: #0A0A0F; color: #E0E0FF; padding: 20px; border-radius: 6px"
+    },
+    {
+      "type": "status-led",
+      "usage": "状态指示",
+      "style": "display: inline-block; border: 1px solid #FF0080; color: #FF0080; border-radius: 999px; padding: 2px 10px; font-family: 'PingFang SC', sans-serif; font-size: 12px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#0A0A0F",
+    "--ink-rgb": "10,10,15",
+    "--paper": "#12121A",
+    "--paper-rgb": "18,18,26",
+    "--accent": "#FF0080",
+    "--accent-light": "#00FFFF",
+    "--accent-alt": "#8B5CF6",
+    "--muted": "#8888AA",
+    "--surface": "#2A2A3A"
+  }
+}

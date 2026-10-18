@@ -1,0 +1,122 @@
+{
+  "name": "商务权威",
+  "description": "正式经典商务风格。深蓝主色体现专业感，红色突出关键数据。适合年度报告、财务分析、企业介绍、政府公文。",
+  "source": "design-system #2 Business & Authority",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#2B2D42",
+      "#EDF2F4",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#2B2D42",
+      "#8D99AE"
+    ],
+    "accents": [
+      "#EF233C",
+      "#D90429"
+    ],
+    "palette": [
+      "#2B2D42",
+      "#8D99AE",
+      "#EDF2F4",
+      "#EF233C",
+      "#D90429",
+      "#FFFFFF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14,
+      12
+    ],
+    "smallSizes": [
+      10,
+      9
+    ],
+    "lineHeight": [
+      1.5
+    ]
+  },
+  "spacing": {
+    "pagePadding": "80px",
+    "sectionGap": "36px",
+    "itemGap": "18px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "正式",
+      "专业",
+      "权威",
+      "规范"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "playful-fonts",
+    "animation",
+    "rounded-card",
+    "informal-tone",
+    "bright-neon"
+  ],
+  "promptSnippet": "Formal corporate style. Deep navy (#2B2D42) as the primary, a muted blue-grey (#8D99AE) for secondary structure, and signal red (#EF233C / #D90429) reserved strictly for the single most important number. Crisp grid, formal type, no playfulness. Reads as an annual report or government document.",
+  "components": [
+    {
+      "type": "cover-band",
+      "usage": "封面色带",
+      "style": "background: #2B2D42; color: #FFFFFF; padding: 20px; border-radius: 6px"
+    },
+    {
+      "type": "figure-block",
+      "usage": "图表块",
+      "style": "background: #2B2D42; border-top: 2px solid #EF233C; padding: 16px 20px"
+    },
+    {
+      "type": "key-number",
+      "usage": "关键数字",
+      "style": "font-family: Microsoft YaHei; font-size: 44px; font-weight: 700; line-height: 1.05; color: #EF233C"
+    },
+    {
+      "type": "body-row",
+      "usage": "正文行",
+      "style": "border-top: 1px solid #FFFFFF; padding: 12px 0; font-family: Microsoft YaHei"
+    }
+  ],
+  "cssVariables": {
+    "--primary": "#2B2D42",
+    "--accent": "#EF233C",
+    "--accent-dark": "#D90429",
+    "--bg-light": "#EDF2F4",
+    "--text-muted": "#8D99AE"
+  },
+  "presets": {
+    "styleRecipe": "Soft & Balanced",
+    "rectRadius": 0.1,
+    "pageMargin": 0.4
+  }
+}

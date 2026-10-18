@@ -1,0 +1,111 @@
+{
+  "name": "法律黑金",
+  "description": "深色专业风格。黑底配金色/琥珀色强调色，极简克制。适合法律讲座、培训课件、专业演示。",
+  "source": "从实际授课课件提取",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#18181B",
+      "#FAFAF8",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#18181B",
+      "#52525B"
+    ],
+    "accents": [
+      "#D97706",
+      "#F59E0B"
+    ],
+    "palette": [
+      "#18181B",
+      "#D97706",
+      "#FAFAF8",
+      "#FFFFFF",
+      "#52525B"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "PingFang SC",
+      "Microsoft YaHei"
+    ],
+    "titleSizes": [
+      49.7,
+      32.5,
+      34.5
+    ],
+    "bodySizes": [
+      18,
+      16.9
+    ],
+    "smallSizes": [
+      12.7
+    ],
+    "lineHeight": [
+      1.6,
+      1.5
+    ]
+  },
+  "spacing": {
+    "pagePadding": "88px",
+    "sectionGap": "40px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      62,
+      39
+    ],
+    "contentWidth": 876
+  },
+  "tone": {
+    "keywords": [
+      "专业克制",
+      "权威",
+      "沉稳",
+      "聚焦"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "rounded-card",
+    "heavy-shadow",
+    "playful-fonts",
+    "bright-saturated-color",
+    "stock-photo"
+  ],
+  "promptSnippet": "Legal-conference style. Near-black background (#18181B) with a single restrained amber-gold accent (#D97706) used only for the element that matters most on each slide. Off-white (#FAFAF8) body text, generous margins, no decoration. Authority comes from restraint and typographic weight, never from ornament. One idea per slide.",
+  "components": [
+    {
+      "type": "box-dark",
+      "style": "background: #18181B; color: #D97706; border-radius: 8px"
+    },
+    {
+      "type": "deco-line",
+      "style": "height: 0.78px; background: #D97706"
+    },
+    {
+      "type": "box-light-accent",
+      "style": "background: rgba(217,119,6,0.05); border-left: 3px solid #D97706"
+    },
+    {
+      "type": "badge",
+      "style": "font-size: 12.7px; color: #D97706; border: 0.7px solid #D97706"
+    }
+  ],
+  "cssVariables": {
+    "--primary": "#18181B",
+    "--accent": "#D97706",
+    "--accent-light": "#F59E0B",
+    "--bg-light": "#FAFAF8",
+    "--text-muted": "#52525B"
+  }
+}

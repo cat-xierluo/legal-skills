@@ -1,0 +1,113 @@
+{
+  "name": "教育绿",
+  "description": "深绿+橙色的教育风格。适合培训课程、教育讲座、知识分享。",
+  "source": "templates.md Edu 配色方案",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FEF3C7",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#166534",
+      "#0A3D1F"
+    ],
+    "accents": [
+      "#EA580C",
+      "#FED7AA"
+    ],
+    "palette": [
+      "#166534",
+      "#0A3D1F",
+      "#FEF3C7",
+      "#EA580C",
+      "#FED7AA",
+      "#FFFFFF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.5,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "80px",
+    "sectionGap": "36px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "亲切",
+      "教学",
+      "清晰",
+      "鼓励"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "neon",
+    "dark-background",
+    "dense-text",
+    "formal-bureaucratic"
+  ],
+  "promptSnippet": "Training-course style. Deep green (#166534 / #0A3D1F) as the anchor with warm cream (#FEF3C7) surfaces and orange (#EA580C) for highlights, key terms and call-outs. Friendly sans type, clear section breaks, generous line spacing for readability from the back of a room.",
+  "components": [
+    {
+      "type": "chapter-rule",
+      "usage": "章节线",
+      "style": "height: 1px; background: #FFFFFF"
+    },
+    {
+      "type": "highlight-mark",
+      "usage": "高亮标记",
+      "style": "border-left: 3px solid #EA580C; padding: 6px 0 6px 20px; font-family: Microsoft YaHei; font-size: 24px; color: #166534"
+    },
+    {
+      "type": "list-row",
+      "usage": "清单行",
+      "style": "border-top: 1px solid #FFFFFF; padding: 12px 0; font-family: Microsoft YaHei"
+    },
+    {
+      "type": "callout",
+      "usage": "提示框",
+      "style": "background: #FEF3C7; border: 1px solid #FFFFFF; border-left: 3px solid #EA580C; padding: 12px 18px; font-family: Microsoft YaHei; color: #166534"
+    }
+  ],
+  "cssVariables": {
+    "--primary": "#166534",
+    "--primary-dark": "#0a3d1f",
+    "--secondary": "#fef3c7",
+    "--accent": "#ea580c",
+    "--accent-light": "#fed7aa"
+  }
+}

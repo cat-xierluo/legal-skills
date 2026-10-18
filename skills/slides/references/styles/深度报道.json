@@ -1,0 +1,122 @@
+{
+  "name": "深度报道",
+  "description": "原创编辑杂志风格。暖骨白纸面 + 墨黑正文 + 单一砖红强调，超大衬线标题与细分隔线构成编辑层级。适合深度长文、行业观察、人物专访、年度回顾。",
+  "source": "本技能自建（编辑杂志风设计方向）",
+  "extractedAt": "2026-10-16",
+  "slideDimensions": {
+    "width": 1280,
+    "height": 720,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FBF9F4",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#14110F",
+      "#5A544C"
+    ],
+    "accents": [
+      "#B23A2E"
+    ],
+    "dividers": [
+      "#E2DCD1"
+    ],
+    "palette": [
+      "#FBF9F4",
+      "#14110F",
+      "#5A544C",
+      "#B23A2E",
+      "#E2DCD1"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Source Han Serif SC",
+      "Georgia",
+      "Source Han Sans SC"
+    ],
+    "titleSizes": [
+      76,
+      48,
+      32
+    ],
+    "bodySizes": [
+      22,
+      18
+    ],
+    "captionSizes": [
+      13
+    ],
+    "fontRoles": {
+      "kicker": "'Source Han Sans SC', sans-serif",
+      "heading": "'Source Han Serif SC', Georgia, serif",
+      "body": "'Source Han Serif SC', serif",
+      "caption": "'Source Han Sans SC', sans-serif"
+    }
+  },
+  "spacing": {
+    "pagePadding": "88px",
+    "sectionGap": "44px",
+    "itemGap": "24px"
+  },
+  "layout": {
+    "preferredComposition": "editorial-grid",
+    "columnCount": 3,
+    "negativeSpacePriority": "medium",
+    "dividerWidth": "1px"
+  },
+  "tone": {
+    "keywords": [
+      "深度",
+      "克制",
+      "编辑感",
+      "叙事"
+    ]
+  },
+  "prohibited": [
+    "purple-dominant-gradient",
+    "neon-accent",
+    "centered-everything",
+    "flashy-3d-chart"
+  ],
+  "promptSnippet": "Editorial magazine style. Warm bone-white paper (#FBF9F4) with near-black ink (#14110F) body text and a single brick-red accent (#B23A2E) used sparingly for emphasis and rules. Large serif headlines (Source Han Serif SC / Georgia) create an editorial hierarchy; thin 1px warm-grey dividers separate sections. Asymmetric column grid, generous margins, zero decoration. Reads like a well-set long-form magazine feature.",
+  "components": [
+    {
+      "type": "kicker",
+      "style": "font-family: 'Source Han Sans SC'; font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: #B23A2E"
+    },
+    {
+      "type": "headline",
+      "style": "font-family: 'Source Han Serif SC'; font-size: 76px; line-height: 1.1; color: #14110F; font-weight: 700"
+    },
+    {
+      "type": "divider",
+      "style": "height: 1px; background: #E2DCD1"
+    },
+    {
+      "type": "pull-quote",
+      "style": "border-left: 3px solid #B23A2E; padding: 8px 24px; font-size: 28px; color: #14110F"
+    },
+    {
+      "type": "caption",
+      "style": "font-family: 'Source Han Sans SC'; font-size: 13px; color: #5A544C; letter-spacing: 0.05em"
+    },
+    {
+      "type": "byline",
+      "style": "font-family: 'Source Han Sans SC'; font-size: 13px; color: #5A544C; padding-top: 12px; border-top: 1px solid #E2DCD1"
+    }
+  ],
+  "cssVariables": {
+    "--paper": "#FBF9F4",
+    "--surface": "#FFFFFF",
+    "--ink": "#14110F",
+    "--ink-muted": "#5A544C",
+    "--accent": "#B23A2E",
+    "--divider": "#E2DCD1",
+    "--font-display": "'Source Han Serif SC', Georgia, serif",
+    "--font-body": "'Source Han Serif SC', serif",
+    "--font-meta": "'Source Han Sans SC', sans-serif"
+  }
+}

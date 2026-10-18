@@ -1,0 +1,120 @@
+{
+  "name": "教育图表",
+  "description": "清晰逻辑风格。色彩分明，适合统计图表展示。配色天然适合数据可视化。适合统计报告、教育、市场分析、通用商务。",
+  "source": "design-system #10 Education & Charts",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F8F9FA"
+    ],
+    "textColors": [
+      "#264653",
+      "#2A2D2E"
+    ],
+    "accents": [
+      "#2A9D8F",
+      "#E9C46A",
+      "#F4A261",
+      "#E76F51"
+    ],
+    "palette": [
+      "#264653",
+      "#2A9D8F",
+      "#E9C46A",
+      "#F4A261",
+      "#E76F51",
+      "#FFFFFF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.5,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "72px",
+    "sectionGap": "32px",
+    "itemGap": "16px"
+  },
+  "layout": {
+    "positioning": "flex-grid",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "清晰",
+      "理性",
+      "友好",
+      "数据优先"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "heavy-shadow",
+    "dense-paragraph",
+    "decorative-3d",
+    "low-contrast-text"
+  ],
+  "promptSnippet": "Data-first educational style. A categorical palette (#264653 / #2A9D8F / #E9C46A / #F4A261 / #E76F51) chosen to stay distinguishable when used as chart series, on white. Each colour carries one meaning consistently across the deck. Charts and labels do the talking, not decoration.",
+  "components": [
+    {
+      "type": "chart-block",
+      "usage": "图表容器",
+      "style": "background: #FFFFFF; border-top: 2px solid #2A9D8F; padding: 16px 20px"
+    },
+    {
+      "type": "series-legend",
+      "usage": "图例",
+      "style": "font-family: Microsoft YaHei; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #2A2D2E"
+    },
+    {
+      "type": "data-row",
+      "usage": "数据行",
+      "style": "border-top: 1px solid #FFFFFF; padding: 12px 0; font-family: Microsoft YaHei"
+    },
+    {
+      "type": "takeaway",
+      "usage": "要点条",
+      "style": "background: #FFFFFF; border: 1px solid #FFFFFF; border-left: 3px solid #2A9D8F; padding: 12px 18px; font-family: Microsoft YaHei; color: #264653"
+    }
+  ],
+  "cssVariables": {
+    "--chart-1": "#264653",
+    "--chart-2": "#2A9D8F",
+    "--chart-3": "#E9C46A",
+    "--chart-4": "#F4A261",
+    "--chart-5": "#E76F51"
+  },
+  "presets": {
+    "styleRecipe": "Sharp & Compact",
+    "rectRadius": 0.05,
+    "pageMargin": 0.3
+  }
+}

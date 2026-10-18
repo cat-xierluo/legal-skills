@@ -1,0 +1,121 @@
+{
+  "name": "铂金白金",
+  "description": "高端专业风格。白色基底配金色点缀和蓝色行动色，极简精致。适合 Agent 产品、企业官网、金融科技、奢侈品牌。",
+  "source": "design-system #18 Platinum White Gold",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#FAFAFA",
+      "#F5F5F5"
+    ],
+    "textColors": [
+      "#0A0A0A",
+      "#525252",
+      "#A3A3A3"
+    ],
+    "accents": [
+      "#0070F3",
+      "#D4AF37"
+    ],
+    "palette": [
+      "#0A0A0A",
+      "#0070F3",
+      "#D4AF37",
+      "#FFFFFF",
+      "#F5F5F5",
+      "#525252"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12,
+      10
+    ],
+    "lineHeight": [
+      1.5
+    ]
+  },
+  "spacing": {
+    "pagePadding": "84px",
+    "sectionGap": "36px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "flex-grid",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "高端",
+      "精致",
+      "现代",
+      "克制"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "clutter",
+    "playful-fonts",
+    "warm-colors",
+    "heavy-shadow"
+  ],
+  "promptSnippet": "Platinum-tier product style. White and near-black (#0A0A0A / #FFFFFF / #F5F5F5) doing the heavy lifting, gold (#D4AF37) for premium cues and action blue (#0070F3) reserved for calls to action. Two accents with distinct jobs, never both at full strength on one element.",
+  "components": [
+    {
+      "type": "premium-rule",
+      "usage": "金色细线",
+      "style": "height: 1px; background: #525252"
+    },
+    {
+      "type": "feature-card",
+      "usage": "特性卡",
+      "style": "background: #FFFFFF; border: 1px solid #525252; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "cta",
+      "usage": "行动点",
+      "style": "display: inline-block; border: 1px solid #0070F3; color: #0070F3; border-radius: 999px; padding: 2px 10px; font-family: Microsoft YaHei; font-size: 12px"
+    },
+    {
+      "type": "metric",
+      "usage": "数字",
+      "style": "font-family: Microsoft YaHei; font-size: 44px; font-weight: 700; line-height: 1.05; color: #0070F3"
+    }
+  ],
+  "cssVariables": {
+    "--primary-text": "#0A0A0A",
+    "--accent-blue": "#0070F3",
+    "--accent-gold": "#D4AF37",
+    "--bg-primary": "#FFFFFF",
+    "--bg-secondary": "#FAFAFA",
+    "--text-muted": "#525252"
+  },
+  "presets": {
+    "styleRecipe": "Soft & Balanced",
+    "rectRadius": 0.1,
+    "pageMargin": 0.4
+  }
+}

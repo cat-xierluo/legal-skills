@@ -1,0 +1,114 @@
+{
+  "name": "学术复古",
+  "description": "经典学术风格。深红与深蓝的强对比，适合学术讲座、历史回顾、博物馆、传统品牌。",
+  "source": "design-system #4 Vintage & Academic",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FDF0D5",
+      "#003049",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#003049",
+      "#780000",
+      "#669BBC"
+    ],
+    "accents": [
+      "#C1121F",
+      "#780000",
+      "#669BBC"
+    ],
+    "palette": [
+      "#780000",
+      "#C1121F",
+      "#FDF0D5",
+      "#003049",
+      "#669BBC"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "84px",
+    "sectionGap": "38px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "典雅",
+      "厚重",
+      "传统",
+      "严谨"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "neon",
+    "rounded-card",
+    "playful-fonts",
+    "flat-modern"
+  ],
+  "promptSnippet": "Classic academic style. Deep burgundy (#780000 / #C1121F) paired with navy (#003049 / #669BBC) on a warm cream ground (#FDF0D5). Strong colour contrast used structurally rather than decoratively — headings, rules and figure captions. Evokes lecture halls, archives and traditional institutions.",
+  "components": [
+    {
+      "type": "chapter-mark",
+      "usage": "章节标记",
+      "style": "font-family: Microsoft YaHei; font-size: 28px; font-weight: 700; color: #C1121F"
+    },
+    {
+      "type": "quote-block",
+      "usage": "引文块",
+      "style": "border-left: 3px solid #C1121F; padding: 6px 0 6px 20px; font-family: Microsoft YaHei; font-size: 24px; color: #003049"
+    },
+    {
+      "type": "note-line",
+      "usage": "注释行",
+      "style": "font-family: Microsoft YaHei; font-size: 12px; line-height: 1.5; color: #780000"
+    },
+    {
+      "type": "rule",
+      "usage": "分隔线",
+      "style": "height: 1px; background: #669BBC"
+    }
+  ],
+  "cssVariables": {
+    "--primary-red": "#780000",
+    "--accent-red": "#C1121F",
+    "--bg-cream": "#FDF0D5",
+    "--primary-blue": "#003049",
+    "--accent-blue": "#669BBC"
+  }
+}

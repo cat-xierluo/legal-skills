@@ -1,0 +1,406 @@
+/*
+ * Slides Design System — 基础设计系统
+ *
+ * 所有模板共享的设计语言：排版节奏、间距系统、组件模式、视觉层级规则。
+ * 使用 CSS 变量实现主题切换，配合 16:9 固定视口（1000×562.5px）。
+ *
+ * PPTX 兼容约束：
+ * - 不用 CSS 渐变（需光栅化）
+ * - 不用 inset 阴影（会损坏 PPTX）
+ * - 文字必须用 <p>/<h1>-<h6>/<li>/<span> 等语义标签，不能裸 div 文本
+ * - 图片使用本地路径
+ * - 文字元素不能直接带 background/border，用父 div 包裹
+ */
+
+:root {
+  /* ── 主题色（每个风格会覆盖这些变量）── */
+  --ink: #18181B;
+  --ink-rgb: 24, 24, 27;
+  --paper: #FAFAF8;
+  --paper-rgb: 250, 250, 248;
+  --accent: #D97706;
+  --accent-light: #F59E0B;
+  --muted: #52525B;
+  --surface: #FFFFFF;
+  --surface-rgb: 255, 255, 255;
+
+  /* ── 间距系统（基于视口比例）── */
+  --sp-xs: 6px;
+  --sp-sm: 12px;
+  --sp-md: 20px;
+  --sp-lg: 32px;
+  --sp-xl: 48px;
+  --sp-2xl: 64px;
+
+  /* ── 页边距 ── */
+  --page-pad-x: 60px;
+  --page-pad-y: 42px;
+
+  /* ── 排版刻度 ── */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --text-4xl: 42px;
+  --text-hero: 52px;
+
+  /* ── 字体栈 ── */
+  --sans: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --serif: "Noto Serif SC", "Source Han Serif SC", "STSong", Georgia, serif;
+  --mono: "SF Mono", "Fira Code", "Menlo", monospace;
+
+  /* ── 圆角 ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ── 阴影（仅 box-shadow，不含 inset）── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* ── Reset ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { font-family: var(--sans); background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+/* ── Slide 容器 ── */
+.slide {
+  position: relative;
+  width: 1000px;
+  height: 562.5px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: var(--page-pad-y) var(--page-pad-x);
+}
+
+.slide.dark {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.slide.light {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* ── Typography ── */
+.kicker {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--sp-sm);
+}
+
+.slide.dark .kicker { color: var(--accent-light); }
+
+h1.hero-title {
+  font-size: var(--text-hero);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+h1.page-title {
+  font-size: var(--text-4xl);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: var(--sp-lg);
+}
+
+h2.section-title {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: var(--sp-md);
+}
+
+h3.card-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: var(--sp-sm);
+}
+
+.lead {
+  font-size: var(--text-lg);
+  line-height: 1.65;
+  color: var(--muted);
+  max-width: 72%;
+}
+
+.slide.dark .lead { color: rgba(var(--paper-rgb), 0.7); }
+
+.body-text {
+  font-size: var(--text-base);
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.slide.dark .body-text { color: rgba(var(--paper-rgb), 0.75); }
+
+.meta-row {
+  display: flex;
+  gap: var(--sp-sm);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  align-items: center;
+}
+
+.slide.dark .meta-row { color: rgba(var(--paper-rgb), 0.5); }
+
+/* ── Chrome（页眉元数据）── */
+.chrome {
+  position: absolute;
+  top: var(--sp-md);
+  left: var(--page-pad-x);
+  right: var(--page-pad-x);
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+.slide.dark .chrome { color: rgba(var(--paper-rgb), 0.4); }
+
+/* ── Foot（页脚）── */
+.foot {
+  position: absolute;
+  bottom: var(--sp-md);
+  left: var(--page-pad-x);
+  right: var(--page-pad-x);
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.slide.dark .foot { color: rgba(var(--paper-rgb), 0.35); }
+
+/* ── 布局工具类 ── */
+.v-center {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+}
+
+.h-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-lg);
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--sp-md);
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: var(--sp-md);
+}
+
+.grid-7-5 {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: var(--sp-lg);
+}
+
+.grid-8-4 {
+  display: grid;
+  grid-template-columns: 8fr 4fr;
+  gap: var(--sp-lg);
+}
+
+/* ── 组件：卡片 ── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: var(--sp-md);
+}
+
+.slide.dark .card {
+  background: rgba(var(--surface-rgb), 0.06);
+}
+
+.card-accent {
+  border-left: 3px solid var(--accent);
+}
+
+/* ── 组件：装饰线 ── */
+.deco-line {
+  height: 2px;
+  background: var(--accent);
+  margin: var(--sp-md) 0;
+}
+
+.deco-line.short {
+  width: 48px;
+}
+
+/* ── 组件：大数据数字 ── */
+.stat-number {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: var(--sp-xs);
+}
+
+.stat-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: var(--sp-xs);
+}
+
+.stat-note {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.slide.dark .stat-note { color: rgba(var(--paper-rgb), 0.6); }
+
+/* ── 组件：引用 ── */
+.callout {
+  font-size: var(--text-lg);
+  font-style: italic;
+  line-height: 1.6;
+  padding: var(--sp-md);
+  padding-left: var(--sp-lg);
+  border-left: 3px solid var(--accent);
+  margin-top: var(--sp-md);
+}
+
+.callout-src {
+  font-style: normal;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin-top: var(--sp-sm);
+}
+
+.slide.dark .callout { border-left-color: var(--accent-light); }
+
+/* ── 组件：徽章 ── */
+.badge {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  letter-spacing: 0.5px;
+}
+
+.slide.dark .badge { color: var(--accent-light); border-color: var(--accent-light); }
+
+/* ── 组件：步骤指示 ── */
+.step-number {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 1px;
+  margin-bottom: var(--sp-xs);
+}
+
+/* ── 组件：时间线节点 ── */
+.timeline-node {
+  position: relative;
+  padding-top: 28px;
+}
+
+.timeline-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.timeline-date {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: var(--sp-xs);
+}
+
+/* ── 组件：图片容器 ── */
+.frame-img {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  position: relative;
+}
+
+.frame-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.img-caption {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: var(--sp-xs);
+}
+
+/* ── 动画（仅浏览器模式，PPTX 忽略）── */
+@media screen {
+  [data-anim] {
+    opacity: 0;
+    animation: fadeSlideUp 0.6s ease forwards;
+  }
+  [data-anim="left"] { animation-name: fadeSlideLeft; }
+  [data-anim="right"] { animation-name: fadeSlideRight; }
+  [data-anim="scale"] { animation-name: fadeScale; }
+
+  [data-anim].d1 { animation-delay: 0.1s; }
+  [data-anim].d2 { animation-delay: 0.2s; }
+  [data-anim].d3 { animation-delay: 0.3s; }
+  [data-anim].d4 { animation-delay: 0.4s; }
+  [data-anim].d5 { animation-delay: 0.5s; }
+  [data-anim].d6 { animation-delay: 0.6s; }
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeSlideLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeSlideRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeScale {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}

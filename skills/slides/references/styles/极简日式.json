@@ -1,0 +1,105 @@
+{
+  "name": "极简日式",
+  "description": "日式极简禅意风格。大面积留白 + 单色墨 + 极细线条，追求间（ma）的美学。适合品牌哲学、设计理念、生活方式分享。",
+  "source": "Japanese design aesthetics",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FAFAF8",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#1A1A1A",
+      "#6B6B6B"
+    ],
+    "accents": [
+      "#1A1A1A",
+      "#B73225"
+    ],
+    "dividers": [
+      "#E5E5E3"
+    ],
+    "palette": [
+      "#FAFAF8",
+      "#1A1A1A",
+      "#6B6B6B",
+      "#B73225",
+      "#E5E5E3"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Noto Serif SC",
+      "Hiragino Sans"
+    ],
+    "fontRoles": {
+      "heading": "'Noto Serif SC', serif",
+      "body": "'Hiragino Sans', 'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      44,
+      32
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "72px",
+    "sectionGap": "40px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "preferredComposition": "single-focus",
+    "negativeSpacePriority": "very-high"
+  },
+  "tone": {
+    "keywords": [
+      "禅意",
+      "留白",
+      "间",
+      "侘寂"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "shadow",
+    "multiple-accent-colors",
+    "dense-layout",
+    "bold-patterns"
+  ],
+  "promptSnippet": "Japanese ma (間) minimalism. Off-white (#FAFAF8) ground, sumi ink (#1A1A1A), mid grey (#6B6B6B) and a single vermilion seal-red (#B73225) used once. Noto Serif SC, enormous empty space, hairline rules (#E5E5E3). The emptiness is the design.",
+  "components": [
+    {
+      "type": "vertical-line",
+      "usage": "竖向引导线",
+      "style": "height: 2px; background: #1A1A1A"
+    },
+    {
+      "type": "seal-mark",
+      "usage": "印章标记",
+      "style": "display: inline-block; border: 1px solid #1A1A1A; color: #1A1A1A; border-radius: 999px; padding: 2px 10px; font-family: 'Hiragino Sans', 'PingFang SC', sans-serif; font-size: 12px"
+    },
+    {
+      "type": "short-line",
+      "usage": "短句块",
+      "style": "border-left: 3px solid #1A1A1A; padding: 6px 0 6px 20px; font-family: 'Noto Serif SC', serif; font-size: 24px; color: #1A1A1A"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1A1A1A",
+    "--ink-rgb": "26,26,26",
+    "--paper": "#FAFAF8",
+    "--paper-rgb": "250,250,248",
+    "--accent": "#1A1A1A",
+    "--accent-alt": "#B73225",
+    "--muted": "#6B6B6B",
+    "--divider": "#E5E5E3"
+  }
+}

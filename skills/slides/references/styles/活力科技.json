@@ -1,0 +1,111 @@
+{
+  "name": "活力科技",
+  "description": "高能量运动风格。深蓝配橙色，动感十足。适合体育赛事、健身、创业路演、青少年教育。",
+  "source": "design-system #7 Vibrant & Tech",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#023047",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#023047"
+    ],
+    "accents": [
+      "#FFB703",
+      "#FB8500",
+      "#219EBC"
+    ],
+    "palette": [
+      "#023047",
+      "#219EBC",
+      "#8ECAE6",
+      "#FFB703",
+      "#FB8500",
+      "#FFFFFF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      40,
+      32,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.5
+    ]
+  },
+  "spacing": {
+    "pagePadding": "72px",
+    "sectionGap": "32px",
+    "itemGap": "16px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "动感",
+      "高能",
+      "年轻",
+      "进取"
+    ]
+  },
+  "prohibited": [
+    "stiff-corporate",
+    "muted-palette",
+    "serif-fonts",
+    "dense-text"
+  ],
+  "promptSnippet": "High-energy sports style. Deep blue (#023047 / #219EBC) with electric sky (#8ECAE6) and a hot orange-yellow accent (#FFB703 / #FB8500) for speed lines and key figures. Diagonal energy, bold numerals, minimal text per slide. Motion implied through layout, not animation.",
+  "components": [
+    {
+      "type": "speed-stat",
+      "usage": "速度数字",
+      "style": "font-family: Microsoft YaHei; font-size: 44px; font-weight: 700; line-height: 1.05; color: #FFB703"
+    },
+    {
+      "type": "accent-bar",
+      "usage": "能量条",
+      "style": "background: #FFB703; height: 100%; border-radius: 2px"
+    },
+    {
+      "type": "team-row",
+      "usage": "成员行",
+      "style": "border-top: 1px solid #FFFFFF; padding: 12px 0; font-family: Microsoft YaHei"
+    },
+    {
+      "type": "tag",
+      "usage": "标签",
+      "style": "display: inline-block; border: 1px solid #FFB703; color: #FFB703; border-radius: 999px; padding: 2px 10px; font-family: Microsoft YaHei; font-size: 12px"
+    }
+  ],
+  "cssVariables": {
+    "--primary": "#023047",
+    "--accent-orange": "#FFB703",
+    "--accent-cyan": "#219EBC",
+    "--accent-light": "#8ECAE6"
+  }
+}

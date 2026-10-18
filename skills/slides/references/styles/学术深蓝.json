@@ -1,0 +1,106 @@
+{
+  "name": "学术深蓝",
+  "description": "学术论文答辩风格。深海军蓝 + 暖白底，双栏排版，图表优先。适合论文答辩、研究成果展示、学术会议。",
+  "source": "academic presentation standards",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F8F9FA"
+    ],
+    "textColors": [
+      "#1B2A4A",
+      "#4A5568"
+    ],
+    "accents": [
+      "#1B2A4A",
+      "#C8102E"
+    ],
+    "dividers": [
+      "#E2E8F0"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#1B2A4A",
+      "#4A5568",
+      "#C8102E",
+      "#E2E8F0",
+      "#F8F9FA"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Georgia",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Georgia', serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      36,
+      28
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "24px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "two-column-academic",
+    "negativeSpacePriority": "low"
+  },
+  "tone": {
+    "keywords": [
+      "学术",
+      "严谨",
+      "数据驱动",
+      "图表优先"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "animation",
+    "large-photo",
+    "informal-tone"
+  ],
+  "promptSnippet": "Thesis-defence style. Navy (#1B2A4A) headings and body on white, a single crimson (#C8102E) for the one contested point per slide, warm-grey panels (#F8F9FA) for figures. Two-column rhythm, chart-first, serif headings. Every page should read like a page of a dissertation.",
+  "components": [
+    {
+      "type": "figure-panel",
+      "usage": "图版容器",
+      "style": "background: #FFFFFF; border-top: 2px solid #1B2A4A; padding: 16px 20px"
+    },
+    {
+      "type": "clause-box",
+      "usage": "条款框",
+      "style": "background: #FFFFFF; border: 1px solid #E2E8F0; border-left: 3px solid #1B2A4A; padding: 12px 18px; font-family: 'PingFang SC', sans-serif; color: #1B2A4A"
+    },
+    {
+      "type": "reference-line",
+      "usage": "文献引用行",
+      "style": "font-family: 'PingFang SC', sans-serif; font-size: 12px; line-height: 1.5; color: #4A5568"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1B2A4A",
+    "--ink-rgb": "27,42,74",
+    "--paper": "#FFFFFF",
+    "--paper-rgb": "255,255,255",
+    "--accent": "#1B2A4A",
+    "--accent-alt": "#C8102E",
+    "--muted": "#4A5568",
+    "--surface": "#F8F9FA",
+    "--divider": "#E2E8F0"
+  }
+}

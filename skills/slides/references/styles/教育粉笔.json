@@ -1,0 +1,104 @@
+{
+  "name": "教育粉笔",
+  "description": "粉笔黑板教育风格。墨绿底 + 白色粉笔效果，温暖亲切。适合课堂教学、教育分享、知识科普。",
+  "source": "educational design standards",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#2D4A3E",
+      "#1F362B"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#D4E7DC"
+    ],
+    "accents": [
+      "#FFD93D",
+      "#FF8C42"
+    ],
+    "dividers": [
+      "#3D6B58"
+    ],
+    "palette": [
+      "#2D4A3E",
+      "#1F362B",
+      "#FFD93D",
+      "#FF8C42",
+      "#FFFFFF",
+      "#D4E7DC"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "KaiTi",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'KaiTi', serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      40,
+      32
+    ],
+    "bodySizes": [
+      18,
+      16
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "28px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "teaching-flow",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "温暖",
+      "亲切",
+      "教学",
+      "启发式"
+    ]
+  },
+  "prohibited": [
+    "cold-corporate",
+    "dense-data",
+    "minimalist-sterile"
+  ],
+  "promptSnippet": "Chalkboard-classroom style. Deep green slate (#2D4A3E / #1F362B) background with chalk-white text, yellow (#FFD93D) and orange (#FF8C42) chalk accents that feel hand-drawn rather than printed. KaiTi for headings. Warm, unhurried, teacher-at-the-board feeling.",
+  "components": [
+    {
+      "type": "lesson-point",
+      "usage": "课堂要点行",
+      "style": "border-top: 1px solid #3D6B58; border-left: 3px solid #FFD93D; padding: 12px 0 12px 14px; font-family: 'PingFang SC', sans-serif"
+    },
+    {
+      "type": "worked-example",
+      "usage": "例题/演示框",
+      "style": "background: #2D4A3E; border-top: 2px solid #FFD93D; padding: 16px 20px"
+    },
+    {
+      "type": "summary-box",
+      "usage": "小结框",
+      "style": "background: #2D4A3E; border: 1px solid #3D6B58; border-left: 3px solid #FFD93D; padding: 12px 18px; font-family: 'PingFang SC', sans-serif; color: #FFFFFF"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1F362B",
+    "--ink-rgb": "31,54,43",
+    "--paper": "#2D4A3E",
+    "--paper-rgb": "45,74,62",
+    "--accent": "#FFD93D",
+    "--accent-light": "#FF8C42",
+    "--muted": "#D4E7DC",
+    "--surface": "#3D6B58"
+  }
+}

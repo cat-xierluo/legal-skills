@@ -1,0 +1,105 @@
+{
+  "name": "投行黑",
+  "description": "投资银行路演风格。纯黑底 + 白色文字 + 红蓝双色强调，信息密度极高。适合IPO路演、投行报告、交易结构展示。",
+  "source": "investment banking standards",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#000000",
+      "#111111"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#B0B0B0"
+    ],
+    "accents": [
+      "#003DA5",
+      "#D42A2A"
+    ],
+    "dividers": [
+      "#333333"
+    ],
+    "palette": [
+      "#000000",
+      "#FFFFFF",
+      "#003DA5",
+      "#D42A2A",
+      "#B0B0B0",
+      "#333333"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Helvetica Neue",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Helvetica Neue', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      32,
+      24
+    ],
+    "bodySizes": [
+      14,
+      12
+    ]
+  },
+  "spacing": {
+    "pagePadding": "44px",
+    "sectionGap": "18px",
+    "itemGap": "10px"
+  },
+  "layout": {
+    "preferredComposition": "data-dense-deal",
+    "negativeSpacePriority": "very-low"
+  },
+  "tone": {
+    "keywords": [
+      "高密度",
+      "交易",
+      "精准",
+      "紧迫感"
+    ]
+  },
+  "prohibited": [
+    "large-photo",
+    "animation",
+    "playful",
+    "pastel"
+  ],
+  "promptSnippet": "Investment-banking style. Pure black (#000000) with white text, blue (#003DA5) for one series and red (#D42A2A) for the other, grey (#B0B0B0) for supporting detail. Maximum information density, Helvetica Neue, zero decoration, tables and figures only. Built to be read under time pressure.",
+  "components": [
+    {
+      "type": "data-table",
+      "usage": "数据表行",
+      "style": "border-bottom: 1px solid #333333; padding: 8px 12px; font-family: 'PingFang SC', sans-serif; font-size: 13px"
+    },
+    {
+      "type": "deal-term",
+      "usage": "交易条款行",
+      "style": "border-top: 1px solid #333333; padding: 12px 0; font-family: 'PingFang SC', sans-serif"
+    },
+    {
+      "type": "waterfall-bar",
+      "usage": "瀑布图条",
+      "style": "background: #003DA5; height: 100%; border-radius: 2px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#000000",
+    "--ink-rgb": "0,0,0",
+    "--paper": "#111111",
+    "--paper-rgb": "17,17,17",
+    "--accent": "#003DA5",
+    "--accent-alt": "#D42A2A",
+    "--muted": "#B0B0B0",
+    "--surface": "#333333"
+  }
+}

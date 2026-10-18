@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-18 | 新上传 | [slides](skills/slides/) | v1.5.15 | MIT 幻灯片工具：HTML 转可编辑 PPTX、PDF 或双格式；本地身份配置隔离、公开内容脱敏检查、Playwright Chromium 运行路径及真实文件回归。 |
 | 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.9.0 | B 单权威写入口协议：`SNAPSHOT_WRITER_PROTOCOL=2`——save_latest 双形态规范化（raw/v2 行往返保真）+ `normalized_rows` 扩展字段直通 + `lock_timeout` 显式参数 + `_lite` 缺省可回填；star-board 插件把全部写入路由给它（单锁/单 CAS/单规范化）；跨仓 runner 按实际调用计数判别写路径（新+新 PASS / 新技能+旧插件 FAIL / 旧技能+新插件回退 PASS）。 |
 | 2026-10-16 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.3 | 仓库发布配置和AGENTS历史迁至docs，项目入口按需转引；skill-lint保持通用审查职责。 |
 | 2026-10-16 | 更新 | [skill-manager](skills/skill-manager/) | v1.9.0 | 改名软链收敛工具链成型：安装即登记（链接创建自动写 registry install_links）+ relink-skill.py 查表秒级改名收敛（--from-registry），四类来源分级与项目集合目录子项目发现；源码待发布。 |
@@ -41,8 +42,6 @@
 | 2026-10-15 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.0.1 | 退役删除冻结兼容旧目录，仓库收敛为单一目录名；私人配置与历史 archive 并入新目录，修复断链 hook 与 skill_root；wire schema 与状态路径兼容不变。 |
 | 2026-10-15 | 更新 | [video-screenshot](skills/video-screenshot/) | v1.2.0 | Task-039：滚动文字模式加 `--deadline-seconds` 墙钟预算与 `--resume-from` 批次级恢复（帧字节等值才复用、恢复终稿逐字节一致），成本预估登记；含 v1.1.3 正文裁边/跨页重复/来源校验修复。源码待发布。 |
 | 2026-10-15 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.0.0 | 更名 Multi-Agent Orca；同步安装、套件与 CI，原协议与状态不变。 |
-| 2026-10-13 | 更新 | [judgment-analysis](skills/judgment-analysis/) | v2.0.0 | 由 litigation-analysis 更名：职责已收敛为单份判决深析，调用名与目录名对齐；legal-case-analysis 等引用同步更新，下载仍为旧名 1.4.0 包。 |
-| 2026-10-13 | 更新 | [case-progress](skills/case-progress/) | v0.9.0 | 补齐快递登记、状态回写与 show 邮寄列表；来源保护、日期与凭证路径校验及合成 CLI 回归，源码待发布。 |
 
 </details>
 
@@ -416,6 +415,15 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="skills/slides/"><strong>slides</strong></a></td>
+<td>工具·幻灯片创作</td>
+<td style="word-break:break-word">从文稿或主题创作 HTML 幻灯片，导出可编辑 PPTX、PDF 或双格式；含 38 个风格预设、12 个模板、本地身份配置与发布前隐私检查。</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.5.15</td>
+<td style="text-align:center"><a href="skills/slides/">源码</a></td>
+<td>首次运行安装 npm 依赖与 Playwright Chromium；使用说明见 SKILL.md。</td>
+</tr>
 <tr>
 <td><a href="skills/pdf-processor/"><strong>pdf-processor</strong></a></td>
 <td>工具·PDF处理</td>

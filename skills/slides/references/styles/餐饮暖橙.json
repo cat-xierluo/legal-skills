@@ -1,0 +1,104 @@
+{
+  "name": "餐饮暖橙",
+  "description": "餐饮美食风格。暖橙 + 奶油白底，传递温暖食欲感。适合餐饮品牌、菜单展示、食品行业分享。",
+  "source": "food & beverage design",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFF8F0",
+      "#FFFAF5"
+    ],
+    "textColors": [
+      "#3D2B1F",
+      "#7C6A5A"
+    ],
+    "accents": [
+      "#E85D26",
+      "#F4A261"
+    ],
+    "dividers": [
+      "#E8D5C4"
+    ],
+    "palette": [
+      "#FFF8F0",
+      "#3D2B1F",
+      "#E85D26",
+      "#F4A261",
+      "#7C6A5A",
+      "#E8D5C4"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Georgia",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Georgia', serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      40,
+      32
+    ],
+    "bodySizes": [
+      18,
+      16
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "28px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "photo-forward",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "温暖",
+      "食欲",
+      "品质",
+      "手工"
+    ]
+  },
+  "prohibited": [
+    "cold-colors",
+    "geometric-rigid",
+    "data-heavy"
+  ],
+  "promptSnippet": "Food-and-hospitality style. Cream (#FFF8F0) ground, warm orange (#E85D26) with apricot (#F4A261) for warmth, deep roast brown (#3D2B1F) text, biscuit (#E8D5C4) surfaces. Georgia serif headings, appetising contrast, generous food imagery space.",
+  "components": [
+    {
+      "type": "menu-item",
+      "usage": "菜单条目",
+      "style": "border-top: 1px solid #E8D5C4; padding: 12px 0; font-family: 'PingFang SC', sans-serif"
+    },
+    {
+      "type": "price-line",
+      "usage": "价格行",
+      "style": "font-family: 'Georgia', serif; font-size: 44px; font-weight: 700; line-height: 1.05; color: #E85D26"
+    },
+    {
+      "type": "tag-sticker",
+      "usage": "菜品标签",
+      "style": "display: inline-block; border: 1px solid #E85D26; color: #E85D26; border-radius: 999px; padding: 2px 10px; font-family: 'PingFang SC', sans-serif; font-size: 12px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#3D2B1F",
+    "--ink-rgb": "61,43,31",
+    "--paper": "#FFF8F0",
+    "--paper-rgb": "255,248,240",
+    "--accent": "#E85D26",
+    "--accent-light": "#F4A261",
+    "--muted": "#7C6A5A",
+    "--divider": "#E8D5C4"
+  }
+}

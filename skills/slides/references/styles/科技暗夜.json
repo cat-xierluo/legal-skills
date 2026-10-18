@@ -1,0 +1,119 @@
+{
+  "name": "科技暗夜",
+  "description": "深色科技风格。黑色/深蓝背景配金色高光，充满科技感与神秘感。适合科技发布会、天文、夜间经济、豪华汽车。",
+  "source": "design-system #9 Tech & Night",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#000814",
+      "#001D3D",
+      "#003566"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#FFC300",
+      "#FFD60A"
+    ],
+    "accents": [
+      "#FFC300",
+      "#FFD60A"
+    ],
+    "palette": [
+      "#000814",
+      "#001D3D",
+      "#003566",
+      "#FFC300",
+      "#FFD60A",
+      "#FFFFFF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      40,
+      32,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      10
+    ],
+    "lineHeight": [
+      1.5,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "84px",
+    "sectionGap": "38px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "深邃",
+      "神秘",
+      "高端",
+      "未来感"
+    ]
+  },
+  "prohibited": [
+    "flat-bright",
+    "pastel",
+    "rounded-card",
+    "playful-fonts",
+    "light-background"
+  ],
+  "promptSnippet": "Midnight-tech style. Near-black navy (#000814 → #001D3D → #003566) layering as depth, gold (#FFC300 / #FFD60A) as the single precious highlight — think instrument panel or starfield. White text, nothing else glowing. Luxury, not neon.",
+  "components": [
+    {
+      "type": "glow-accent",
+      "usage": "辉光强调",
+      "style": "height: 2px; background: #FFFFFF"
+    },
+    {
+      "type": "metric",
+      "usage": "指标",
+      "style": "font-family: Microsoft YaHei; font-size: 44px; font-weight: 700; line-height: 1.05; color: #FFC300"
+    },
+    {
+      "type": "panel",
+      "usage": "面板",
+      "style": "background: #000814; border-top: 2px solid #FFC300; padding: 16px 20px"
+    },
+    {
+      "type": "caption",
+      "usage": "说明",
+      "style": "font-family: Microsoft YaHei; font-size: 12px; line-height: 1.5; color: #FFC300"
+    }
+  ],
+  "cssVariables": {
+    "--bg-primary": "#000814",
+    "--bg-secondary": "#001D3D",
+    "--accent-gold": "#FFC300",
+    "--accent-gold-light": "#FFD60A"
+  },
+  "presets": {
+    "styleRecipe": "Sharp & Compact",
+    "rectRadius": 0.05,
+    "pageMargin": 0.3
+  }
+}

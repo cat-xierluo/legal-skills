@@ -1,0 +1,105 @@
+{
+  "name": "房地产金",
+  "description": "房地产楼盘展示风格。深墨绿/黑金 + 高端质感，传达品质与稀缺性。适合楼盘发布、地产报告、品牌展示。",
+  "source": "luxury real estate design",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#0B1A0B",
+      "#142214"
+    ],
+    "textColors": [
+      "#F5F5DC",
+      "#C4C4A6"
+    ],
+    "accents": [
+      "#C9A84C",
+      "#E8D48B"
+    ],
+    "dividers": [
+      "#2A3D2A"
+    ],
+    "palette": [
+      "#0B1A0B",
+      "#C9A84C",
+      "#E8D48B",
+      "#F5F5DC",
+      "#2A3D2A",
+      "#C4C4A6"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Noto Serif SC",
+      "Inter"
+    ],
+    "fontRoles": {
+      "heading": "'Noto Serif SC', serif",
+      "body": "'Inter', 'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      44,
+      32
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "28px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "luxury-photo",
+    "negativeSpacePriority": "high"
+  },
+  "tone": {
+    "keywords": [
+      "高端",
+      "稀缺",
+      "品质",
+      "沉稳"
+    ]
+  },
+  "prohibited": [
+    "bright-colors",
+    "playful",
+    "data-dense",
+    "casual"
+  ],
+  "promptSnippet": "Luxury-property style. Deep forest-black (#0B1A0B / #2A3D2A) ground with gold (#C9A84C / #E8D48B) as the only accent, ivory (#F5F5DC) text. Serif display type, wide spacing, photography given room. Communicates scarcity and price, not warmth.",
+  "components": [
+    {
+      "type": "unit-card",
+      "usage": "户型信息卡",
+      "style": "background: #0B1A0B; border: 1px solid #2A3D2A; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "amenity-row",
+      "usage": "配套清单行",
+      "style": "border-top: 1px solid #2A3D2A; padding: 12px 0; font-family: 'Inter', 'PingFang SC', sans-serif"
+    },
+    {
+      "type": "gold-rule",
+      "usage": "金色分隔线",
+      "style": "height: 2px; background: #F5F5DC"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#0B1A0B",
+    "--ink-rgb": "11,26,11",
+    "--paper": "#142214",
+    "--paper-rgb": "20,34,20",
+    "--accent": "#C9A84C",
+    "--accent-light": "#E8D48B",
+    "--muted": "#C4C4A6",
+    "--surface": "#2A3D2A"
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "name": "医疗薄荷",
+  "description": "医疗健康行业风格。薄荷绿 + 柔白底，干净清爽，传达专业与关怀。适合医疗报告、临床数据、健康科普。",
+  "source": "healthcare design standards",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F0FDF4"
+    ],
+    "textColors": [
+      "#14532D",
+      "#4B5563"
+    ],
+    "accents": [
+      "#059669",
+      "#0D9488"
+    ],
+    "dividers": [
+      "#D1FAE5"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#14532D",
+      "#059669",
+      "#0D9488",
+      "#D1FAE5",
+      "#F0FDF4"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      36,
+      28
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "24px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "clean-grid",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "专业",
+      "关怀",
+      "清爽",
+      "值得信赖"
+    ]
+  },
+  "prohibited": [
+    "dark-background",
+    "aggressive-red",
+    "gradient",
+    "heavy-shadow"
+  ],
+  "promptSnippet": "Clinical-clean style. White ground with deep green (#14532D) text, emerald (#059669) as the affirmative accent and teal (#0D9488) for secondary data, on pale mint washes (#F0FDF4 / #D1FAE5). Fresh, careful, legible under clinical lighting. Nothing alarming, nothing cold.",
+  "components": [
+    {
+      "type": "vital-card",
+      "usage": "生命体征/指标卡",
+      "style": "background: #FFFFFF; border: 1px solid #D1FAE5; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "protocol-step",
+      "usage": "诊疗流程步骤",
+      "style": "border-top: 1px solid #D1FAE5; border-left: 3px solid #059669; padding: 12px 0 12px 14px; font-family: 'PingFang SC', sans-serif"
+    },
+    {
+      "type": "disclaimer",
+      "usage": "风险提示条",
+      "style": "background: #FFFFFF; border: 1px solid #D1FAE5; border-left: 3px solid #059669; padding: 12px 18px; font-family: 'PingFang SC', sans-serif; color: #14532D"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#14532D",
+    "--ink-rgb": "20,83,45",
+    "--paper": "#FFFFFF",
+    "--paper-rgb": "255,255,255",
+    "--accent": "#059669",
+    "--accent-light": "#0D9488",
+    "--muted": "#4B5563",
+    "--surface": "#F0FDF4",
+    "--divider": "#D1FAE5"
+  }
+}

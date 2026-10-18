@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>金句/引用页模板</title>
+  <link rel="stylesheet" href="_base.css">
+  <style>
+    :root {
+      --ink: #18181B; --ink-rgb: 24,24,27;
+      --paper: #FAFAF8; --paper-rgb: 250,250,248;
+      --accent: #D97706; --accent-light: #F59E0B;
+      --muted: #52525B; --surface: #FFFFFF; --surface-rgb: 255,255,255;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    金句/引用页 (Quote)
+    视觉层级：kicker → 大引用文字 → 出处 → 原文/补充
+    整页留白，只放一句核心信息。
+    适用：核心结论、金句强调、转折悬念
+  -->
+  <div class="slide dark">
+    <div class="chrome">
+      <p>核心观点 · Takeaway</p>
+      <p>08 / 12</p>
+    </div>
+
+    <div class="v-center h-center" style="padding: 0 12%;">
+      <p class="kicker" data-anim>QUOTE</p>
+      <p style="font-family: var(--serif); font-size: 38px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; color: var(--paper);" data-anim>
+        "金句内容放这里，<br>不超过三行。"
+      </p>
+      <div class="deco-line short" style="margin-top: 20px; margin-bottom: 16px;" data-anim></div>
+      <p class="lead" style="max-width: 55%; text-align: center; color: rgba(250,250,248,0.55);" data-anim>
+        英文原文或补充说明，opacity 低一层制造视觉层级。
+      </p>
+      <div class="meta-row" style="margin-top: 12px;" data-anim>
+        <span>— 出处 / 作者</span><span>·</span><span>日期</span>
+      </div>
+    </div>
+
+    <div class="foot">
+      <p>页面说明</p>
+      <p>— · —</p>
+    </div>
+  </div>
+</body>
+</html>

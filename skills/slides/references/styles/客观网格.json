@@ -1,0 +1,123 @@
+{
+  "name": "客观网格",
+  "description": "原创瑞士国际主义方向。纯白 + 石墨黑 + 单一正红，严格 12 栏网格、左对齐无装饰、大字号无衬线驱动层级。适合数据汇报、架构说明、方法论讲解、指标复盘。",
+  "source": "本技能自建（瑞士国际主义网格方向）",
+  "extractedAt": "2026-10-16",
+  "slideDimensions": {
+    "width": 1280,
+    "height": 720,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#111111",
+      "#5C5C5C"
+    ],
+    "accents": [
+      "#E30613"
+    ],
+    "dividers": [
+      "#D8D8D8"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#111111",
+      "#5C5C5C",
+      "#E30613",
+      "#D8D8D8"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Helvetica Neue",
+      "Inter",
+      "Source Han Sans SC"
+    ],
+    "titleSizes": [
+      68,
+      44,
+      28
+    ],
+    "bodySizes": [
+      20,
+      17
+    ],
+    "captionSizes": [
+      12
+    ],
+    "fontRoles": {
+      "heading": "'Helvetica Neue', Inter, sans-serif",
+      "body": "'Helvetica Neue', 'Source Han Sans SC', sans-serif",
+      "data": "'Helvetica Neue', Inter, sans-serif"
+    }
+  },
+  "spacing": {
+    "pagePadding": "72px",
+    "sectionGap": "32px",
+    "itemGap": "16px"
+  },
+  "layout": {
+    "preferredComposition": "strict-left-grid",
+    "columnCount": 12,
+    "gutter": "24px",
+    "alignment": "left",
+    "decorationLevel": "none"
+  },
+  "tone": {
+    "keywords": [
+      "客观",
+      "严谨",
+      "系统",
+      "信息优先"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "rounded-card",
+    "shadow",
+    "centered-heading",
+    "decorative-illustration"
+  ],
+  "promptSnippet": "Swiss International Style. Pure white (#FFFFFF) with graphite black (#111111) and a single signal red (#E30613) used only for the single most important element per slide. Strict 12-column grid with 72px margins and 24px gutters, everything flush-left, nothing centred. Hierarchy comes from large Helvetica/Inter numerals and uppercase micro-type, never from decoration. No gradients, no rounded cards, no shadows, no illustrations.",
+  "components": [
+    {
+      "type": "index-number",
+      "style": "font-family: 'Helvetica Neue'; font-size: 68px; line-height: 1; color: #111111; font-weight: 700"
+    },
+    {
+      "type": "rule",
+      "style": "height: 2px; background: #111111"
+    },
+    {
+      "type": "accent-bar",
+      "style": "width: 64px; height: 6px; background: #E30613"
+    },
+    {
+      "type": "grid-cell",
+      "style": "border-top: 1px solid #D8D8D8; padding-top: 12px"
+    },
+    {
+      "type": "micro-type",
+      "style": "font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #5C5C5C"
+    },
+    {
+      "type": "data-figure",
+      "style": "font-family: 'Helvetica Neue'; font-size: 44px; font-weight: 700; color: #111111"
+    }
+  ],
+  "cssVariables": {
+    "--paper": "#FFFFFF",
+    "--ink": "#111111",
+    "--ink-muted": "#5C5C5C",
+    "--accent": "#E30613",
+    "--divider": "#D8D8D8",
+    "--font-display": "'Helvetica Neue', Inter, sans-serif",
+    "--font-body": "'Helvetica Neue', 'Source Han Sans SC', sans-serif",
+    "--grid-columns": "12",
+    "--grid-gutter": "24px",
+    "--page-padding": "72px"
+  }
+}

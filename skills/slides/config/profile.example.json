@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "name": "",
+    "titles": [],
+    "organization": "",
+    "bio": ""
+  },
+  "contact": {
+    "wechat": "",
+    "email": "",
+    "website": ""
+  },
+  "assets": {
+    "avatar": "",
+    "logo": "",
+    "wechat_qr": "",
+    "public_account_qr": "",
+    "footprint_photos": []
+  },
+  "brand": {
+    "style": "",
+    "custom_style_file": "",
+    "footer_text": "",
+    "footer_style": "minimal"
+  },
+  "presentation": {
+    "locale": "zh-CN",
+    "aspect_ratio": "16:9",
+    "font_families": [],
+    "show_profile": false,
+    "show_footprints": false,
+    "show_wechat_qr": false,
+    "show_public_account_qr": false,
+    "intro_pages": 0,
+    "closing_mode": "summary"
+  },
+  "sources": {
+    "bio_file": "",
+    "footprints_file": ""
+  },
+  "preferences_file": ""
+}

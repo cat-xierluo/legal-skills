@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幻灯片模板预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f5f4; padding: 32px; }
+  h1 { font-size: 24px; margin-bottom: 8px; color: #18181b; }
+  p.subtitle { font-size: 14px; color: #71717a; margin-bottom: 32px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+  .card { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: box-shadow 0.2s; }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+  .thumb-wrap { aspect-ratio: 16/9; background: #e4e4e7; overflow: hidden; }
+  .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .card-info { padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+  .num { font-size: 12px; font-weight: 700; color: #d97706; letter-spacing: 0.5px; }
+  .name { font-size: 14px; font-weight: 500; color: #3f3f46; }
+</style>
+</head>
+<body>
+  <h1>幻灯片模板预览</h1>
+  <p class="subtitle">共 12 个模板 · 点击查看大图</p>
+  <div class="grid">
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/01-cover.png" alt="Cover" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#01</span>
+        <span class="name">Cover</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/02-content-list.png" alt="Content List" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#02</span>
+        <span class="name">Content List</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/03-data-grid.png" alt="Data Grid" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#03</span>
+        <span class="name">Data Grid</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/04-quote.png" alt="Quote" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#04</span>
+        <span class="name">Quote</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/05-timeline.png" alt="Timeline" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#05</span>
+        <span class="name">Timeline</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/06-two-column.png" alt="Two Column" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#06</span>
+        <span class="name">Two Column</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/07-section-divider.png" alt="Section Divider" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#07</span>
+        <span class="name">Section Divider</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/08-case-evidence.png" alt="Case Evidence" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#08</span>
+        <span class="name">Case Evidence</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/09-process-flow.png" alt="Process Flow" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#09</span>
+        <span class="name">Process Flow</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/10-risk-matrix.png" alt="Risk Matrix" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#10</span>
+        <span class="name">Risk Matrix</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/11-training.png" alt="Training" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#11</span>
+        <span class="name">Training</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="thumb-wrap">
+        <img src="previews/12-image-text.png" alt="Image Text" loading="lazy">
+      </div>
+      <div class="card-info">
+        <span class="num">#12</span>
+        <span class="name">Image Text</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

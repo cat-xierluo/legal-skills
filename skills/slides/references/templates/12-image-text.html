@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>图文混排页模板</title>
+  <link rel="stylesheet" href="_base.css">
+  <style>
+    :root {
+      --ink: #18181B; --ink-rgb: 24,24,27;
+      --paper: #FAFAF8; --paper-rgb: 250,250,248;
+      --accent: #D97706; --accent-light: #F59E0B;
+      --muted: #52525B; --surface: #FFFFFF; --surface-rgb: 255,255,255;
+    }
+    .text-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    图文混排页 (Image + Text)
+    左栏：文字内容（标题 + 正文 + callout）
+    右栏：配图
+    比例：7:5（文字主导）或 8:4（大段文字+小图）
+    适用：案例展示、产品介绍、图文并茂的内容页
+  -->
+  <div class="slide light">
+    <div class="chrome">
+      <p>图文内容 · Content</p>
+      <p>06 / 12</p>
+    </div>
+
+    <div class="grid-7-5" style="padding-top: 10px;">
+      <!-- 左栏：文字 -->
+      <div class="text-col" data-anim>
+        <div>
+          <p class="kicker">CASE STUDY</p>
+          <h2 class="section-title">页面标题</h2>
+        </div>
+        <p class="body-text">
+          正文内容，说明核心信息。保持简洁，不超过 4-5 行。先给结论，再展开论据。
+        </p>
+        <div class="callout">
+          "引用或金句放这里，不超过两行。"
+          <p class="callout-src">— 出处</p>
+        </div>
+      </div>
+      <!-- 右栏：图片 -->
+      <div class="frame-img" style="height: 380px; margin-top: 8px;" data-anim>
+        <img src="images/placeholder.png" alt="配图说明">
+        <p class="img-caption">图片说明 · Caption</p>
+      </div>
+    </div>
+
+    <div class="foot">
+      <p>页面说明</p>
+      <p>— · —</p>
+    </div>
+  </div>
+</body>
+</html>
