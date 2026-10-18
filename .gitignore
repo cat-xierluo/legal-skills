@@ -18,14 +18,14 @@ templates/
 
 # Agent config - keep skills symlink, ignore runtime files
 .agents/*.json
+# 面向迭代者/交接者的内部上下文（TASKS / DECISIONS / HANDOFF / 迭代上下文 / 试跑评估）只留本地，不进远程
 **/DECISIONS.md
 **/TASKS.md
-# moot-court 开发文档随技能源码维护
-!skills/moot-court/DECISIONS.md
-!skills/moot-court/TASKS.md
-# multi-agent-orchestration 的跨会话维护上下文随 Skill 源码维护
-!skills/multi-agent-orchestration/DECISIONS.md
-!skills/multi-agent-orchestration/TASKS.md
+**/HANDOFF*.md
+**/SESSION_HANDOFF*.md
+**/iteration-context.md
+**/skill-iteration-evaluation.md
+.handoff/
 !CLAUDE.md
 **/*/CLAUDE.md
 
@@ -62,7 +62,6 @@ skills/local-asr/assets/speaker-profiles.json
 !skills/legal-skill-evaluation/config/instruction-stability-contract.json
 !skills/video-screenshot/config/instruction-stability-contract.json
 !skills/video-screenshot/config/evidence-lead-taxonomy.json
-!skills/multi-agent-orchestration/config/harness-backend-policy.json
 # Team config - keep example, ignore real data and images
 skills/legal-proposal-generator/config/team-config.md
 skills/legal-proposal-generator/config/images/
@@ -252,9 +251,6 @@ skills/legal-visualization/export-report.json
 :memory:.ses
 .video_agent/
 
-# multi-agent-orchestration 远程调度回执（runtime 临时文件，含 nonce/会话名，不入库）
-skills/multi-agent-orchestration/config/remote-dispatch-inbox/
-
 # github-star-manager 运行导出产物含个人 star 私有数据，仅限本地
 skills/github-star-manager/scripts/output/
 skills/github-star-manager/output/
@@ -264,10 +260,7 @@ skills/github-star-manager/output/
 skills/github-star-manager/scripts/output/stars_raw.json
 skills/github-star-manager/scripts/output/stars_raw_new.json
 
-# Multi-Agent Orca: current task/policy tracking and private runtime exclusions
-# multi-agent-orca 的跨会话维护上下文随 Skill 源码维护
-!skills/multi-agent-orca/DECISIONS.md
-!skills/multi-agent-orca/TASKS.md
+# Multi-Agent Orca: policy config whitelist and private runtime exclusions
 !skills/multi-agent-orca/config/harness-backend-policy.json
 # multi-agent-orca 远程调度回执（runtime 临时文件，含 nonce/会话名，不入库）
 skills/multi-agent-orca/config/remote-dispatch-inbox/
