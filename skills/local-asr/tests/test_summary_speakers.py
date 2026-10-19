@@ -69,6 +69,24 @@ def test_plain_text_mentions_are_not_speakers():
     assert labels == ["随便一行"], labels
 
 
+def test_get_transcription_text_skips_lab_blockquote():
+    """prompt 文本提取：听悟 lab 议程/幻灯片引用行不进入说话人归属。"""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        md = Path(td) / "t.md"
+        md.write_text(TINGWU_LIKE, encoding="utf-8")
+        text = sm.get_transcription_text(md)
+    lines = text.split("\n")
+    # 议程引用行不再被当作 current_speaker（曾产出 "> 00:00 -：### ..."）
+    assert not any(l.startswith("> ") for l in lines), lines
+    assert not any("：" in l and l.split("：", 1)[0].startswith(">") for l in lines), lines
+    # 真实发言归属保持；幻灯片引用时间戳行（"> *01:17*"）也整行跳过
+    assert any(l.startswith("发言人1：") for l in lines), lines
+    assert any(l.startswith("发言人2：") for l in lines), lines
+    assert not any("*01:17*" in l for l in lines), lines
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in tests:
