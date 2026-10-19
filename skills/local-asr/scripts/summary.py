@@ -59,6 +59,12 @@ def _extract_speaker_orders(markdown_text: str) -> list[str]:
         label = match.group("label").strip()
         if not label or TIMESTAMP_ONLY_RE.fullmatch(label):
             continue
+        # 听悟 lab 板块的议程引用行（"> 00:00 - 03:13"）行尾同样是时间戳，
+        # 会被 SPEAKER_LINE_RE 捕获为「标签="> 00:00 -"」。块引用符 ">" 开头
+        # 的行不是发言行，跳过，否则 verify 的 expected_speakers 混入垃圾
+        # 标签，tingwu 转录稿的 AI 摘要永远无法通过发言人覆盖校验。
+        if label.lstrip().startswith(">"):
+            continue
         # 旧版 speaker_N 标签归一为 发言人N+1，避免与新格式重复入列
         old_style = re.fullmatch(r"speaker_(\d+)", label)
         if old_style:
