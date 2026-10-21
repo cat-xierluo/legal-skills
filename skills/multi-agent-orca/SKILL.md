@@ -3,7 +3,7 @@ name: multi-agent-orca
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "3.1.0"
+  version: "3.1.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -266,6 +266,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 只读GUI监控状态及一次性观察（READY仍需PM验收，无正式Orca监督） | `references/zcode-gui-monitor-adapter.md`、`references/zcode-gui-observe.md`；组合验证见 `references/zcode-gui-evidence-pipeline.md` |
 | GUI交付三件套的校验分块传输及Git bundle消费者 | `references/zcode-gui-artifacts.md` |
 | Codex App cross-thread coordination（跨独立会话的全量盘点、卡点归类、批量等待、共享配置写入纪律） | `references/40-codex-app-native-coordination.md` |
+| PM 总管交付：合并门禁判读、base 前移证据、隐私例外、本地/云端收敛与中断恢复 | [PR 合并与一致性治理](references/41-pm-merge-and-sync.md)（Git 操作仍归 git-workflow） |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。references只保留可复用操作与当前接口合同；任务计划、待办、逐轮验收和现场证据索引写回原TASKS卡，重要取舍写DECISIONS，不为一次任务新增运行参考。

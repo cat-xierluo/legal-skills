@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-22 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.1.1 | 补齐 PM 总管 PR 合并与本地/云端一致性治理：候选门禁、base 前移证据、内容绑定隐私例外、在途材料保护和中断恢复；Git 操作沿用 git-workflow。 |
 | 2026-10-21 | 新上传 | [disk-insight](skills/disk-insight/) | v1.1.0 | 默认自动发现 Fathom 历史并输出 APFS 容量变化；无历史才定向扫描，明确区分目录累计与真实物理占用。源码待发布。 |
 | 2026-10-21 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.1.0 | 新增 Codex App cross-thread coordination 参考入口（独立 thread 之间的跨会话协调）、全局配置文件共享写入纪律（单写者/快照/写后逐项回读）、重复任务证据门槛（DUPLICATE_CONFIRMED / SAME_TOPIC_UNCONFIRMED）；跨会话发送侧经一次性 scratch 会话端到端验证。 |
 | 2026-10-21 | 更新 | [dsh-plugin-dev](skills/dsh-plugin-dev/) | v0.6.5 | locale 嵌套展开、重复键和浅覆盖冲突转 NOT_VERIFIED；保留不相交顶层展开，完整自测 47 项。源码待发布。 |
@@ -41,11 +42,6 @@
 | 2026-10-21 | 更新 | [git-workflow](skills/git-workflow/) | v1.24.1 | 草稿使用官方 `gh pr ready` 入口保留原 PR 编号与审查记录，转换前后核 head/base，失败先回查；保留独立授权与 CI 门禁。 |
 | 2026-10-18 | 更新 | [slides](skills/slides/) | v1.5.16 | MIT 幻灯片工具；修复含空格、中文、# 与 % 的本地 HTML 和图片路径，补充 PPTX/PDF 双格式回归。 |
 | 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.9.0 | B 单权威写入口协议：`SNAPSHOT_WRITER_PROTOCOL=2`——save_latest 双形态规范化（raw/v2 行往返保真）+ `normalized_rows` 扩展字段直通 + `lock_timeout` 显式参数 + `_lite` 缺省可回填；star-board 插件把全部写入路由给它（单锁/单 CAS/单规范化）；跨仓 runner 按实际调用计数判别写路径（新+新 PASS / 新技能+旧插件 FAIL / 旧技能+新插件回退 PASS）。 |
-| 2026-10-16 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.3 | 仓库发布配置和AGENTS历史迁至docs，项目入口按需转引；skill-lint保持通用审查职责。 |
-| 2026-10-16 | 更新 | [skill-manager](skills/skill-manager/) | v1.9.0 | 改名软链收敛工具链成型：安装即登记（链接创建自动写 registry install_links）+ relink-skill.py 查表秒级改名收敛（--from-registry），四类来源分级与项目集合目录子项目发现；源码待发布。 |
-| 2026-10-16 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.8.6 | 审计 A/B/C/D + 上游复审返修：limit 截断守卫、Agent 查询接口、机会卡证据实质校验（8 类反例全拒）、事务 CAS+前向合并、跨进程写锁 fail-closed、失效引用拒绝。 |
-| 2026-10-15 | 更新 | [multi-agent-orca](skills/multi-agent-orca/) | v3.0.1 | 退役删除冻结兼容旧目录，仓库收敛为单一目录名；私人配置与历史 archive 并入新目录，修复断链 hook 与 skill_root；wire schema 与状态路径兼容不变。 |
-| 2026-10-15 | 更新 | [video-screenshot](skills/video-screenshot/) | v1.2.0 | Task-039：滚动文字模式加 `--deadline-seconds` 墙钟预算与 `--resume-from` 批次级恢复（帧字节等值才复用、恢复终稿逐字节一致），成本预估登记；含 v1.1.3 正文裁边/跨页重复/来源校验修复。源码待发布。 |
 
 </details>
 
@@ -723,9 +719,9 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal、Run/Task/Dispatch、额度与生命周期门禁；按需接入独立 ZCode CLI、MiniMax Code、CodeBuddy、Qoder CN 与千问办公，日常池保持 Claude Code/Codex</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v3.1.0</td>
+<td style="text-align:center">v3.1.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip">已发布 v2.30.5</a></td>
-<td>源码 v3.1.0 待发布；旧包保留历史名称。所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)</td>
+<td>源码 v3.1.1 待发布；旧包保留历史名称。所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)</td>
 </tr>
 <tr>
 <td><a href="skills/release-workflow/"><strong>release-workflow</strong></a></td>
