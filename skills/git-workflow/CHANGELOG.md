@@ -1,5 +1,13 @@
 # 变更日志
 
+## [1.24.2] - 2026-10-21
+
+### 文档
+- `references/privacy-preflight.md` 补充「手动启用仓库自带 hook」：仓库 `.githooks/` 随仓库分发但 Git 默认只读 `.git/hooks/`，此前文档未说明启用前提。现给出 `git config core.hooksPath .githooks` 的启用与 `--unset` 禁用方式，并说明相对路径按 worktree 根解析、稀疏检出未落盘 `.githooks/` 时 Git 会静默跳过。
+
+### 验证
+- 仅文档变更。`git config core.hooksPath .githooks` 与 `git config --unset core.hooksPath` 已在真实仓库验证生效；`git rev-parse --git-path hooks` 在主目录与 linked worktree 均解析为该 worktree 根下的 `.githooks`。
+
 ## [1.24.1] - 2026-10-21
 
 ### 修复
