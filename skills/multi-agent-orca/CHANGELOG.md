@@ -3,7 +3,8 @@
 ## [3.1.0] - 2026-10-21
 
 ### 新增
-- 应用内原生跨会话协调参考（`references/40-codex-app-native-coordination.md`）：面向 PM 与被管 worker 同处 Codex 应用且宿主实际提供相应能力的场景。
+- Codex App cross-thread coordination 参考（`references/40-codex-app-native-coordination.md`）：面向 PM 与被管 worker 同处 Codex App 但是彼此独立 thread、且宿主实际提供相应能力的场景；
+  只协调已存在的独立会话，不覆盖宿主 runtime 内部的 Subagent 调度。
   覆盖全量盘点（`list_threads` 需同时读取 pinnedThreads 与 threads）、生命周期状态与 `notLoaded`/明确加载错误/额度失败/长任务运行中的区分、
   `read_thread` 分层读取与分页、`wait_threads` 批量等待语义（`timedOut` 不等于失败、`afterCursor` 抑重、commentary 不唤醒）、
   跨会话动作边界（`send_message_to_thread` 需用户授权、prompt 必须自包含）、
@@ -11,11 +12,11 @@
 - 重复任务识别矩阵：按实际 cwd/worktree、写域、任务卡、分支/PR 与产物身份交叉比对，不以标题或摘要判重；
   只有路径/产物身份相同，或任务卡加 PR/分支/产物 SHA 至少两类实证指向同一交付物，才标 `DUPLICATE_CONFIRMED` 并指定 canonical owner；
   其余主题相似只能标 `SAME_TOPIC_UNCONFIRMED` 并保留双方。非 canonical owner 保留原身份与现场，不擅停、关闭、覆盖或删除在途会话；证据不足或 owner/授权不明时升级用户。
-- SKILL.md 三处接入：适用边界新增应用内场景；模式选择表新增「Codex 应用内会话」一行；
+- SKILL.md 三处接入：适用边界新增 Codex App cross-thread 场景；模式选择表新增「Codex App cross-thread」一行；
   按需读取地图新增对应条目。
 
 ### 改进
-- SKILL.md 巡检与 Hard Fail 同步接入应用内会话：跨会话消息须用户本人授权，不得仅凭标题相似停止或覆盖在途会话；`config.toml`/`hooks.json`/`providers.json` 等共享配置文件须具名单写者、写前快照与写后段/键逐项回读。
+- SKILL.md 巡检与 Hard Fail 同步接入 Codex App cross-thread：跨会话消息须用户本人授权，不得仅凭标题相似停止或覆盖在途会话；`config.toml`/`hooks.json`/`providers.json` 等共享配置文件须具名单写者、写前快照与写后段/键逐项回读。
 
 ### 背景
 - 源自 2026-10-21 一次真实跨会话治理：盘点多个在途会话并修复网关路由配置；

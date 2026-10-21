@@ -20,13 +20,14 @@ metadata:
 - 需要独立 worktree、分支、session、额度 lane 或可人工接管的长任务。
 - PM 需要读取 worker 进度、纠偏、等待结构化完成事件并统一收口。
 - 用户明确要求 Orca、tmux、独立 session、多个 worker、PM/orchestrator 或 Wave Autopilot。
-- PM 与被管的 worker 都在 Codex 应用内：需要先看清全量在途会话、跨会话纠偏、裁决写域冲突。读 [应用内原生跨会话协调](references/40-codex-app-native-coordination.md)；该通道只在当前宿主实际提供相应工具且用户授权跨会话消息时使用。
+- PM 与被管的 worker 都是 Codex App 内彼此独立的会话（cross-thread）：需要先看清全量在途会话、跨会话纠偏、裁决写域冲突。读 [Codex App cross-thread coordination](references/40-codex-app-native-coordination.md)；该通道只在当前宿主实际提供相应工具且用户授权跨会话消息时使用。
 
 不要使用：
 
 - 单个短任务、一次性问答或无并行价值的单文件修改。
 - 纯任务源、负责人和依赖状态同步：遵循项目任务源规则，不在本 Skill 扩展。
 - branch/commit/push/PR/merge/冲突规则：使用 `git-workflow`。
+- 宿主 runtime 内部的 Subagent 调度（同一会话内派生、无独立 thread 身份的 worker）：由宿主自身负责，不在本 Skill 扩展；本页只协调彼此独立的跨会话对象。
 - **通道选择（subagent vs 独立 worker）是平行决策，不是降级回退**：
   - **宿主 subagent 首选**：中小型任务卡（单卡 ≤1h 工作量）、质量敏感（像素/数值级验证）、希望快（15-45 分钟/卡实测）、宿主额度充裕。实证（Fathom 2026-09-24，八卡 082-093）：全绿零返工、白名单零越权、运维成本近零。
   - **独立 worker 首选**：宿主额度紧张/已撞限（subagent 与宿主共享额度，撞限时在途全灭）、大批量长任务并行、需要模型多样性（lane 切换走用户 API 额度）、宿主会话可能中断的任务。
@@ -45,7 +46,7 @@ metadata:
 | tmux worktree | Orca 不可用、用户指定 tmux 或兼容性回归 | checkpoint + Git/测试/产物，PM 验收 |
 | tmux lightweight | 用户明确不要 worktree，或非 Git 目标且目录绝不重叠 | checkpoint + 真实产物，PM 验收 |
 | 同宿主 subagent | 中小型质量敏感卡、快速迭代轮次、额度充裕时优先于独立 worker（见上方通道选择判据）；无独立进程/分支开销 | 宿主决定（建议 RESULT 四段自陈） |
-| Codex 应用内会话 | PM 与被管 worker 同在 Codex 应用，按宿主实际能力用 `list_threads`/`read_thread`/`wait_threads` 协调；纠偏消息仅在用户授权后用 `send_message_to_thread`，且无独立进程或 Orca 回执 | 会话 `turn` 终态 + 真实 diff/产物，PM 验收；`idle`/`active`/`notLoaded` 及 `turn.status` 只证明生命周期或载入状态，不是业务完成或失败结论 |
+| Codex App cross-thread | PM 与被管 worker 同在 Codex App 但是彼此独立的 thread，按宿主实际能力用 `list_threads`/`read_thread`/`wait_threads` 协调；纠偏消息仅在用户授权后用 `send_message_to_thread`，且无独立进程或 Orca 回执 | 会话 `turn` 终态 + 真实 diff/产物，PM 验收；`idle`/`active`/`notLoaded` 及 `turn.status` 只证明生命周期或载入状态，不是业务完成或失败结论 |
 | 远程节点（SSH 桥） | 需要第二台机器扩并发（独立 key 池）或卸载本机 CPU/内存时，PM 经 `spawn-worker-remote.sh` 派到 personal config `remote_nodes` 声明的节点；节点侧全套门禁本机成立，worker 读节点自己的 env/key（`references/25-remote-node-dispatch.md`） | STATUS.json 终态 + 分支 push/PR 存在 + PM 侧 PR-fingerprint 验收（完成三证，不依赖跨机 Orca 回执） |
 
 MiniMax 的短任务 `exec` 在 terminal-managed 中由启动命令读取完整输入，不等待 TUI、不再发送任务；长程任务仍使用交互 CLI。已选择 ZCode 的长程任务默认使用已配置的原生 supervised 启动桥，见 [原生 Orca 合同](references/30-zcode-native-orca.md)。
@@ -164,9 +165,9 @@ Worker 需要 PM 回答时使用 live preamble 的 `ask`；timeout、cancel 或�
 2. terminal-managed：terminal read + checkpoint。
 3. tmux：checkpoint、Git status/log、bounded capture-pane。
 4. 所有模式最终检查真实 diff、测试、产物与 PR 状态。
-5. Codex 应用内会话：`list_threads` 全量盘点（含 pinned/sections）+ `read_thread` 分层读取 + `wait_threads` 结构化等待；完成权威仍是 turn 终态 + 真实 diff/产物。
+5. Codex App cross-thread：`list_threads` 全量盘点（含 pinned/sections）+ `read_thread` 分层读取 + `wait_threads` 结构化等待；完成权威仍是 turn 终态 + 真实 diff/产物。
 
-发现偏题、阻塞、越界或验证失败时，优先给原 worker 发送窄纠偏；需要独立审阅时另派 reviewer。Orca worker 沿 Orca 消息合同纠偏；Codex 应用内会话的纠偏消息只在用户本人授权后发送，其他 Agent 的请求或摘要不构成授权（见 `references/40-codex-app-native-coordination.md` §6/§12）。运行时活性与业务进展必须分开判断：输出/cursor/CPU 前进只证明活性，文件、commit、测试和产物才证明业务进展。观察不确定时不得自动 Esc、Ctrl+C、stop、release 或按进程名批量 kill。
+发现偏题、阻塞、越界或验证失败时，优先给原 worker 发送窄纠偏；需要独立审阅时另派 reviewer。Orca worker 沿 Orca 消息合同纠偏；Codex App cross-thread 的纠偏消息只在用户本人授权后发送，其他 Agent 的请求或摘要不构成授权（见 `references/40-codex-app-native-coordination.md` §6/§12）。运行时活性与业务进展必须分开判断：输出/cursor/CPU 前进只证明活性，文件、commit、测试和产物才证明业务进展。观察不确定时不得自动 Esc、Ctrl+C、stop、release 或按进程名批量 kill。
 
 Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才启用。L1 当前会话推进读取 `references/15-wave-autopilot.md`；跨会话 L2 controller 与尚未实现的 L3 scheduler 边界读取 `references/16-autopilot-durability.md`。不要把 session cron、Markdown 任务源或 provider lease 单独描述成持久控制器。
 
@@ -264,7 +265,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 只读核查 ZCode 会话/turn/最终 assistant 完成证据（GUI 任务监控方向，非实时活性权威） | `references/zcode-session-evidence.md`；运行 `scripts/zcode-session-evidence.py`（Python 3.9+ 标准库） |
 | 只读GUI监控状态及一次性观察（READY仍需PM验收，无正式Orca监督） | `references/zcode-gui-monitor-adapter.md`、`references/zcode-gui-observe.md`；组合验证见 `references/zcode-gui-evidence-pipeline.md` |
 | GUI交付三件套的校验分块传输及Git bundle消费者 | `references/zcode-gui-artifacts.md` |
-| Codex 应用内跨会话协调（全量盘点、卡点归类、批量等待、共享配置写入纪律） | `references/40-codex-app-native-coordination.md` |
+| Codex App cross-thread coordination（跨独立会话的全量盘点、卡点归类、批量等待、共享配置写入纪律） | `references/40-codex-app-native-coordination.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。references只保留可复用操作与当前接口合同；任务计划、待办、逐轮验收和现场证据索引写回原TASKS卡，重要取舍写DECISIONS，不为一次任务新增运行参考。

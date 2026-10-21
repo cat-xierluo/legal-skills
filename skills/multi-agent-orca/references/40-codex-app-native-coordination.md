@@ -1,7 +1,9 @@
-# Codex 应用内原生跨会话协调
+# Codex App cross-thread coordination
 
-适用于 PM 本身就跑在 Codex 应用里、由用户授权协调的 worker 也是同一应用内会话（而非 Orca/tmux 外部进程）的场景。
+适用于 PM 本身就跑在 Codex App 里、由用户授权协调的对象也是同一 App 内彼此独立的 thread（而非 Orca/tmux 外部进程）的场景。
 2026-10-21 以 Codex 桌面端实测；工具名、返回字段和生命周期值以当前宿主实际提供为准，不照抄旧版本或其他 Harness。
+
+本通道只协调**已存在的独立会话**。宿主 runtime 内部的 Subagent 调度（同一会话内派生、无独立 thread 身份）由宿主自身负责，不走这里，也不由本页覆盖。
 
 ## 1. 何时走这条通道
 
@@ -9,7 +11,7 @@
 - 需要先看清全量在途会话再决定派什么、救什么、停什么。
 - 会话之间需要传递上下文、纠偏、裁决写域冲突。
 
-不要用于：单个已知会话的短问询（直接 `read_thread` 即可）、Orca 已接管的 worker（走 supervised 合同）、其他 Harness 的原生协调协议（按其自己的 Skill/合同执行，本页不是通用 Agent 总线）。
+不要用于：单个已知会话的短问询（直接 `read_thread` 即可）、Orca 已接管的 worker（走 supervised 合同）、宿主 runtime 内部的 Subagent 调度、其他 Harness 的原生协调协议（按其自己的 Skill/合同执行，本页不是通用 Agent 总线）。
 
 ## 2. 先取全景，再动手
 
@@ -137,7 +139,7 @@ wait_threads(targets=[{threadId, afterCursor}], timeoutMs=N)
 |---|---|
 | 当前会话直接做 | 单步、需要连续判断、跨文件强耦合 |
 | 宿主 subagent | 有界、可独立验收、需要并行但共享同一工作区 |
-| 应用内新 thread | 长期独立目标、需要独立上下文与生命周期 |
+| Codex App 新建 thread | 长期独立目标、需要独立上下文与生命周期 |
 | 外部 worker（Orca 等） | 需要独立进程/额度 lane/跨模型多样性 |
 
 不要为了「看起来在管」而把所有事都派出去。派发成本包含交接成本和验收成本。
