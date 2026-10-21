@@ -1,0 +1,105 @@
+{
+  "name": "毛玻璃",
+  "description": "毛玻璃质感风格。半透明磨砂层 + 柔和色彩叠加，现代 UI 美学。适合 SaaS 产品、科技公司品牌、UI 设计展示。",
+  "source": "glassmorphism design trend",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#E0E7FF",
+      "#F0F4FF"
+    ],
+    "textColors": [
+      "#1E1B4B",
+      "#4338CA"
+    ],
+    "accents": [
+      "#6366F1",
+      "#A78BFA"
+    ],
+    "dividers": [
+      "#C7D2FE"
+    ],
+    "palette": [
+      "#E0E7FF",
+      "#1E1B4B",
+      "#6366F1",
+      "#A78BFA",
+      "#4338CA",
+      "#C7D2FE"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      40,
+      32
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "28px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "glass-layers",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "现代",
+      "柔和",
+      "半透明",
+      "精致"
+    ]
+  },
+  "prohibited": [
+    "solid-heavy-blocks",
+    "dark-background",
+    "harsh-contrast"
+  ],
+  "promptSnippet": "Frosted-glass UI style. Periwinkle ground (#E0E7FF) with translucent white panels, indigo (#6366F1 / #4338CA) text and violet (#A78BFA) accents. backdrop-blur surfaces, soft 1px light borders, layered depth without shadows. Modern SaaS product language.",
+  "components": [
+    {
+      "type": "glass-card",
+      "usage": "玻璃拟态卡",
+      "style": "background: #E0E7FF; border: 1px solid #C7D2FE; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "layer-stack",
+      "usage": "层级说明块",
+      "style": "background: #E0E7FF; border-top: 2px solid #6366F1; padding: 16px 20px"
+    },
+    {
+      "type": "nav-pill",
+      "usage": "导航胶囊",
+      "style": "display: inline-block; border: 1px solid #6366F1; color: #6366F1; border-radius: 999px; padding: 2px 10px; font-family: 'PingFang SC', sans-serif; font-size: 12px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1E1B4B",
+    "--ink-rgb": "30,27,75",
+    "--paper": "#E0E7FF",
+    "--paper-rgb": "224,231,255",
+    "--accent": "#6366F1",
+    "--accent-light": "#A78BFA",
+    "--muted": "#4338CA",
+    "--surface": "#C7D2FE",
+    "--glass-bg": "rgba(255,255,255,0.4)"
+  }
+}

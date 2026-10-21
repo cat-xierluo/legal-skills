@@ -1,5 +1,68 @@
 # 变更日志
 
+## [1.9.1] - 2026-10-16
+
+### 修复
+- **`--apply --register` 组合失效**：REGISTER 分支优先级高于修复分支，导致组合使用时只登记不修复（真实踩坑：一批链接连续两轮"修复"实际零动作，靠旧链接 mtime 未变发现）。现改为 register 仅在**不带 --apply** 时走纯登记；组合使用正常执行修复并在尾部统一登记。
+
+### 改进
+- 默认 harness 列表扩充 `.hermes`、`.myagents`（真实存在且承载技能安装的 Agent 框架，实测全盘扫描发现其内有漏网旧链）。
+- 浅层模式支持 skills/commands 下的**分类子目录一层**（如 `~/.hermes/skills/personal/<skill>` 三层结构），仍毫秒级。
+- `--full-home` 耗时描述如实修正：全 home 树实测可达十余小时（视目录规模），非"数分钟"；分层设计的默认档（浅层）与登记档（--from-registry）才是日常路径。
+
+### 验证
+- 云同步目录（Documents/Mac同步文件夹）深层漏网链接修复后 20s/15s 两次复扫零回滚；.hermes/.myagents/Documents 三根 deep 终验 0；registry 累计登记 multi-agent-orca 56 处。
+
+
+## [1.9.0] - 2026-10-16
+
+### 新增
+- **安装即登记（链接出生带建档）**：install.sh 创建符号链接的四个路径（单 skill/command/批量 skills 集合/批量 commands 集合）全部调用 record_install；record.py 的 record_install 把本次安装位置追加进 registry `install_links`（幂等去重、保留历史登记不被覆盖）。经 skill-manager 安装的链接从此天然进建档，改名时 `relink-skill.py --from-registry` 直接查表，无需事后 `--register` 补录；手工建的链接仍可用 --register 兜底。
+- record.py 的 registry 路径支持 `SKILL_MANAGER_REGISTRY` 环境变量覆盖（与 relink-skill.py 一致，测试/非标准安装位置）。
+
+### 验证
+- 端到端：install.sh 安装 → registry 自动含 install_links（via=install）→ 源目录改名 → relink --from-registry 0.0s 修复并回写新名条目 → 重复安装同位置去重（links 恒 1）。
+
+
+## [1.8.4] - 2026-10-15
+
+### 改进
+- **relink-skill.py 浅层模式支持项目集合目录**：--roots 传入的目录除自身 8 类 harness 外，自动向下发现一层子项目的 harness（如把项目集合根传入，其下每个子项目的 .claude/.codex 都会被检查），毫秒级完成（实测 432 个展开根 0.1s）。真实建档验证：multi-agent-orca 一次登记 35 处链接位置（用户级 5 + 9 个子项目 26 + 两层深项目 4）。
+
+
+## [1.8.3] - 2026-10-15
+
+### 新增
+- **relink-skill.py 登记优先模式（`--register` / `--from-registry`）**：回答"能否按目标文件夹反查其符号链接位置"——文件系统不维护反向索引（symlink 是单向字符串、Spotlight 不索引），唯一秒级路径是登记表。`--register` 把链接位置写入 registry `install_links`（位置导向）；`--apply` 修复后自动登记；`--from-registry` 下次改名直接查表定位（实测 0.23s 含修复与回写），无登记自动回退浅层扫描。registry 路径支持 `SKILL_MANAGER_REGISTRY` 环境变量覆盖（测试/非标准安装位置）。
+
+
+## [1.8.2] - 2026-10-15
+
+### 改进
+- **relink-skill.py 扫描改三档分级，默认档提速数千倍**：默认浅层只查 8 类用户级 harness（.claude/.codex/.agents/.zcode/.openclaw/.workbuddy/.qoderworkcn/.codebuddy）与 --roots 项目根各自的顶层、skills/、commands/ 一层，毫秒级完成（实测 16 根 0.05s，对比全盘 20 分钟+）；`--deep` 完整递归；`--full-home` 全盘兜底不变。依据：真实消费者链接全部挂在配置根浅层，深层链接属于历史快照/归档（40 链接实测清单验证）。
+- --roots 传项目根时自动展开按 `<项目>/<harness>/` 浅层检查，传 harness 根（basename 为 .claude 等）则直用；--deep --roots-only 只递归指定根。
+- 明确记录：Spotlight（mdfind）实测不索引符号链接（存量查询只返回实体目录、新建链接不出现），不能作为快路径，勿再尝试。
+
+
+## [1.8.1] - 2026-10-15
+
+### 新增
+- **relink-skill.py 增加 `--full-home` 全盘扫描模式**：项目不一定集中在已知根目录（如项目住在 `~/Library/Application Support` 等非常规位置），`--full-home` 扫描整个用户主目录，自动跳过确定不承载 Agent 配置的重资源区（Caches、Containers、Group Containers、MobileSync、iCloud/CloudStorage 挂载、Photos 图库、Developer、.Trash 等）控制耗时；`~/Library/Application Support`（项目常驻处）不跳。外置卷不默认扫，用 `--roots /Volumes/卷名` 追加。
+
+### 改进
+- **默认扫描根去机器特定化**（公开分发要求）：默认只扫通用的用户级 Agent 配置目录（`~/.agents/skills`、`~/.claude`、`~/.codex`、`~/.zcode`），移除上一版内置的本机项目根；项目级位置因人而异，一律用 `--roots` 显式传入或 `--full-home` 兜底，不做猜测。
+
+
+## [1.8.0] - 2026-10-15
+
+### 新增
+- **改名后的本机软链收敛工具 `scripts/relink-skill.py`**：skill 目录改名/迁移后，有界扫描用户级（~/.claude/.codex/.agents/.zcode）与项目级（maoscripts、~/orca/workspaces）配置根，找出指向旧路径的符号链接并批量修复。默认 dry-run，--apply 执行，--exclude-glob 跳过历史快照，--report 输出 JSON 追溯报告。来源：multi-agent-orca v3.0.1 改名实战（40 链接盘点、13 处手工修复暴露的链式断链问题）。
+
+### 技术优化
+- 目录级符号链接纳入扫描（os.walk 将其归入 dirnames 而非 filenames，须单独检查，否则 skills 安装链全部漏扫）；相对链接修复后保持相对形态，避免把本机绝对路径写进仓库内相对链接。
+- 分类修复策略：同名安装链在目标已有新名链接时只删旧链，无异名脚本链（如 night-watch.sh）保持链接名重指新路径。
+
+
 ## [1.7.2] - 2026-08-13
 
 ### 改进

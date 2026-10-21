@@ -1,0 +1,112 @@
+{
+  "name": "自然森系",
+  "description": "大地色系风格。绿色单色渐变，安全且协调。适合景观设计、ESG 报告、环保主题、植物学。",
+  "source": "design-system #11 Forest & Eco",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FEFAE0",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#344E41",
+      "#3A5A40",
+      "#588157"
+    ],
+    "accents": [
+      "#588157",
+      "#A3B18A"
+    ],
+    "palette": [
+      "#DAD7CD",
+      "#A3B18A",
+      "#588157",
+      "#3A5A40",
+      "#344E41",
+      "#FEFAE0"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "84px",
+    "sectionGap": "36px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "flex-grid",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "温和",
+      "可持续",
+      "舒缓",
+      "自然"
+    ]
+  },
+  "prohibited": [
+    "neon",
+    "high-saturation",
+    "harsh-contrast",
+    "tech-sterile",
+    "gradient-mesh"
+  ],
+  "promptSnippet": "Earth-tone style. A monochrome green ramp (#DAD7CD → #A3B18A → #588157 → #3A5A40 → #344E41) on cream (#FEFAE0), using value rather than hue for hierarchy. Calm, ESG-appropriate, botanical. No accent colour at all.",
+  "components": [
+    {
+      "type": "value-ramp",
+      "usage": "绿色阶梯",
+      "style": "background: #588157; height: 100%; border-radius: 2px"
+    },
+    {
+      "type": "spec-row",
+      "usage": "指标行",
+      "style": "border-top: 1px solid #FEFAE0; padding: 12px 0; font-family: Microsoft YaHei"
+    },
+    {
+      "type": "panel",
+      "usage": "说明块",
+      "style": "background: #FEFAE0; border-top: 2px solid #588157; padding: 16px 20px"
+    },
+    {
+      "type": "caption",
+      "usage": "图注",
+      "style": "font-family: Microsoft YaHei; font-size: 12px; line-height: 1.5; color: #3A5A40"
+    }
+  ],
+  "cssVariables": {
+    "--forest-dark": "#344E41",
+    "--forest-mid": "#588157",
+    "--forest-light": "#A3B18A",
+    "--bg-warm": "#FEFAE0"
+  }
+}

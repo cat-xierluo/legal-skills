@@ -2,14 +2,14 @@
 name: dsh-plugin-dev
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.2"
+version: "0.6.4"
 license: MIT
 description: DeepSeek Harness（DSH）插件的设计、开发、装载验证、版本迁移与发布审查指引（版本感知）。在用户要为 DSH Desktop 开发插件、把 Pi/Hermes 插件迁移到 DSH、做隔离装载实验、排查插件在真实宿主的行为、跟进 DSH 版本升级适配，或在发布前做机械审查与验收（dsh.bundle / dsh.client 双面包工件契约、inject/external 对账、主题变量、类型化 locale）时使用。不要用于普通 npm 包审查或与 DSH 无关的 agent 项目。
 ---
 
 # DSH Plugin Dev
 
-DSH 插件开发指引 Skill（2026-09-29 由 dsh-plugin-lint 并入吸收：开发主线 + 机械审查一体）。沉淀来源：dsh-plugins 仓库全程开发实测（真实 DSH Desktop 2.0.15 / 内嵌运行时 0.1.7-rc.2，五次隔离装载实验、14 个 PR 的独立审查修复）+ dsh-contract-copilot 0.1.2 期开发实测。
+DSH 插件开发指引 Skill（2026-09-29 由 dsh-plugin-lint 并入吸收：开发主线 + 机械审查一体）。沉淀来源：dsh-plugins 仓库全程开发实测（真实 DSH Desktop 2.0.15 / 内嵌运行时 0.1.7-rc.2，五次隔离装载实验、14 个 PR 的独立审查修复；**2026-10-15 已按安装版 2.0.17 / 0.2.0-rc.2 复核，2026-10-17 增补真宿主实证批（三标记复现 + C-1 装载实验，见 harness-facts-020rc2 实证修订节）**）+ dsh-contract-copilot 0.1.2 期开发实测。
 
 本技能不代替实现者：创建插件时先做设计预检，实现后回来做正式验收——审查器与生产者不混同责任。
 
@@ -32,7 +32,7 @@ DSH 插件开发指引 Skill（2026-09-29 由 dsh-plugin-lint 并入吸收：开
 3. **接业务**：会话状态用投影（[projection-cookbook](references/session-projection-cookbook.md)：register 必填 `stateVersion`、通知只走 wire、真实 turn id 是数字）；业务对象↔会话关联走共享服务（dsh-bizlink 先例：owner 在 revision 权威处做乐观并发）；**模型调用与一切公共能力先查官方复用**（[official-capabilities](references/official-capabilities.md)：目录 + 查证方法；已核 `ctx.llm` 为唯一受支持模型调用入口，勿自建）。
 4. **隔离装载验证**：按 [desktop-load-and-isolation](references/desktop-load-and-isolation.md) 建实验 profile（GUI profile 必须直接含 `@deepseek-ai/dsh-web-app`；官方 bundle 从安装锚点解析，本地插件放符号链接即可零物化装载）、`DSH_HOME` 隔离启动、宿主日志找激活标记、SIGTERM 分步退出、恢复生产（profile-selection 快照/恢复）。
 5. **宿主级验证**：mock 全绿 ≠ 宿主可用——真实 cordis ctx 代理（未声明 inject 的属性读取抛错→可选服务用 `ctx.get`）、域 schema 只在 open 边界校验、写路径须过真实域校验的回归用例（防 best-effort 吞错造成静默失效）依次核过。headless 验证入口与证据纪律见 [pitfalls-log](references/pitfalls-log.md)「宿主验证与证据纪律」节（每轮异名落盘、driver/dump 同 commit 互证、门序断言确认前道门未短路、计数器须真注入、文件级≠记录级、离线桩≠网络失败）。
-6. **审查与回写**：mock ctx 集成测试（真实双插件串接）→ 机械审查（下节）→ 独立审查（角色分离）→ 装载证据绑定候选。踩坑回写 [pitfalls-log](references/pitfalls-log.md)，版本迁移差异回写 [harness-facts](references/harness-facts-017rc2.md)。
+6. **审查与回写**：mock ctx 集成测试（真实双插件串接）→ 机械审查（下节）→ 独立审查（角色分离）→ 装载证据绑定候选。踩坑回写 [pitfalls-log](references/pitfalls-log.md)，版本迁移差异回写 [harness-facts](references/harness-facts-020rc2.md)（当前基线 0.2.0-rc.2；历史 0.1.7-rc.2 另存）。
 
 ## 机械审查（`scripts/lint.mjs`）
 
@@ -70,7 +70,8 @@ harness 根解析优先级：`--harness-root` 参数 → `DSH_HARNESS_ROOT` 环�
 - [Host 插件要领与版本差异](references/host-plugin-essentials.md)：形态、装载解析、零依赖与 schema 策略、api-catalog 类型查找、0.1.2→0.1.7 迁移表。
 - [会话投影 Cookbook](references/session-projection-cookbook.md)：sessionProjections 契约、wire 通知、数字 turnId、水位与 fork。
 - [Desktop 装载与隔离实验](references/desktop-load-and-isolation.md)：profile 工作区、装载实证、DSH_HOME/单例锁/SIGTERM/向导状态/renderer 已知问题。
-- [0.1.7-rc.2 事实快照](references/harness-facts-017rc2.md)：版本矩阵、内嵌包速查、与 0.1.2 规范差异清单。
+- [0.2.0-rc.2 事实快照](references/harness-facts-020rc2.md)：**当前基线**（Desktop 2.0.17）——版本矩阵、Host 消费面零破坏结论、新版增量事实速查（settings 客户端族/表名正则/宿主不变式/schedule 留存/llm discovery 面/tools 无损校验）、client 侧 90-slot 台账与 shadowing 语义、primitives/tokens 现状、NOT_VERIFIED 边界。
+- [0.1.7-rc.2 事实快照](references/harness-facts-017rc2.md)：历史基线（Desktop 2.0.15）——版本矩阵、内嵌包速查、与 0.1.2 规范差异清单。
 - [插件工作台与运行视图设计](references/ui-ux-workbench.md)：新增可视化插件、重排主界面或用户反馈「能跑但不愿使用」时先读——真实入口观察、版式按产品任务选择、跨插件可复用经验与产品自有任务源的边界。
 - [踩坑日志](references/pitfalls-log.md)：按症状索引的实测坑（含出处），跨版本累积。
 - [0.1.2 开发规范（历史权威）](references/dsh-plugin-development-standards.md)：插件形态/分发/工具/事件/slot/client 工件契约/主题/locale 全量规范 + 14 条实测坑与 harness 参考文件索引。

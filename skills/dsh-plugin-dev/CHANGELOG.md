@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.4] - 2026-10-17
+
+### 真宿主实证批回写（dsh-plugins DSH-023 标记轮 PR #338 + DSH-022 C-1 PR #339，Desktop 2.0.17 / 0.2.0-rc.2 隔离 headless + 浏览器 client）
+
+- **harness-facts-020rc2 覆盖语义实证修订**：此前「抢占父座位使子座位声明权易主」口径**订正**——排他发生在两份 children 表之间（任何第二个携带 children 的 register 都抛 `already declared`，与 priority 无关；现实模块图顺序下后到者是自研插件且未捕获异常会中断整个 client 装载）；**不带 children 注册即成功抢占**（priority -1 胜者替换官方浏览区渲染，官方子座位声明与子 entry 全保留可消费）；带 id 的 entry 注册（schedule 行标记）与谁声明都共存——「C 与 B'/schedule 互斥」旧判定不成立（真实 SlotCore 四场景复演 + 真宿主双 profile 对照）。
+- 新增「client 插件装载契约（C-1 实证）」节：bundle 必须是 `window.__ModuleLoader__.load({id, factory})` 工厂封装（裸 ESM 永卡 Loading plugins；`build-client.mjs` 构建先例）；client 模块需导出 `inject:['slots',…]` **服务键**（与 package.json `dsh.client.inject` 模块 id 是两层声明）；slot 胜者组件按 React 渲染（裸 DOM 返回值会炸）；apply 返回值被当 effect 处置器（非函数非空即 Invalid effect）。
+- NOT_VERIFIED 收口：五插件 0.2.0-rc.2 装载复跑与 2026-09-30 三宿主标记（共载自检/disable 半/跨进程回放）全部重现（PR #337/#338）；0.1.7 时代 enable 半 `inactive context` 异常在新版**未复现**；HMR disposed 面仍未复测。新登记观察差异：storages 域文件似改首写物化（未定因）。
+- pitfalls-log 新增「slot 抢占与 client 装载契约」批（9 条症状）：children 排他/裸 ESM、inject 服务键、Invalid effect、undeclared 依赖假绿、`{...ctx}` 展开丢 logger（mock 假绿族）、`dsh` CLI node v20 静默 no-op（`import.meta.main` undefined）、实验 host 未清致 pre-push 负载闪断、重型 SPA 饿死浏览器观察通道（替代观察面：`__DSH_BOOT__` manifest/截图/对照）、装配后 token 抓取时序。
+- SKILL.md：版本 0.6.4；沉淀来源注明 2026-10-17 实证批。
+
+
+## [0.6.3] - 2026-10-15
+
+### 版本复核（Desktop 2.0.17 / 内嵌 0.2.0-rc.2，dsh-plugins DSH-023）
+
+- 新增 `references/harness-facts-020rc2.md`：当前基线事实快照——版本矩阵（tag `dsh-v0.2.0-rc.2` / `639ed015`）、Host 消费面零破坏结论（官方能力七条目 6 ANCHOR_OK）、新版增量事实速查、client 侧 90-slot 宿主台账与 priority-shadowing 官方语义、primitives/tokens 现状、NOT_VERIFIED 边界。0.1.7-rc.2 快照保留为历史基线。
+- official-capabilities 七条目按安装版实物复核并回写：抬头标注复核结论；#1 范例锚点改指安装版 `dsh-compaction-basic/lib/index.js` + 补 `registerModelDiscovery` 等服务面；#3 补 schedule `static Config` 留存上限 + inject 六键实物锚点；#4 补 `ctx.tools.execute` 唯一执行口与 `snapshotToolValue` 无损 JSON 校验（EVOLVE-005 实证）、取消码锚点改指 lib；#5 UNIT_NAME_RE 锚点改 `dsh-storage/lib/index.js:80`、**表名同受正则**、补 `compatibleVersions`/`facet-unsupported`/`version-mismatch` 透传/open 六步顺序；**#6 末条 ANCHOR_GONE 改写**（`dsh-client-ui-settings` + 10 分域包的 schema 自动设置页已存在）+ `update()` 服务端非 volatile 拒绝；#7 补宿主 `storage-domain-invariant` 不变式护栏。
+- 查证方法修正：#1 版本锚点改为「安装版实物为锚、npm channel 不作等式」（与 0.6.2 SKILL 修正一致）；#2 改为「安装版内嵌 node_modules 只读优先（api-catalog.js + README.zh.md），harness 源码检出为备选」——R2/R3 两任务全程离线按此法完成。
+- SKILL.md：沉淀来源注明 2.0.17/0.2.0-rc.2 复核；参考节双基线并列；回写指向当前基线。
+- 证据：dsh-plugins `docs/evidence/dsh-023-20261015/`（oc-recheck/REPORT.md 249 行、client-survey/README.md 224 行，含 PM 勘正附记）。行为语义类事实维持 NOT_VERIFIED，不以静态复核冒充实机验证。
+
 ## [0.6.2] - 2026-10-14
 
 ### 修复（审计 DPD-AUDIT-001，F01–F08 逐项绑定最小反例入回归）

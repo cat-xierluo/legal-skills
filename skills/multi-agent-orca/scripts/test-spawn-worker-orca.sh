@@ -11,7 +11,7 @@ trap 'rm -rf "$CASE_ROOT"' EXIT
 PROJECT_REPO="$CASE_ROOT/business repo"
 SKILL_REPO="$CASE_ROOT/skills repo"
 NON_GIT_PROJECT="$CASE_ROOT/non-git project"
-mkdir -p "$PROJECT_REPO/.claude/skills" "$SKILL_REPO/multi-agent-orchestration" "$NON_GIT_PROJECT"
+mkdir -p "$PROJECT_REPO/.claude/skills" "$SKILL_REPO/multi-agent-orca" "$NON_GIT_PROJECT"
 git -C "$PROJECT_REPO" init -q
 git -C "$PROJECT_REPO" config user.email "spawn-orca@test.local"
 git -C "$PROJECT_REPO" config user.name "spawn-orca-test"
@@ -20,8 +20,8 @@ git -C "$SKILL_REPO" init -q
 git -C "$SKILL_REPO" config user.email "spawn-orca@test.local"
 git -C "$SKILL_REPO" config user.name "spawn-orca-test"
 git -C "$SKILL_REPO" commit -q --allow-empty -m init
-ln -s "$SKILL_REPO/multi-agent-orchestration" "$PROJECT_REPO/.claude/skills/multi-agent-orchestration"
-SYMLINK_SKILL_DIR="$PROJECT_REPO/.claude/skills/multi-agent-orchestration"
+ln -s "$SKILL_REPO/multi-agent-orca" "$PROJECT_REPO/.claude/skills/multi-agent-orca"
+SYMLINK_SKILL_DIR="$PROJECT_REPO/.claude/skills/multi-agent-orca"
 
 passed=0
 failed=0
@@ -232,7 +232,7 @@ physical_caller=$(pwd -P)
 detect_orca_mode >/dev/null
 actual_worktree_id=$(orca_worktree_create worker main)
 cd "$SCRIPT_DIR"
-assert_eq "$physical_caller" "$SKILL_REPO/multi-agent-orchestration" \
+assert_eq "$physical_caller" "$SKILL_REPO/multi-agent-orca" \
   "symlink fixture starts in the other repository"
 if grep -Fq "cwd=$PROJECT_REPO worktree create" "$FAKE_LOG"; then
   ok "worktree create is scoped to the verified PROJECT_DIR top from a symlink skill cwd"

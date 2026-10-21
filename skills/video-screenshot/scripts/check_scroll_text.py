@@ -11,10 +11,11 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 from unittest.mock import patch
 from PIL import Image, ImageDraw
 from scroll_text import (select_roi, observations, stitch, pixel_hash, promote_new,
-                         resolve_new_output, parse_args, run, write_texts)
+                         resolve_new_output, parse_args, run, write_texts, deadline_exceeded)
 from scroll_ocr import normalize_lines, OCRFailure
 import check_scroll_env as env_probe
 
@@ -374,6 +375,180 @@ def cli_fixtures():
             assert p.returncode!=0
 
 
+def _tree_digest(root):
+    root = Path(root)
+    return {str(p.relative_to(root)): sha256(p.read_bytes()).hexdigest()
+            for p in sorted(root.rglob('*')) if p.is_file()}
+
+
+def _helper(root, name):
+    path = root / name
+    path.write_text('#!' + sys.executable + '\nimport json,sys\nfor p in sys.argv[1:]:\n'
+                    + ' print(json.dumps({"path":p,"error":"","lines":[{"text":"A generated non-sensitive sentence.",'
+                      '"bbox":[.05,.2,.9,.24],"confidence":.9}]}))\n')
+    path.chmod(0o700)
+    return path
+
+
+def budget_resume_fixtures():
+    """Wall-clock budget, batch-level resume and cost estimate contracts."""
+    # The pure gate is checked directly: None budget never trips, boundary is strict >.
+    with patch('scroll_text.time.monotonic', return_value=100):
+        assert deadline_exceeded(4, None) is False
+    with patch('scroll_text.time.monotonic', return_value=10):
+        assert deadline_exceeded(4, 6) is False   # elapsed 6 is not yet over a 6s budget
+    with patch('scroll_text.time.monotonic', return_value=11):
+        assert deadline_exceeded(4, 6) is True    # 7 > 6 trips
+    with tempfile.TemporaryDirectory(prefix='scroll-budget-resume-') as folder:
+        root = Path(folder).resolve()
+        video = root / 'sample.mp4'
+        subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=400x900:d=2:r=10',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(video)], check=True, capture_output=True)
+        other = root / 'other.mp4'
+        subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=s=400x900:d=2:r=10',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(other)], check=True, capture_output=True)
+        script = Path(__file__).with_name('scroll_text.py')
+        helper = _helper(root, 'ocr-helper')
+
+        def invoke(target, extra=(), source=video):
+            return subprocess.run([sys.executable, str(script), '-i', str(source), '-o', str(target),
+                                   '--engine', 'vision', '--ocr-executable', str(helper), *extra],
+                                  capture_output=True, text=True)
+
+        # 1. Deadline stops the layout loop between batches; finished batches survive.
+        # 4 unique pages, batch_size 1. Checks: layout F,F,F,trip; the body loop then
+        # trips at its first check, so layout readings stand and crops fall back to them.
+        cut = root / 'deadline-layout'
+        args = parse_args(['-i', str(video), '-o', str(cut), '--engine', 'vision', '--ocr-executable', str(helper),
+                           '--batch-size', '1', '--deadline-seconds', '9'])
+        with patch('scroll_text.deadline_exceeded', side_effect=[False, False, False, True, True]):
+            assert run(args) == 3
+        receipt = json.loads((cut / 'receipt.json').read_text())
+        assert receipt['deadline_hit'] is True and receipt['status'] == 'partial', receipt
+        assert receipt['parameters']['deadline_seconds'] == 9
+        issues = json.loads((cut / 'issues.json').read_text())
+        hit = [x for x in issues if x['kind'] == 'deadline_exhausted']
+        assert hit[0]['stage'] == 'layout' and hit[0]['covered_to_frame'] == 'F000003', issues
+        layout_rows = [json.loads(x) for x in (cut / 'raw-ocr.jsonl').read_text().splitlines()
+                       if json.loads(x)['stage'] == 'layout']
+        assert len(layout_rows) == 3 < receipt['frame_count'], (len(layout_rows), receipt['frame_count'])
+        assert 'A generated non-sensitive sentence.' in (cut / 'transcript.txt').read_text()
+        assert receipt['ocr_images'] == 3, receipt
+        verify_output(cut)
+        # 1b. Deadline in the body stage keeps every completed layout reading.
+        # Explicit ROI forces real crops: 4 layout checks pass, body batch 1 passes,
+        # body check 2 trips. One crop reading is recognized; no frame loses text.
+        body_cut = root / 'deadline-body'
+        args = parse_args(['-i', str(video), '-o', str(body_cut), '--engine', 'vision', '--ocr-executable', str(helper),
+                           '--batch-size', '1', '--deadline-seconds', '9', '--roi', '0,100,400,850'])
+        with patch('scroll_text.deadline_exceeded', side_effect=[False, False, False, False, False, True]):
+            assert run(args) == 3
+        receipt = json.loads((body_cut / 'receipt.json').read_text())
+        assert receipt['deadline_hit'] is True and receipt['status'] == 'partial', receipt
+        hit = [x for x in json.loads((body_cut / 'issues.json').read_text()) if x['kind'] == 'deadline_exhausted']
+        assert hit and hit[-1]['stage'] == 'body', hit
+        rows = [json.loads(x) for x in (body_cut / 'raw-ocr.jsonl').read_text().splitlines()]
+        assert len([x for x in rows if x['stage'] == 'layout']) == receipt['frame_count'], receipt
+        assert receipt['ocr_images'] == 5, receipt
+        assert 'A generated non-sensitive sentence.' in (body_cut / 'transcript.txt').read_text()
+        verify_output(body_cut)
+        # 1c. An invalid deadline never starts a run.
+        p = invoke(root / 'deadline-invalid', ['--deadline-seconds', '0'])
+        assert p.returncode == 2 and '--deadline-seconds' in p.stderr and not (root / 'deadline-invalid').exists()
+        p = invoke(root / 'deadline-nan', ['--deadline-seconds', 'nan'])
+        assert p.returncode == 2 and not (root / 'deadline-nan').exists()
+        # 1d. A generous budget never trips and the estimate line is emitted.
+        priced = root / 'estimate'
+        p = invoke(priced)
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        receipt = json.loads((priced / 'receipt.json').read_text())
+        assert receipt['deadline_hit'] is False and receipt['parameters']['deadline_seconds'] is None
+        line = '预计 OCR 调用 ≤ %d 张（布局 %d 帧 + 正文 ≤%d 帧；批大小 %d）' % (
+            receipt['estimated_ocr_images'], receipt['frame_count'], receipt['frame_count'],
+            receipt['parameters']['batch_size'])
+        assert line in p.stderr, (line, p.stderr)
+        assert receipt['estimated_ocr_images'] == 2*receipt['frame_count'], receipt
+        # 2. Resume equivalence: a resumed run reproduces the full run's reading draft.
+        partial = root / 'resume-partial'
+        p = invoke(partial, ['--max-ocr-images', '1'])
+        assert p.returncode == 3, (p.stdout, p.stderr)
+        assert json.loads((partial / 'receipt.json').read_text())['status'] == 'partial'
+        before = _tree_digest(partial)
+        full = root / 'resume-full'
+        t0 = time.monotonic()
+        p = invoke(full)
+        full_seconds = time.monotonic()-t0
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        f_receipt = json.loads((full / 'receipt.json').read_text())
+        resumed = root / 'resume-run'
+        t0 = time.monotonic()
+        p = invoke(resumed, ['--resume-from', str(partial)])
+        resume_seconds = time.monotonic()-t0
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        r_receipt = json.loads((resumed / 'receipt.json').read_text())
+        assert r_receipt['ocr_images'] < f_receipt['ocr_images'], (r_receipt['ocr_images'], f_receipt['ocr_images'])
+        assert r_receipt['resumed_readings'] >= 1, r_receipt
+        assert r_receipt['resumed_skipped_malformed'] == 0 and r_receipt['resumed_skipped_mismatch'] == 0, r_receipt
+        assert r_receipt['status'] == f_receipt['status'] and r_receipt['blocks'] == f_receipt['blocks'], r_receipt
+        for name in ('transcript.txt', 'transcript.md', 'blocks.json', 'issues.json'):
+            assert (resumed / name).read_bytes() == (full / name).read_bytes(), name
+        assert any(json.loads(x).get('resumed') is True
+                   for x in (resumed / 'raw-ocr.jsonl').read_text().splitlines())
+        verify_output(resumed)
+        assert _tree_digest(partial) == before, 'resume modified the previous staging'
+        print('RESUME_SAMPLE full=%.3fs resumed=%.3fs calls %d->%d' % (
+            full_seconds, resume_seconds, f_receipt['ocr_images'], r_receipt['ocr_images']), file=sys.stderr)
+        # 2b. Resuming a completed full run reuses everything: zero new source calls.
+        allresume = root / 'resume-all'
+        p = invoke(allresume, ['--resume-from', str(full)])
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        receipt = json.loads((allresume / 'receipt.json').read_text())
+        assert receipt['ocr_images'] == 0 and receipt['resumed_readings'] > 0, receipt
+        assert (allresume / 'transcript.txt').read_bytes() == (full / 'transcript.txt').read_bytes()
+        assert (allresume / 'blocks.json').read_bytes() == (full / 'blocks.json').read_bytes()
+        verify_output(allresume)
+        # 3. Refusals: different source, engine or batch size never start a new run.
+        for name, extra, source in [
+                ('refuse-source', ['--resume-from', str(partial)], other),
+                ('refuse-engine', ['--resume-from', str(partial), '--engine', 'rapidocr'], video),
+                ('refuse-batch', ['--resume-from', str(partial), '--batch-size', '4'], video)]:
+            target = root / name
+            p = invoke(target, extra, source=source)
+            assert p.returncode == 2, (name, p.stdout, p.stderr)
+            assert '--resume-from 拒绝' in p.stderr and not target.exists(), (name, p.stderr)
+        assert _tree_digest(partial) == before, 'a refused resume modified the previous staging'
+        # 4. A same-named frame whose pixels changed is never reused.
+        moved = root / 'resume-pixels'; shutil.copytree(partial, moved)
+        with Image.open(moved / 'frames' / 'frame_000001.png') as im:
+            changed = im.convert('RGB'); changed.putpixel((3, 3), (1, 2, 3)); changed.save(moved / 'frames' / 'frame_000001.png')
+        repix = root / 'resume-repixel'
+        p = invoke(repix, ['--resume-from', str(moved)])
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        receipt = json.loads((repix / 'receipt.json').read_text())
+        assert receipt['resumed_skipped_mismatch'] >= 1, receipt
+        assert receipt['ocr_images'] >= 1, receipt
+        # 5. Malformed raw lines are skipped and counted, never fatal.
+        broken = root / 'resume-broken'; shutil.copytree(partial, broken)
+        with (broken / 'raw-ocr.jsonl').open('a', encoding='utf-8') as f:
+            f.write('not a json line\n')
+            f.write(json.dumps({'frame': 'F000009', 'stage': 'layout'})+'\n')
+        repaired = root / 'resume-repaired'
+        p = invoke(repaired, ['--resume-from', str(broken)])
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        receipt = json.loads((repaired / 'receipt.json').read_text())
+        assert receipt['resumed_skipped_malformed'] == 2, receipt
+        assert receipt['resumed_readings'] >= 1, receipt
+        assert (repaired / 'transcript.txt').read_bytes() == (full / 'transcript.txt').read_bytes()
+        # 6. Default behaviour is unchanged: no new flags means no resume and no deadline.
+        plain = root / 'resume-plain'
+        p = invoke(plain)
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        receipt = json.loads((plain / 'receipt.json').read_text())
+        assert receipt['resumed_readings'] == 0 and receipt['deadline_hit'] is False
+        assert receipt['parameters']['resume_from'] is None
+        assert (plain / 'transcript.txt').read_bytes() == (full / 'transcript.txt').read_bytes()
+
+
 def environment_fixtures():
     packages={'normal':{'PIL':'pillow','rapidocr_onnxruntime':'rapid','onnxruntime':'user-site/onnx'},
               'isolated':{'PIL':'pillow','rapidocr_onnxruntime':'rapid','onnxruntime':None}}
@@ -472,7 +647,9 @@ def main():
         audit_content_regressions()
         environment_fixtures()
         runtime_fixtures()
-    if args.case in ('all','cli'): cli_fixtures()
+    if args.case in ('all','cli'):
+        cli_fixtures()
+        budget_resume_fixtures()
     print('SCROLL_DOMAIN_CHECKS_PASSED')
 
 if __name__=='__main__': main()

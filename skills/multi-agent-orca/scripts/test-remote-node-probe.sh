@@ -41,7 +41,7 @@ git clone -q "$CASE_ROOT/origin.git" "$CASE_ROOT/node-root"
 git -C "$CASE_ROOT/node-root" commit -q --allow-empty -m "base"
 git -C "$CASE_ROOT/node-root" branch -M main
 git -C "$CASE_ROOT/node-root" push -q origin main
-FIXTURE_SKILL="$CASE_ROOT/node-root/skills/multi-agent-orchestration"
+FIXTURE_SKILL="$CASE_ROOT/node-root/skills/multi-agent-orca"
 mkdir -p "$FIXTURE_SKILL"
 printf '## [9.9.9] - 2026-09-29\n' > "$FIXTURE_SKILL/CHANGELOG.md"
 PM_VERSION=$(grep -m1 -oE '\[[0-9]+\.[0-9]+\.[0-9]+\]' "$SCRIPT_DIR/../CHANGELOG.md" | tr -d '[]')

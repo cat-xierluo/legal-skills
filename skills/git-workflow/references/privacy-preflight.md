@@ -51,6 +51,20 @@ python3 skills/git-workflow/scripts/safe-pr.py squash --number 227 \
 
 手机号、身份证、座机、本机用户目录、法院案号、私钥标记与本地黑名单都会产生阻断式待核对项。案号命中不等于认定隐私泄露；公开裁判和虚构夹具在人工确认后可精确放行。普通 `(#227)` / `Refs #13` 与含 `XXXX` 的案号占位符不会仅因数字被拦截。
 
+### 用 privacy-map.py 定位与登记
+
+诊断只输出规则、行号与两个摘要，不打印原文。`scripts/privacy-map.py` 在指定范围逐提交复算 checker 扫描的全部来源（`commit:<oid>:message`、`commit:<oid>:patch`、`path:<路径>`、`blob:<路径>`，与 checker 同参数），按 (rule, source_sha256, content_sha256) 精确匹配，把每组命中定位到提交与文件并打印命中行的本机用户名段：
+
+```bash
+# 只映射核对（打印来源、提交、行内容摘要与用户名段；需人工的组退出码 2）
+python3 scripts/privacy-map.py --repo <仓库> <base> <head> < 诊断文本
+# 映射 + 登记占位符例外（写入 Git 公共目录 privacy-reviewed.json 并复用 checker 加载校验）
+python3 scripts/privacy-map.py --repo <仓库> <base> <head> \
+  --record --reviewer <审查者> [--reason-prefix 前缀] < 诊断文本
+```
+
+`--record` 仅对规则为 `local-user-path` 且命中行用户名段全部属于占位符白名单（demo / example / your-path 等合成取值）的组写入 `synthetic` 例外；其他规则、含非占位符用户名段或未能映射到范围内来源的诊断一律转人工并退出码 2，不静默放行。工具不联网、不改写历史。回归：`python3 scripts/test_privacy_map.py`。
+
 本地策略放在 `git rev-parse --git-common-dir` 指向的 Git 目录：
 
 - `privacy-denylist`：每行一个需拦截的精确词，空行及 `#` 注释忽略。已有 `.githooks/local-denylist` 可兼容读取，但该文件一旦被跟踪或出现在待发布变更中立即停止。永远不要将真实黑名单提交到仓库、PR 或公开日志。

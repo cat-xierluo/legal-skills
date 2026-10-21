@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.0.1] - 2026-10-15
+
+### 改进
+- 按用户决策退役并删除冻结兼容目录 `skills/multi-agent-orchestration/`：3.0.0 的"复制新目录+冻结旧目录"方案改为单一目录收敛，旧名不再以目录形式存在于仓库。
+- 旧目录 gitignored 私人 config（7 个 provider/编排配置实体文件）迁入本目录并替换原软链；28 项历史 archive 物理并入本目录 archive/，历史不丢失。
+- 修正改名时遗留的断链：`.claude/settings.local.json` 依赖安装 hook 路径（3.0.0 时即已指向不存在路径）、私人配置 `orchestration-personal.json` 的 `skill_root` 绝对路径、multica 更新清单条目。
+- 收敛活引用：测试夹具目录/示例路径、脚本自称注释、example 配置 `_read_by` 文案、`references/14-pm-orchestrate.md` 适配注记统一改为新名。
+
+### 修复
+- SKILL.md「名称迁移与兼容」章节由冻结表述改为退役事实；wire schema 字面量（`multi-agent-orchestration.*.v1`）、`MAO_*`/`MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG` 环境变量、状态/lease 目录路径保持不变，不创建第二状态树。
+
+### 验证
+- `test-spawn-worker-orca.sh` 304/304；message-contract、skill-name-migration、reviewer-scope-guard(44)、review-acceptance-gate(27)、blocker-recovery(51+33+44)、zcode-session-evidence 全过。`test-remote-node-probe.sh` 1 例与 `test-spawn-worker-remote.sh` 4 例失败经 HEAD 原版对照确认为预存失败，与本次改动无耦合。
+
 ## [3.0.0] - 2026-10-15
 
 ### 改进

@@ -78,7 +78,7 @@
 
 - 私人或内部草稿 Skill：缺少 LICENSE 一般不判错，可作为信息提示。
 - 第三方普通 Skill：缺少 LICENSE 不应直接判为严重问题，除非其发布目标要求。
-- 本仓库公开 Skill：按 `publishing-standards.md` 和项目规则检查 LICENSE。
+- 有明确发布规范的项目 Skill：按 `publishing-standards.md` 和项目规则检查 LICENSE。
 - frontmatter 中已经声明 `license` 时，应检查是否有对应 LICENSE 文本或项目说明。
 
 ## 输出要求

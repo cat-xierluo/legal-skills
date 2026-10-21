@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """zcode lane 额度 summary 适配器（quota-aware-routing.summary.v1 合并写入方）。
 
-multi-agent-orchestration 的额度预检门（quota_preflight.py）与路由
+multi-agent-orca 的额度预检门（quota_preflight.py）与路由
 （route_suggest.py）只消费中立合同文件；谁生产 summary 合同不限定。本脚本
 把本机 zcode-quota 监测器的真实观测（BigModel coding plan 5h 窗口）转成
 summary 里的 zcode fuel lane，作为该合同的生产方之一。

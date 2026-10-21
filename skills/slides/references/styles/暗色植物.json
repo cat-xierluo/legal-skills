@@ -1,0 +1,114 @@
+{
+  "name": "暗色植物",
+  "description": "优雅精致的深色风格。深黑背景配暖色柔和装饰，艺术感强。适合高端品牌、艺术展览、奢侈品展示。",
+  "source": "STYLE_PRESETS #4 Dark Botanical",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#0F0F0F"
+    ],
+    "textColors": [
+      "#E8E4DF",
+      "#9A9590"
+    ],
+    "accents": [
+      "#D4A574",
+      "#E8B4B8",
+      "#C9B896"
+    ],
+    "palette": [
+      "#0F0F0F",
+      "#E8E4DF",
+      "#9A9590",
+      "#D4A574",
+      "#E8B4B8",
+      "#C9B896"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Cormorant",
+      "IBM Plex Sans"
+    ],
+    "titleSizes": [
+      44,
+      32,
+      24
+    ],
+    "bodySizes": [
+      18,
+      16
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.4,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "88px",
+    "sectionGap": "40px",
+    "itemGap": "22px"
+  },
+  "layout": {
+    "positioning": "centered",
+    "marginPattern": [
+      80,
+      60
+    ],
+    "contentWidth": 840
+  },
+  "tone": {
+    "keywords": [
+      "优雅",
+      "精致",
+      "艺术",
+      "克制"
+    ]
+  },
+  "prohibited": [
+    "bright-saturated-color",
+    "flat-modern",
+    "rounded-card",
+    "playful-fonts"
+  ],
+  "promptSnippet": "Gallery-dark style. True black (#0F0F0F) ground, warm off-white (#E8E4DF) text, and muted organic accents — clay (#D4A574), blush (#E8B4B8), straw (#C9B896) — used like exhibits under low light. Slow, spacious, luxurious.",
+  "components": [
+    {
+      "type": "exhibit-caption",
+      "usage": "展签",
+      "style": "font-family: Cormorant; font-size: 12px; line-height: 1.5; color: #9A9590"
+    },
+    {
+      "type": "gold-accent",
+      "usage": "暖金点缀",
+      "style": "height: 2px; background: #E8E4DF"
+    },
+    {
+      "type": "pull-line",
+      "usage": "引文行",
+      "style": "border-left: 3px solid #D4A574; padding: 6px 0 6px 20px; font-family: Cormorant; font-size: 24px; color: #E8E4DF"
+    },
+    {
+      "type": "space-block",
+      "usage": "留白块",
+      "style": "background: #0F0F0F; border-top: 2px solid #D4A574; padding: 16px 20px"
+    }
+  ],
+  "cssVariables": {
+    "--bg-primary": "#0f0f0f",
+    "--text-primary": "#e8e4df",
+    "--text-secondary": "#9a9590",
+    "--accent-warm": "#d4a574",
+    "--accent-pink": "#e8b4b8",
+    "--accent-gold": "#c9b896"
+  },
+  "signature": "柔和渐变圆形装饰、暖色强调（粉、金、陶土）、细竖线装饰、斜体签名排版"
+}

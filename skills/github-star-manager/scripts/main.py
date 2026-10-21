@@ -24,11 +24,31 @@ except ImportError:
 
 
 def init_command(tracker: StarTracker, args):
-    """初始化：首次同步并保存原始数据"""
+    """初始化：首次同步并保存原始数据
+
+    F01 守卫：分页/限流失败得到的部分快照不落盘覆盖基线。
+    """
     print(f"--- 正在获取 {args.user} 的 Star 列表（上限: {args.limit}）---")
 
     repos = tracker.get_starred_repos(args.user, limit=args.limit)
+    fetch_meta = tracker.last_fetch_meta or {}
     print(f"找到 {len(repos)} 个 Star 项目")
+
+    if fetch_meta.get("failed_pages"):
+        pages = ", ".join(str(p["page"]) for p in fetch_meta["failed_pages"])
+        print(f"⚠️ 有 {len(fetch_meta['failed_pages'])} 页抓取失败（页码: {pages}），本次数据不完整")
+
+    # F01 + R5/J5: 抓取不完整或 limit 截断时禁止覆盖既有基线
+    if not fetch_meta.get("complete"):
+        existing = tracker.load_latest()
+        reason = ("被 --limit 截断（子集）" if fetch_meta.get("limit_truncated")
+                  else "抓取不完整")
+        if existing:
+            print(f"❌ 本次{reason}且已存在旧快照，已保留旧快照不被覆盖（审计 F01 守卫）")
+            print("   提示：请检查网络/Token 或调整 --limit 后重试，"
+                  "或删除 output/original_latest.json 强制重建基线")
+            return 1
+        print(f"⚠️ 本次{reason}且无旧快照，仍将保存（首次建基线，快照标记为 partial）")
 
     # 对 description 为 null 的项目重新抓取元数据
     repos = tracker.retry_null_descriptions(repos)
@@ -36,43 +56,73 @@ def init_command(tracker: StarTracker, args):
     # 记录数据质量日志
     tracker.log_null_descriptions(repos, source="init")
 
-    # 保存快照
-    snapshot_file = tracker.save_latest(repos)
+    # 保存快照（携带完整性元数据 + 基线代际 CAS——R9/G1 接活：插件写方现会 bump
+    # timestamp，若本次 fetch 期间有外部写者提交，save_latest 在锁内检出并拒绝）
+    from star_tracker import SnapshotConflictError as _SCE
+    existing = tracker.load_latest()
+    try:
+        snapshot_file = tracker.save_latest(
+            repos, fetch_meta=fetch_meta or None,
+            base_timestamp=(existing or {}).get("timestamp"))
+    except _SCE as e:
+        print(f"❌ {e}")
+        print("   另一写者（star-board 插件）在本次抓取期间已提交。请直接重跑本命令——"
+              "重跑会读到最新基线，通常一次即成功。")
+        return 1
     print(f"✓ 原始数据已保存: {snapshot_file}")
 
     # 生成项目摘要（可选）
     if args.summarize and len(repos) > 0:
         print("\n--- 正在生成项目摘要 ---")
-        report_path = Path("star_summary.md")
+        # 摘要产物锚定技能 output/ 目录，不随 cwd 漂移污染共享仓库
+        report_path = StarTracker.CACHE_DIR / "star_summary.md"
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(f"# GitHub Star 项目摘要\n\n")
             f.write(f"**用户**: {args.user}\n")
-            f.write(f"**生成时间**: {tracker.get_readme.__self__}\n\n")
+            f.write(f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
 
             for i, repo in enumerate(repos[:20], 1):
                 print(f"[{i}/{min(20, len(repos))}] {repo['full_name']}")
                 readme = tracker.get_readme(repo["full_name"])
-                summary = tracker.summarize_with_ai(repo, readme)
+                summary = tracker.summarize_with_ai(repo, readme, use_ai=not args.no_ai)
 
                 f.write(f"## {i}. [{repo['full_name']}]({repo['html_url']})\n\n")
                 f.write(f"{summary}\n\n")
 
         print(f"✓ 摘要已保存: {report_path}")
+    return 0
 
 
 def check_command(tracker: StarTracker, args):
-    """检查更新"""
+    """检查更新
+
+    F01 守卫：本次抓取不完整时不保存快照也不报告「取消 Star」——
+    部分数据中缺失的仓库可能只是没抓到，不是用户真取消了收藏。
+    """
     print(f"--- 正在检查 {args.user} 的 Star 更新 ---")
 
     # 获取当前状态
     current_repos = tracker.get_starred_repos(args.user, limit=args.limit or 200)
+    fetch_meta = tracker.last_fetch_meta or {}
     print(f"当前 Star 数量: {len(current_repos)}")
+
+    # F01 + R5/J5: 抓取不完整或 limit 截断时保留旧基线，不做取消判定
+    if not fetch_meta.get("complete"):
+        if fetch_meta.get("limit_truncated"):
+            print("❌ 本次抓取被 --limit 截断（子集），已放弃保存与对比，旧快照保持不变")
+            print("   截断子集会把未抓到的旧条目误判为「取消收藏」——请提高 --limit 或去掉该参数")
+        else:
+            failed = fetch_meta.get("failed_pages", [])
+            pages = ", ".join(str(p["page"]) for p in failed)
+            print(f"❌ 本次抓取不完整（失败页: {pages}），已放弃保存与对比，旧快照保持不变")
+            print("   部分抓取无法区分「用户取消收藏」与「分页失败漏抓」，继续对比会产生误报")
+        return 1
 
     # 加载历史数据
     snapshot = tracker.load_latest()
     if not snapshot:
         print("❌ 未找到历史数据，请先运行: --init")
-        return
+        return 1
 
     snapshot_time = snapshot.get("timestamp", "未知")[:16].replace("T", " ")
     print(f"上次保存: {snapshot_time}")
@@ -124,8 +174,16 @@ def check_command(tracker: StarTracker, args):
     # === 新增：数据质量日志 ===
     tracker.log_null_descriptions(current_repos, source="check_incremental")
 
-    # 保存新数据（包含刷新后的元数据）
-    tracker.save_latest(current_repos)
+    # 保存新数据（R9/G1 接活 CAS：传入本次对比开始时的基线 timestamp，
+    # 锁内若检出插件在 fetch 期间已提交则 fail-closed，旧数据保留）
+    from star_tracker import SnapshotConflictError as _SCE
+    try:
+        tracker.save_latest(current_repos, fetch_meta=fetch_meta,
+                           base_timestamp=snapshot.get("timestamp"))
+    except _SCE as e:
+        print(f"❌ {e}")
+        print("   另一写者（star-board 插件）在本次检查期间已提交。请直接重跑本命令。")
+        return 1
 
     # 输出结果
     print("\n" + "=" * 50)
@@ -154,6 +212,7 @@ def check_command(tracker: StarTracker, args):
         print("\n✓ 没有检测到新项目或更新")
 
     print("=" * 50)
+    return 0
 
 
 def report_command(tracker: StarTracker, args):
@@ -163,12 +222,14 @@ def report_command(tracker: StarTracker, args):
     days = args.report_days or 7
     report = tracker.generate_report(args.user, days=days)
 
-    output_path = Path(args.output or "star_report.md")
+    # 默认产物锚定技能 output/ 目录，不随 cwd 漂移污染共享仓库
+    output_path = Path(args.output) if args.output else StarTracker.CACHE_DIR / "star_report.md"
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(report)
 
     print(f"✓ 报告已保存: {output_path}")
     print(f"  追踪时间范围: 最近 {days} 天")
+    return 0
 
 
 def export_command(tracker: StarTracker, args):
@@ -176,7 +237,14 @@ def export_command(tracker: StarTracker, args):
     print(f"--- 正在导出 {args.user} 的 Star 数据 ---")
 
     repos = tracker.get_starred_repos(args.user, limit=args.limit or 9999)
+    fetch_meta = tracker.last_fetch_meta or {}
     print(f"获取到 {len(repos)} 个项目")
+
+    # F01: 导出产物只用于展示，允许部分数据，但必须明示
+    if not fetch_meta.get("complete"):
+        failed = fetch_meta.get("failed_pages", [])
+        pages = ", ".join(str(p["page"]) for p in failed)
+        print(f"⚠️ 本次抓取不完整（失败页: {pages}），Dashboard 将只展示部分数据")
 
     # 获取每个项目的详细信息
     export_data = []
@@ -229,6 +297,7 @@ def export_command(tracker: StarTracker, args):
     print(f"  Dashboard: {result['dashboard_path']}")
     print(f"  项目数量: {result['project_count']}")
     print(f"  可以直接双击 {result['dashboard_path']} 查看可视化面板")
+    return 0
 
 
 def export_config_command(tracker: StarTracker, args):
@@ -242,94 +311,98 @@ def export_config_command(tracker: StarTracker, args):
 
     print(f"✓ 配置已导出: {output_path}")
     print(f"  包含价值关键词、忽略列表、追踪仓库等设置")
+    return 0
 
 
 def import_config_command(tracker: StarTracker, args):
-    """导入配置文件"""
+    """导入配置文件（校验并持久化到 user_settings.json）"""
     config_path = Path(args.import_config)
 
     if not config_path.exists():
         print(f"❌ 配置文件不存在: {config_path}")
-        return
+        return 1
 
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"❌ 配置不是有效 JSON: {e}")
+        return 1
 
-    if not tracker.import_config(config):
-        print(f"❌ 配置格式无效: {config.get('error', '未知错误')}")
-        return
+    if not isinstance(config, dict) or not tracker.import_config(config):
+        print(f"❌ 配置格式无效：缺少 username 字段")
+        return 1
 
-    # 应用导入的配置
-    print(f"✓ 已导入配置: {config_path}")
+    # import_config 已把配置持久化到 user_settings.json（修复「只校验不应用」）
+    print(f"✓ 已导入并保存配置: {config_path} → {StarTracker.SETTINGS_FILE}")
     print(f"  价值关键词: {', '.join(config.get('value_keywords', []))}")
-    print(f" ��星阈值: {config.get('min_stars', 0)}")
+    print(f"  Star 阈值: {config.get('min_stars', 0)}")
     if "ignore_repos" in config:
         print(f"  忽略列表: {', '.join(config.get('ignore_repos', []))}")
+    return 0
 
 
 def version_diff_command(tracker: StarTracker, args):
-    """查看版本差异"""
-    import json
+    """查看版本差异（非交互式，须同时提供 --old-version 与 --new-version）
 
-    # 首先需要获取两个版本号
-    print("\n请提供两个版本号进行比较：")
-    print("格式: owner/repo 按标签号 (如 v1.0.0)")
+    重写说明：旧实现读取两个 input() 却把「旧版本」输入当 owner/repo 解析，
+    与 star_tracker.get_version_diff 的参数（repo, old, new）完全错位，实际不可用。
+    """
+    if not args.version_repo:
+        print("❌ 请指定仓库: --version-diff --repo owner/repo --old-version v1.0.0 --new-version v2.0.0")
+        return 1
+    if not args.old_version or not args.new_version:
+        print("❌ 请同时提供 --old-version 与 --new-version（如 v1.0.0 / v2.0.0，也支持分支名或 commit SHA）")
+        return 1
 
-    try:
-        old_version = input("旧版本: ").strip()
-        new_version = input("新版本: ").strip()
+    diff_data = tracker.get_version_diff(args.version_repo, args.old_version, args.new_version)
 
-        if not old_version or not new_version:
-            print("❌ 请提供完整的版本号")
-            return
+    if diff_data.get("error"):
+        print(f"❌ {diff_data['error']}")
+        print(f"   对比链接（浏览器打开可确认）: {diff_data['compare_url']}")
+        return 1
 
-        # 解析仓库
-        parts = old_version.split("/", 1)
-        if len(parts) != 2:
-            print("❌ 版本格式错误，应为 owner/repo")
-            return
+    print(f"\n### 版本差异: {args.version_repo}")
+    print(f"  {args.old_version} → {args.new_version}")
+    if diff_data.get("status"):
+        print(f"  状态: {diff_data['status']} (ahead {diff_data.get('ahead_by')}, behind {diff_data.get('behind_by')})")
+    print(f"  Commits 数量: {diff_data.get('total_commits', diff_data.get('commits_count', 0))}")
 
-        owner, repo = parts
+    commits = diff_data.get("commits", [])
+    if commits:
+        print("\nCommits（最多展示 10 条）:")
+        for commit in commits[:10]:
+            # GitHub compare API 返回 {commit: {message, author: {date}}, sha}
+            info = commit.get("commit", {})
+            date = (info.get("author", {}) or {}).get("date", "")[:10]
+            msg = (info.get("message", "") or "").splitlines()[0][:80]
+            sha = commit.get("sha", "")[:7]
+            print(f"  [{date}] {sha} {msg}")
 
-        # 获取版本差异
-        diff_data = tracker.get_version_diff(f"{owner}/{repo}", old_version, new_version)
-
-        print(f"\n### 版本差异: {owner}/{repo}")
-        print(f"  旧版本: {old_version}")
-        print(f"  新版本: {new_version}")
-        print(f"  Commits 数量: {diff_data['commits_count']}")
-
-        if diff_data['commits']:
-            print("\n最近的 Commits:")
-            for commit in diff_data['commits']:
-                date = commit.get('date', '')[:10]
-                msg = commit.get('message', '')[:60]
-                print(f"  [{date}] {msg[:80] if len(msg) > 80 else msg}")
-
-        print(f"\n对比链接: {diff_data['compare_url']}")
-
-    except Exception as e:
-        print(f"❌ 错误: {e}")
+    print(f"\n对比链接: {diff_data['compare_url']}")
+    return 0
 
 
 def star_command(tracker: StarTracker, args):
     """为仓库添加 Star"""
     if not args.star:
         print("❌ 请指定仓库 (--star owner/repo)")
-        return
+        return 1
 
     success, msg = tracker.star_repo(args.star)
     print(msg)
+    return 0 if success else 1
 
 
 def unstar_command(tracker: StarTracker, args):
     """取消仓库的 Star"""
     if not args.unstar:
         print("❌ 请指定仓库 (--unstar owner/repo)")
-        return
+        return 1
 
     success, msg = tracker.unstar_repo(args.unstar)
     print(msg)
+    return 0 if success else 1
 
 
 def cleanup_command(tracker: StarTracker, args):
@@ -431,20 +504,9 @@ def batch_star_command(tracker: StarTracker, args):
 
 
 def assess_value(repo: dict, health: dict) -> str:
-    """评估项目对用户的价值"""
-    # 这里可以根据自定义规则评估
-    stars = repo.get('stargazers_count', 0)
-    language = repo.get('language') or ''
-
-    # 高价值判断规则（可自定义）
-    high_value_keywords = ['claude', 'ai', 'llm', 'agent', 'python']
-    description = (repo.get('description') or '').lower()
-
-    if stars > 5000 or any(kw in description for kw in high_value_keywords):
-        return 'high'
-    elif stars > 1000 or 'Python' in language:
-        return 'medium'
-    return 'low'
+    """评估项目对用户的价值（统一走 common.assess_value，读取 user_settings.json）"""
+    from common import assess_value as shared_assess_value
+    return shared_assess_value(repo)
 
 
 def main():
@@ -456,7 +518,7 @@ def main():
   # 首次使用，初始化并保存快照
   python scripts/main.py --init --user yourname --limit 50
 
-  # 检查更新（对比上次快照）
+  # 检查更新（对比上次快照；抓取不完整时自动放弃保存，不会误报取消收藏）
   python scripts/main.py --check --user yourname
 
   # 生成完整报告
@@ -465,17 +527,17 @@ def main():
   # 导出 JSON 数据供 HTML Dashboard 使用
   python scripts/main.py --export --user yourname
 
-  # 快速启动 Dashboard
-  python scripts/main.py --export --user yourname && open dashboard.html
+  # 快速启动 Dashboard（产物固定在技能 output/ 目录）
+  python scripts/main.py --export --user yourname
 
   # 导出配置
   python scripts/main.py --export-config --user yourname
 
-  # 导入配置
+  # 导入配置（持久化到 user_settings.json，价值评估将读取）
   python scripts/main.py --import-config config.json
 
-  # 查看版本差异
-  python scripts/main.py --version-diff --repo owner/repo
+  # 查看版本差异（非交互）
+  python scripts/main.py --version-diff --repo owner/repo --old-version v1.0.0 --new-version v2.0.0
 
   # 为单个仓库添加 Star
   python scripts/main.py --star owner/repo
@@ -484,10 +546,10 @@ def main():
   python scripts/main.py --unstar owner/repo
 
   # 批量清理长期未更新的仓库（先预览）
-  python scripts/main.py --cleanup --days 90
+  python scripts/main.py --cleanup --cleanup-days 90
 
   # 批量清理（实际执行，需要 --execute）
-  python scripts/main.py --cleanup --days 90 --execute
+  python scripts/main.py --cleanup --cleanup-days 90 --execute
 
   # 批量取消 Star（从配置文件）
   python scripts/main.py --batch-unstar repos.json
@@ -501,10 +563,13 @@ def main():
     parser.add_argument("--init", action="store_true", help="初始化模式：首次同步并保存快照")
     parser.add_argument("--check", action="store_true", help="检查模式：对比快照检测更新")
     parser.add_argument("--report", action="store_true", help="报告模式：生成完整更新报告")
-    parser.add_argument("--export", action="store_true", help="导出模式：生成 projects.json 供 HTML Dashboard 使用")
+    parser.add_argument("--export", action="store_true", help="导出模式：生成 data.js 供 HTML Dashboard 使用")
     parser.add_argument("--export-config", action="store_true", help="导出配置：将当前配置保存到文件")
-    parser.add_argument("--import-config", help="导入配置：从文件导入配置")
-    parser.add_argument("--version-diff", action="store_true", help="版本差异：查看两个版本之间的 commits")
+    parser.add_argument("--import-config", help="导入配置：从文件导入配置（持久化到 user_settings.json）")
+    parser.add_argument("--version-diff", action="store_true", help="版本差异：比较两个版本之间的 commits")
+    parser.add_argument("--repo", dest="version_repo", help="版本差异的目标仓库 (owner/repo)，配合 --version-diff")
+    parser.add_argument("--old-version", help="基准版本（tag/分支/SHA），配合 --version-diff")
+    parser.add_argument("--new-version", help="目标版本（tag/分支/SHA），配合 --version-diff")
     parser.add_argument("--star", help="为指定仓库添加 Star (owner/repo)")
     parser.add_argument("--unstar", help="取消指定仓库的 Star (owner/repo)")
     parser.add_argument("--cleanup", action="store_true", help="清理长期未更新的仓库")
@@ -548,29 +613,29 @@ def main():
     # 执行对应命令
     try:
         if args.init:
-            init_command(tracker, args)
+            return init_command(tracker, args) or 0
         elif args.check:
-            check_command(tracker, args)
+            return check_command(tracker, args) or 0
         elif args.report:
-            report_command(tracker, args)
+            return report_command(tracker, args) or 0
         elif args.export:
-            export_command(tracker, args)
+            return export_command(tracker, args) or 0
         elif args.export_config:
-            export_config_command(tracker, args)
+            return export_config_command(tracker, args) or 0
         elif args.import_config:
-            import_config_command(tracker, args)
+            return import_config_command(tracker, args) or 0
         elif args.version_diff:
-            version_diff_command(tracker, args)
+            return version_diff_command(tracker, args) or 0
         elif args.star:
-            star_command(tracker, args)
+            return star_command(tracker, args) or 0
         elif args.unstar:
-            unstar_command(tracker, args)
+            return unstar_command(tracker, args) or 0
         elif args.cleanup:
-            cleanup_command(tracker, args)
+            return cleanup_command(tracker, args) or 0
         elif args.batch_unstar:
-            batch_unstar_command(tracker, args)
+            return batch_unstar_command(tracker, args) or 0
         elif args.batch_star:
-            batch_star_command(tracker, args)
+            return batch_star_command(tracker, args) or 0
         return 0
     except KeyboardInterrupt:
         print("\n\n⚠️ 操作已取消")

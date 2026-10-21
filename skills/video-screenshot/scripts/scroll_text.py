@@ -24,6 +24,9 @@ except ImportError:
 from scroll_ocr import LocalOCR, OCRFailure
 
 SCHEMA = 'video-screenshot-scroll/1'
+# Resume reuse requires identical recognition-affecting parameters. The frozen
+# roi_mode key maps to this CLI's --roi (None = automatic conservative crop).
+RESUME_KEYS = ('engine', 'batch_size', 'interval', 'roi')
 TIME_PATTERN = r'\d{1,3}:[0-5]\d(?:[:.][0-5]\d)?'
 TIME = re.compile('^'+TIME_PATTERN+'$')
 UI = re.compile(r'^(?:文字记录|原始记录|转录|全文|会议记录|Transcript|Transcription|Text|返回|Back|分享|Share|搜索|Search|播放|暂停|录音|总结|摘要)$', re.I)
@@ -423,6 +426,53 @@ def write_texts(root, blocks, issues, status):
     (root/'uncertain.md').write_text('\n'.join(unresolved)+'\n', encoding='utf-8')
 
 
+def load_resume_readings(value):
+    """Read-only batch-level reuse source: a previous partial/failed run's staging."""
+    root = Path(os.path.abspath(os.path.expanduser(value)))
+    if not root.is_dir():
+        raise ValueError('--resume-from 不是已存在的 staging 目录')
+    if root.is_symlink():
+        raise ValueError('--resume-from 不接受符号链接目录')
+    receipt_path = root/'receipt.json'
+    if not receipt_path.is_file():
+        raise ValueError('--resume-from 目录缺少 receipt.json，无法核验来源与参数')
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding='utf-8'))
+    except (ValueError, OSError) as exc:
+        raise ValueError('--resume-from 的 receipt.json 无法解析: '+str(exc))
+    rows, malformed = [], 0
+    raw_file = root/'raw-ocr.jsonl'
+    if raw_file.is_file():
+        for line in raw_file.read_text(encoding='utf-8').splitlines():
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except ValueError:
+                malformed += 1; continue
+            if not isinstance(item, dict) or item.get('stage') not in ('layout','body') or \
+                    not isinstance(item.get('frame'), str) or not isinstance(item.get('input_relative'), str) or \
+                    not isinstance(item.get('record'), dict):
+                malformed += 1; continue
+            rows.append(item)
+    return root, receipt, rows, malformed
+
+
+def copy_reading(row, new_path):
+    """Reuse an old reading verbatim; only the input path re-binds to this staging."""
+    record = dict(row['record'])
+    record['path'] = str(new_path)
+    record['resumed'] = True
+    return record
+
+
+def deadline_exceeded(begun, deadline):
+    """Wall-clock check before each OCR batch; None budget never trips. Extraction is exempt."""
+    if deadline is None:
+        return False
+    return time.monotonic()-begun > deadline
+
+
 def run(args):
     if not (math.isfinite(args.interval) and .1 <= args.interval <= 10):
         raise ValueError('--interval 需要 0.1—10 秒')
@@ -433,17 +483,35 @@ def run(args):
             raise ValueError(f'{name} 超过允许预算 {low}—{high}')
     if not math.isfinite(args.ocr_timeout) or not 1 <= args.ocr_timeout <= 600:
         raise ValueError('--ocr-timeout 需要 1—600 秒')
+    if args.deadline_seconds is not None and (not math.isfinite(args.deadline_seconds) or args.deadline_seconds <= 0):
+        raise ValueError('--deadline-seconds 需要正数（秒）')
+    resume_staging = resume_receipt = resume_rows = None
+    resume_malformed = 0
+    if args.resume_from:
+        resume_staging, resume_receipt, resume_rows, resume_malformed = load_resume_readings(args.resume_from)
     target = resolve_new_output(args.output)
     source = Path(args.input).expanduser().resolve()
     if not source.is_file():
         raise ValueError('输入视频不存在')
     ffmpeg, duration, source_width, source_height = probe(source)
     source_sha = digest(source)
+    if resume_staging is not None:
+        previous_parameters = resume_receipt.get('parameters') if isinstance(resume_receipt.get('parameters'), dict) else None
+        if resume_receipt.get('source_sha256_before') != source_sha:
+            raise ValueError('--resume-from 拒绝：上一运行来源 SHA 与本次输入不一致，不能把多次输出当作不同原素材')
+        if previous_parameters is None:
+            raise ValueError('--resume-from 拒绝：上一运行 receipt 缺少 parameters，无法核验关键参数')
+        mismatched = [name for name in RESUME_KEYS if previous_parameters.get(name) != getattr(args, name)]
+        if mismatched:
+            raise ValueError('--resume-from 拒绝：关键参数不一致 '+','.join(mismatched)+'；用相同参数重跑或新建目录')
     ocr = LocalOCR(args.engine, args.ocr_executable, args.batch_size, args.ocr_timeout, args.deny_network, args.rapid_python, args.runtime_dir)
     staging = Path(tempfile.mkdtemp(prefix='.'+target.name+'.staging-', dir=target.parent))
     os.chmod(staging, 0o700)
     begun = time.monotonic()
+    deadline_hit = False
     status, errors, issues, frames = 'draft_requires_review', [], [], []
+    resumed_readings = resumed_mismatch = 0
+    estimated_ocr_images = None
     try:
         (staging/'frames').mkdir(); (staging/'body').mkdir()
         scale = min(1., math.sqrt(args.max_pixels/(source_width*source_height)))
@@ -485,8 +553,40 @@ def run(args):
                 unique.append(ph)
             else:
                 frame['layout_cache_from'] = cache[ph]['original']
+        if resume_staging is not None:
+            # Frame identity: same-id full-page PNG in both stagings must be byte-equal.
+            # A matching reading never costs a new call; mismatches fall through to OCR.
+            for ph in unique:
+                original = cache[ph]['original']
+                old = next((r for r in resume_rows if r['stage'] == 'layout' and
+                            (r['frame'] == original or r.get('cache_from') == original)), None)
+                if old is None:
+                    continue
+                try:
+                    same = digest(resume_staging/old['input_relative']) == digest(cache[ph]['path'])
+                except OSError:
+                    same = False
+                if same:
+                    cache[ph]['record'] = copy_reading(old, cache[ph]['path'])
+                    resumed_readings += 1
+                else:
+                    resumed_mismatch += 1
+        # Cost estimate before any layout batch: registration only, never blocking.
+        # Body crops cannot be counted before layout OCR, so the bound is unique pages doubled.
+        estimated_ocr_images = 2*len(unique)
+        print(f'预计 OCR 调用 ≤ {estimated_ocr_images} 张（布局 {len(unique)} 帧 + 正文 ≤{len(unique)} 帧；批大小 {args.batch_size}）',
+              file=sys.stderr, flush=True)
         for start in range(0, min(len(unique), args.max_ocr_images), args.batch_size):
-            batch = unique[start:min(start+args.batch_size, args.max_ocr_images)]
+            batch = [ph for ph in unique[start:min(start+args.batch_size, args.max_ocr_images)]
+                     if cache[ph]['record'] is None]
+            if not batch:
+                continue
+            if deadline_exceeded(begun, args.deadline_seconds):
+                deadline_hit = True; status = 'partial'
+                covered = [f['id'] for f in frames if cache[f['pixel_sha256']]['record'] is not None]
+                issues.append({'kind': 'deadline_exhausted', 'stage': 'layout',
+                               'covered_to_frame': covered[-1] if covered else None})
+                break
             try:
                 records = ocr.recognize([cache[ph]['path'] for ph in batch])
                 for ph, record in zip(batch, records):
@@ -502,8 +602,12 @@ def run(args):
                 issues.append({'kind': 'layout_ocr_missing_after_error_or_budget', 'frame': frame['id']})
                 continue
             layouts[frame['id']] = record['normalized_lines']
+            row = {'frame': frame['id'], 'stage': 'layout', 'cache_from': frame.get('layout_cache_from'),
+                   'input_relative': str(Path(record['path']).relative_to(staging)), 'record': record}
+            if record.get('resumed') is True:
+                row['resumed'] = True
             with raw_file.open('a', encoding='utf-8') as f:
-                f.write(json.dumps({'frame': frame['id'], 'stage': 'layout', 'cache_from': frame.get('layout_cache_from'), 'input_relative': str(Path(record['path']).relative_to(staging)), 'record': record}, ensure_ascii=False)+'\n')
+                f.write(json.dumps(row, ensure_ascii=False)+'\n')
         body_cache, pages, body_unique = {}, [], []
         for n, frame in enumerate(frames):
             path = staging/frame['full']
@@ -537,10 +641,35 @@ def run(args):
                 body_cache[ph] = {'record': record, 'original': frame['id'], 'path': staging/frame['body']}
                 if record is None:
                     body_unique.append(ph)
+        if resume_staging is not None:
+            # Body rows match on identical input_relative bytes; injected readings cost no call.
+            for ph in body_unique:
+                original = body_cache[ph]['original']
+                old = next((r for r in resume_rows if r['stage'] == 'body' and
+                            (r['frame'] == original or r.get('cache_from') == original)), None)
+                if old is None:
+                    continue
+                try:
+                    same = digest(resume_staging/old['input_relative']) == digest(body_cache[ph]['path'])
+                except OSError:
+                    same = False
+                if same:
+                    body_cache[ph]['record'] = copy_reading(old, body_cache[ph]['path'])
+                    resumed_readings += 1
+                else:
+                    resumed_mismatch += 1
+            body_unique = [ph for ph in body_unique if body_cache[ph]['record'] is None]
         remaining = max(0, args.max_ocr_images-ocr.calls)
         if not errors:
             for start in range(0, min(len(body_unique), remaining), args.batch_size):
                 batch = body_unique[start:min(start+args.batch_size, remaining)]
+                if deadline_exceeded(begun, args.deadline_seconds):
+                    deadline_hit = True; status = 'partial'
+                    covered = [f['id'] for f in frames
+                               if f.get('body_pixel_sha256') and body_cache[f['body_pixel_sha256']]['record'] is not None]
+                    issues.append({'kind': 'deadline_exhausted', 'stage': 'body',
+                                   'covered_to_frame': covered[-1] if covered else None})
+                    break
                 try:
                     records = ocr.recognize([body_cache[ph]['path'] for ph in batch])
                     for ph, record in zip(batch, records):
@@ -572,8 +701,12 @@ def run(args):
                 status = 'partial'
                 issues.append({'kind': 'body_ocr_missing_after_error_or_budget', 'frame': frame['id']})
                 continue
+            row = {'frame': frame['id'], 'stage': 'body', 'cache_from': frame.get('body_cache_from'),
+                   'input_relative': str(Path(record['path']).relative_to(staging)), 'record': record}
+            if record.get('resumed') is True:
+                row['resumed'] = True
             with raw_file.open('a', encoding='utf-8') as f:
-                f.write(json.dumps({'frame': frame['id'], 'stage': 'body', 'cache_from': frame.get('body_cache_from'), 'input_relative': str(Path(record['path']).relative_to(staging)), 'record': record}, ensure_ascii=False)+'\n')
+                f.write(json.dumps(row, ensure_ascii=False)+'\n')
             frame['ocr_status'] = 'recognized'
             pages.append((frame, observations(record['normalized_lines'], frame)))
         blocks, alignment_issues = stitch(pages)
@@ -604,6 +737,10 @@ def run(args):
             'deny_network': args.deny_network, 'time_basis': 'fps_filter_derived_approx_not_source_pts',
             'blocks': len(blocks), 'body_characters': sum(len(key(b['text'])) for b in blocks),
             'roi_methods': dict(Counter(f['roi']['method'] for f in frames)), 'parameters': vars(args),
+            'deadline_seconds': args.deadline_seconds, 'deadline_hit': deadline_hit,
+            'estimated_ocr_images': estimated_ocr_images,
+            'resumed_readings': resumed_readings, 'resumed_skipped_malformed': resume_malformed,
+            'resumed_skipped_mismatch': resumed_mismatch, 'resume_from': str(resume_staging) if resume_staging else None,
             'model_review': 'not_reviewed', 'elapsed_seconds': round(time.monotonic()-begun,3),
             'privacy': 'explicit_text_mode_contains_raw_text_and_source_paths_no_cloud_no_skill_archive',
             'coverage': 'screen_visible_partial_meeting_not_full_transcript'})
@@ -653,6 +790,9 @@ def parse_args(argv=None):
     p.add_argument('--max-review-groups', type=int, default=6)
     p.add_argument('--max-review-images', type=int, default=18)
     p.add_argument('--roi', type=lambda x: [int(v) for v in x.split(',')], help='显式 left,top,right,bottom，抽帧后像素坐标')
+    p.add_argument('--deadline-seconds', type=float, default=None,
+                   help='OCR 批次粒度的墙钟时间预算（秒）；默认无限。只在每个布局/正文 OCR 批次开始前检查，抽取子进程不受约束')
+    p.add_argument('--resume-from', help='上一次 partial/failed 运行的 staging 目录；按来源SHA+关键参数+帧PNG字节复用读数，旧目录只读')
     args = p.parse_args(argv)
     if args.roi is not None and len(args.roi) != 4:
         p.error('--roi 必须有4个整数')

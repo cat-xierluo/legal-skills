@@ -1,12 +1,22 @@
 # 变更日志
 
-## [1.23.3] - 2026-10-14
+## [1.24.1] - 2026-10-21
 
 ### 修复
 - 草稿转审查使用官方 `gh pr ready` 保留同一 PR；移除关闭重建的错误默认路径，避免切断编号与审查记录。转换前后绑定 head/base，失败先回查，保留独立授权与最终 CI 门禁。
 
 ### 验证
 - 增加离线文档合同回归并接入 Git Privacy CI；官方手册和 CLI 帮助核验命令存在。未转换、关闭或合并真实 PR，文档测试不等同真实权限/网络条件下的执行验收。
+
+## [1.24.0] - 2026-10-18
+
+### 新增
+- 新增 `scripts/privacy-map.py`：把 privacy_check / safe-push / safe-pr 的 PRIVACY_REVIEW_REQUIRED 诊断按 (rule, source_sha256, content_sha256) 摘要映射回提交、文件与行——逐提交复算 checker 扫描的全部来源（`commit:<oid>:message`、`commit:<oid>:patch`、`path:`、`blob:`，与 checker 同参数保证摘要一致），打印命中行的本机用户名段。`--record --reviewer` 仅对全占位符用户名段的 local-user-path 命中登记 synthetic 例外，写后复用 checker 加载校验；其他规则、非占位符段或未能映射的诊断转人工并退出码 2，不静默放行。不联网、不改写历史。
+- privacy-preflight.md 增补该工具的用法、登记边界与回归入口。
+
+### 验证
+- 新增 `scripts/test_privacy_map.py` 隔离回归 3 项（真实临时仓库）：blob / patch / message 三类来源映射与非占位符用户名转人工；登记后 checker 复扫通过（PRIVACY_OK）；`--record` 缺 `--reviewer` 与空输入均拒绝。
+- 本机（python3.14）`test_privacy_check.py` 存在 4 项既有失败，在未改动主检出上复现完全相同的失败集，与本次改动无关；新增测试 3/3 通过。
 
 ## [1.23.2] - 2026-10-11
 

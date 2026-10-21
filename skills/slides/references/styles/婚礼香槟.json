@@ -1,0 +1,105 @@
+{
+  "name": "婚礼香槟",
+  "description": "婚礼/庆典风格。香槟金 + 柔粉 + 奶白底，浪漫优雅。适合婚礼策划、活动提案、品牌仪式感内容。",
+  "source": "wedding & event design",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFF9F0",
+      "#FFFDF8"
+    ],
+    "textColors": [
+      "#4A3728",
+      "#8A7568"
+    ],
+    "accents": [
+      "#C9A87C",
+      "#E8B4B8"
+    ],
+    "dividers": [
+      "#E8D8C8"
+    ],
+    "palette": [
+      "#FFF9F0",
+      "#4A3728",
+      "#C9A87C",
+      "#E8B4B8",
+      "#8A7568",
+      "#E8D8C8"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Playfair Display",
+      "Noto Serif SC"
+    ],
+    "fontRoles": {
+      "heading": "'Playfair Display', serif",
+      "body": "'Noto Serif SC', serif"
+    },
+    "titleSizes": [
+      44,
+      32
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "64px",
+    "sectionGap": "32px",
+    "itemGap": "16px"
+  },
+  "layout": {
+    "preferredComposition": "center-elegant",
+    "negativeSpacePriority": "high"
+  },
+  "tone": {
+    "keywords": [
+      "浪漫",
+      "优雅",
+      "仪式感",
+      "精致"
+    ]
+  },
+  "prohibited": [
+    "dark-background",
+    "bold-geometric",
+    "neon",
+    "data-heavy"
+  ],
+  "promptSnippet": "Celebratory elegance. Champagne (#C9A87C) and straw (#E8D8C8) over cream (#FFF9F0), with deep cocoa (#4A3728) text and a blush (#E8B4B8) accent. Playfair Display serif headlines, wide letter-spacing, ornamental rules. Warm, unhurried, ceremonial.",
+  "components": [
+    {
+      "type": "rsvp-card",
+      "usage": "席位/邀请卡",
+      "style": "background: #FFF9F0; border: 1px solid #E8D8C8; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "ornament-rule",
+      "usage": "花饰分隔线",
+      "style": "height: 1px; background: #E8D8C8"
+    },
+    {
+      "type": "schedule-line",
+      "usage": "当日流程行",
+      "style": "border-top: 1px solid #E8D8C8; padding: 12px 0; font-family: 'Noto Serif SC', serif"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#4A3728",
+    "--ink-rgb": "74,55,40",
+    "--paper": "#FFF9F0",
+    "--paper-rgb": "255,249,240",
+    "--accent": "#C9A87C",
+    "--accent-light": "#E8B4B8",
+    "--muted": "#8A7568",
+    "--divider": "#E8D8C8"
+  }
+}

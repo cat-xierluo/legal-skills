@@ -2,7 +2,7 @@
 /**
  * zcode-browser-driver.cjs — ZCode localhost GUI 浏览器驱动 MVP（Node CJS，输出 JSON）。
  *
- * 合同来源：multi-agent-orchestration references/34、35（2026-10-02 runtime 3.14.3 页面映射）。
+ * 合同来源：multi-agent-orca references/34、35（2026-10-02 runtime 3.14.3 页面映射）。
  * 所有任务输入仅经 GUI DOM（文本框键入 + 发送按钮点击），不调用隐藏 RPC、不直接 CLI 模型调用。
  *
  * 命令：

@@ -13,7 +13,15 @@ GitHub Star 分类动态生成器
 """
 
 import json
-import yaml
+
+try:
+    import yaml
+except ImportError:
+    print("❌ 缺少依赖: pyyaml")
+    print("   请运行: pip install pyyaml")
+    print("   或运行: pip install -r assets/requirements.txt")
+    raise SystemExit(1)
+
 import argparse
 from pathlib import Path
 from collections import Counter

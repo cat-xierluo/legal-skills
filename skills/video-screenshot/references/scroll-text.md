@@ -84,6 +84,8 @@ python3 scripts/run_scroll.py -i "/输入/录屏.mp4" -o "/私有输出/新Rapid
 | `--ocr-timeout` | 每批默认90秒 |
 | `--max-review-groups` / `--max-review-images` | 默认6组/18张唯一来源图；最高8组/24张，不因疑点多而自动扩大 |
 | `--roi` | `left,top,right,bottom`四个整数；不指定时自动保守定位，指定时使用抽帧后像素坐标 |
+| `--deadline-seconds` | 默认不设（无限）；OCR 批次粒度的墙钟总预算，见专节 |
+| `--resume-from` | 上一次 partial/failed 的 staging 目录；按三要素复用读数，旧目录只读，见专节 |
 | `--ocr-executable` / `--rapid-python` | 高级兼容参数，分别指定受信helper或已有完整独立Rapid解释器；一般使用缓存即可 |
 
 例如确认实际抽帧后的图片为800×1100，正文在y=180到1000之间时，可另跑全新目录：
@@ -94,6 +96,48 @@ python3 scripts/run_scroll.py -i "/输入/录屏.mp4" -o "/私有输出/显式�
 ```
 
 先看真实抽帧图片再填ROI。显式裁区触及OCR行时只记录疑点，不替用户更改坐标；不确定正文边界时保留自动定位或全页回退。
+
+## 时间预算 `--deadline-seconds`
+
+`--deadline-seconds` 是从运行开始计的墙钟总预算（正浮点秒，默认不设=无限）。它只约束 **OCR 批次粒度**：每个布局/正文 OCR 批次开始前检查一次 `time.monotonic()-begun > deadline`，超预算则不再开始后续批次，本轮 status 记 `partial`，并在 `issues.json` 写入 `deadline_exhausted`（带 `stage` 与已覆盖到的 `covered_to_frame`）。FFmpeg 抽帧子进程不受该预算约束（其自身另有 600 秒 timeout）。
+
+已完成的批次成果**不会丢**：已有布局/正文读数照常进入既有 assemble/dump 路径成稿，正文裁图阶段缺读数时按既有语义退回全页读数并标记 `body_ocr_fallback_full_page`。因此一次被预算截断的运行仍然产出可核对的草稿，只是披露未处理范围。`receipt.json` 回显 `deadline_seconds` 与 `deadline_hit: true/false`。
+
+预算值应为正数；`0`、负值、NaN 直接以参数错误退出（exit 2），不开新目录。
+
+```bash
+python3 scripts/run_scroll.py -i "/输入/录屏.mp4" -o "/私有输出/预算截断目录" \
+  --deadline-seconds 900 --deny-network
+```
+
+## 批次级恢复 `--resume-from`
+
+`--resume-from STAGING_DIR` 指向**上一次 partial/failed 运行保留的 staging 目录**（其中含 `raw-ocr.jsonl`），把已完成的 OCR 读数按批次粒度复用，未覆盖部分增量补齐，从而不必从零重跑。staging 路径会在运行失败时打印保留；成功运行的 staging 已原子提交为输出目录本身，也可作为复用源。
+
+**恢复匹配三要素，全部满足才复用一条读数**：
+
+1. **来源一致**：上一 staging 的 receipt 中 `source_sha256_before` 必须等于本次源文件实算 SHA。resume 只认一个来源 SHA，发现不同即拒绝启动（exit 2，具名错误），不把多次输出当作不同原素材。
+2. **关键参数一致**：`engine`、`batch_size`、`interval`、`roi`（`--roi` 未指定时为自动裁区）。任一不一致即具名拒绝，不复用。
+3. **帧像素一致**：旧 raw 行的 `frame` id（或 `cache_from`）对应的同名帧文件，在新 staging 中存在，且该 PNG 文件字节 SHA 与旧 `input_relative` 文件字节 SHA 一致。帧像素不变才复用；不放宽到"帧号相同"了事。
+
+命中的读数直接跳过该帧该 stage 的 OCR 调用（`ocr.calls` 只计新调用），追加到新 `raw-ocr.jsonl` 时带 `resumed: true`；`receipt.json` 记录 `resumed_readings`、`resumed_skipped_malformed`（旧 raw 行损坏逐行跳过并计数，不崩）、`resumed_skipped_mismatch`（同名帧但像素已变，重 OCR）。partial 语义不变，未匹配帧走正常 OCR。
+
+**旧 staging 目录只读**：恢复过程不写旧目录；`--resume-from` 路径出现写打开即违规，新 staging 始终另建。恢复等结果性：与全量重跑的 `transcript.txt`/`blocks.json` 等逐字节一致，只省调用与耗时。
+
+```bash
+python3 scripts/run_scroll.py -i "/输入/录屏.mp4" -o "/私有输出/恢复补齐目录" \
+  --resume-from "/私有输出/上次保留的.staging-xxxx" --deny-network
+```
+
+## 成本预估
+
+布局批循环开始前，stderr 打印一行预估并写入 receipt `estimated_ocr_images`：
+
+```text
+预计 OCR 调用 ≤ N 张（布局 M 帧 + 正文 ≤M 帧；批大小 B）
+```
+
+N 按现有 unique/body_unique 计数逻辑推得（布局唯一页数与正文唯一裁图数之和的上界）。这只是**登记，不阻断、不改默认**：超预算仍按 `--max-ocr-images` 既有语义保留部分结果。
 
 ## 顺序与正文区域
 
@@ -111,8 +155,8 @@ python3 scripts/run_scroll.py -i "/输入/录屏.mp4" -o "/私有输出/显式�
 默认间隔 0.5 秒；最多 600 张帧、每帧 4M 像素、600 次图像 OCR（布局+正文共享）；每批最多 8 图、超时 90 秒。疑点复核最多 6 组/18 张唯一全页来源，每组最多 3 张相邻页，hard cap 8 组/24 张。参数可降低，代码限制不能隐式突破。auto另有最多2次非敏感图后端预检，与源图600次预算分开；receipt的backend_probe_images和backend-preflight.json记录实际次数/进程，源OCR计数不含这些测试图。
 
 - `0`：本地提取链路完成，`draft_requires_review`；不代表文字全对或全文无遗漏。
-- `3`：`partial` 或 `failed`；预算耗尽/引擎运行错误/没有正文。裁图阶段无法继续但已有全页读数时，退回全页及其坐标，保留拟议裁区/裁图并标记body_ocr_fallback_full_page，仍是partial。新目录保留已生成的帧、raw、诊断和可用稿，并披露待处理范围。不能把部分结果当完整完成。
-- `2`：参数、引擎入口、视频预检或提交错误。不会替换任何已有目录；若已建 staging，打印其位置并保留诊断。
+- `3`：`partial` 或 `failed`；预算耗尽/引擎运行错误/没有正文。预算包含 `--max-frames`、`--max-ocr-images` 与 `--deadline-seconds` 三种口径；裁图阶段无法继续但已有全页读数时，退回全页及其坐标，保留拟议裁区/裁图并标记body_ocr_fallback_full_page，仍是partial。新目录保留已生成的帧、raw、诊断和可用稿，并披露待处理范围。不能把部分结果当完整完成。
+- `2`：参数、引擎入口、视频预检、`--resume-from` 拒绝或提交错误。不会替换任何已有目录；若已建 staging，打印其位置并保留诊断。
 
 只接受不存在的新目录，输出或父目录符号链接、已有目录一律拒绝。本技能源码仓库内输出也拒绝；其他输出位置由调用者确认私密且不入 Git。临时目录默认 0700，全部生成/绑定后通过 macOS/Linux 原子“不覆盖”目录重命名提交；并发出现的空目录也不能被替换。其他平台缺提交接口时保留 staging 并报错。不会扫描或清理旧输出，不归档文字到 Skill `archive/`。
 
@@ -122,7 +166,7 @@ python3 scripts/run_scroll.py -i "/输入/录屏.mp4" -o "/私有输出/显式�
 |---|---|
 | `transcript.txt` / `.md` | 可复制草稿；页面时间/标签与 block ID；不是重新 ASR |
 | `blocks.json` | 顺序块、所有观察变体、边界与对齐状态 |
-| `raw-ocr.jsonl` | 全页布局与正文原 OCR，真实坐标/置信度；包含原文 |
+| `raw-ocr.jsonl` | 全页布局与正文原 OCR，真实坐标/置信度；包含原文；恢复复用的行带 `resumed: true` |
 | `frames/` / `body/` | 全页与保守/显式正文裁图 |
 | `frames.json` | 抽样秒数、全页/正文相对路径与 SHA、裁区、缓存来源、排除行 |
 | `provenance.tsv` | block→frame→近似采样秒数→OCR 行号/框；坐标空间以该帧正文 OCR 输入为准 |
@@ -130,7 +174,7 @@ python3 scripts/run_scroll.py -i "/输入/录屏.mp4" -o "/私有输出/显式�
 | `review/questions.json` / `INSTRUCTIONS.md` | 小批相邻图单一疑点任务，默认 `not_reviewed` / `pending` |
 | `ocr-processes.json` / `extraction-process.json` | 真实 argv、退出码、stderr、引擎与耗时；含敏感原读数 |
 | `backend-preflight.json` | auto选择的非敏感测试真实进程；显式选择时为空，与源OCR预算分开 |
-| `receipt.json` | 原片前后 SHA、来源、参数、状态、引擎及预算实耗 |
+| `receipt.json` | 原片前后 SHA、来源、参数、状态、引擎及预算实耗；含 `deadline_seconds`/`deadline_hit`、`estimated_ocr_images` 与恢复计数 |
 | `output-manifest.json` | 最终输出文件与真实 SHA，供检查完整性 |
 
 原始进程 argv/path 保留当时 staging 路径；raw 的 `input_relative` 和 receipt 的 staging/output 映射支持移动后的回查。UI 标签与正文的自动拆分也可能有错；不要在不了解版面时抄全文做语义重写。
@@ -157,4 +201,4 @@ python3 scripts/check_scroll_text.py --verify-output /私有输出/已生成目�
 python3 scripts/check_pipeline.py --case all
 ```
 
-`check_scroll_text.py` 生成自含非敏感图像/视频与本地假引擎，检查两种正文起点、稳定/新增/滚动、边界保护、回滚、真实重复、变体守恒、缺引擎/运行错误、预算、源/旧输出保护及提交竞态。CLI 假引擎验证合同，不代表 OCR 语义准确率；实际引擎/录屏仍需另跑、看首尾/裁边/重复/模糊。输出绑定检查只验证可观察来源与哈希，不取代逐字校验。
+`check_scroll_text.py` 生成自含非敏感图像/视频与本地假引擎，检查两种正文起点、稳定/新增/滚动、边界保护、回滚、真实重复、变体守恒、缺引擎/运行错误、预算、源/旧输出保护及提交竞态。其中预算与恢复用例覆盖：deadline 在布局/正文两个 stage 截断后已有批次成稿不丢、恢复复用后终稿与全量逐字节一致且恢复行带 `resumed:true`、来源 SHA/engine/batch_size 不一致具名拒绝、同名帧像素变化不复用、损坏 raw 行跳过计数、默认行为零回归。CLI 假引擎验证合同，不代表 OCR 语义准确率；实际引擎/录屏仍需另跑、看首尾/裁边/重复/模糊。输出绑定检查只验证可观察来源与哈希，不取代逐字校验。

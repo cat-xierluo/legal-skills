@@ -233,7 +233,7 @@ contract_args=(
   --correlation-id "corr.task-contract.1"
   --expected-action "Review the frozen head and reply with evidence."
   --evidence-ref "git:abc123"
-  --evidence-ref "path:skills/multi-agent-orchestration/SKILL.md"
+  --evidence-ref "path:skills/multi-agent-orca/SKILL.md"
   --text "Please review the frozen candidate."
 )
 
@@ -280,7 +280,7 @@ assert_true "payload freezes context, correlation, action and typed evidence" jq
     and .expected_action == "Review the frozen head and reply with evidence."
     and .authority == "informational_only"
     and .message.thread_id == "thread.task-contract"
-    and .evidence_refs == ["git:abc123","path:skills/multi-agent-orchestration/SKILL.md"]
+    and .evidence_refs == ["git:abc123","path:skills/multi-agent-orca/SKILL.md"]
     and .sender == {role:"coordinator",terminal_handle:"term-pm-contract"}
     and .recipient == {kind:"dispatch",dispatch_id:"ctx-contract"}
     and .context == {run_id:"run-contract",task_id:"task-contract",dispatch_id:"ctx-contract"}

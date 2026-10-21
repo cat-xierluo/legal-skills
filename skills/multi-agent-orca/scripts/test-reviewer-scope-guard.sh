@@ -131,8 +131,8 @@ FIXTURE="$(cd "$FIXTURE" && pwd -P)"
 git -C "$FIXTURE" init -q
 WORKTREE="$FIXTURE"
 SESSION_ROOT="$WORKTREE/.claude/agent-sessions/rev-1"
-SKILL_CONFIG="$WORKTREE/skills/multi-agent-orchestration/config"
-ALLOW_ALL="skills/multi-agent-orchestration/**"
+SKILL_CONFIG="$WORKTREE/skills/multi-agent-orca/config"
+ALLOW_ALL="skills/multi-agent-orca/**"
 
 ROLE_ENVS=("SCOPE_GUARD_ROLE=reviewer" "SCOPE_GUARD_SESSION_ROOT=$SESSION_ROOT")
 
@@ -144,7 +144,7 @@ run_hook "reviewer writes own session context" allow \
 
 run_hook "reviewer cannot write outside session context" deny \
   "${ROLE_ENVS[@]}" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
-  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orchestration/SKILL.md\"}}"
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orca/SKILL.md\"}}"
 
 # 回归（要求 5）：reviewer 不得在安装 Skill 的 config/ 下创建 *.local.yaml
 run_hook "reviewer cannot create skill config *.local.yaml" deny \
@@ -163,7 +163,7 @@ deny_reason "config local yaml deny reason names the rule" "reviewer role: confi
 
 run_hook "granted reviewer writes allowlisted doc" allow \
   "${ROLE_ENVS[@]}" "SCOPE_GUARD_REVIEW_REPAIR_GRANT=1" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
-  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orchestration/SKILL.md\"}}"
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orca/SKILL.md\"}}"
 
 run_hook "granted reviewer still cannot write config local yaml" deny \
   "${ROLE_ENVS[@]}" "SCOPE_GUARD_REVIEW_REPAIR_GRANT=1" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
@@ -177,7 +177,7 @@ run_hook "granted reviewer still cannot write outside allowlist" deny \
 
 run_hook "implementer allowlist match allows" allow \
   "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
-  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orchestration/SKILL.md\"}}"
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orca/SKILL.md\"}}"
 
 run_hook "implementer allowlist mismatch denies" deny \
   "SCOPE_GUARD_ALLOW=docs/**" -- \
@@ -211,7 +211,7 @@ run_hook "reviewer Update cannot create skill config local yaml" deny \
 
 run_hook "granted reviewer Update follows allowlist (match)" allow \
   "${ROLE_ENVS[@]}" "SCOPE_GUARD_REVIEW_REPAIR_GRANT=1" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
-  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orchestration/SKILL.md\"}}"
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orca/SKILL.md\"}}"
 
 run_hook "granted reviewer Update follows allowlist (mismatch)" deny \
   "${ROLE_ENVS[@]}" "SCOPE_GUARD_REVIEW_REPAIR_GRANT=1" "SCOPE_GUARD_ALLOW=docs/**" -- \
@@ -219,7 +219,7 @@ run_hook "granted reviewer Update follows allowlist (mismatch)" deny \
 
 run_hook "implementer Update allowlist match allows" allow \
   "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
-  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orchestration/SKILL.md\"}}"
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orca/SKILL.md\"}}"
 
 run_hook "implementer Update allowlist mismatch denies" deny \
   "SCOPE_GUARD_ALLOW=docs/**" -- \

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>章节分隔页模板</title>
+  <link rel="stylesheet" href="_base.css">
+  <style>
+    :root {
+      --ink: #18181B; --ink-rgb: 24,24,27;
+      --paper: #FAFAF8; --paper-rgb: 250,250,248;
+      --accent: #D97706; --accent-light: #F59E0B;
+      --muted: #52525B; --surface: #FFFFFF; --surface-rgb: 255,255,255;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    章节分隔页 (Section Divider)
+    极简留白：kicker → 幕号 → 大标题 → 一行引语
+    hero dark / hero light 交替使用制造节奏
+    适用：章节封面、幕间转场、收束过渡
+  -->
+  <div class="slide dark">
+    <div class="chrome">
+      <p>第一幕 · Act I</p>
+      <p>04 / 12</p>
+    </div>
+
+    <div class="v-center" style="padding: 0 10%;">
+      <p class="kicker" data-anim>ACT I</p>
+      <h1 class="hero-title" style="font-size: 46px;" data-anim>章节标题</h1>
+      <p class="lead" style="color: rgba(250,250,248,0.6); margin-top: 14px;" data-anim>
+        一句话概括本章核心议题。
+      </p>
+    </div>
+
+    <div class="foot">
+      <p>章节说明</p>
+      <p>— · —</p>
+    </div>
+  </div>
+</body>
+</html>

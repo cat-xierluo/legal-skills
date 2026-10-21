@@ -1,0 +1,45 @@
+# slides 本地/私有文件 —— 一律不进入版本库与公开发布包。
+# 公私区分约定：Git 跟踪的 = 可发布通用内容；被本文件忽略的 = 使用者私有。
+# 注意：.gitignore 只防新增跟踪，已跟踪文件必须在发布允许清单中单独排除。
+
+# 本地配置（便携安装位置）
+config/profile.local.json
+config/*.local.json
+config/*.local.*
+
+# 本人私有资料原件与个人数据（旧版身份/品牌/风格等的恢复来源）
+config/local/
+
+# 素材目录（skill 常规目录）：图片/二进制默认私有——个人照片与二维码靠这层防误入库；
+# 要公开分发的素材用 ! 显式豁免（如 !assets/共享图标.png）
+assets/*.png
+assets/*.jpg
+assets/*.jpeg
+assets/*.webp
+assets/*.gif
+
+# 自提取风格与个人偏好
+styles.local/
+*.local.json
+*.local.md
+
+# 运行产物
+*.pptx
+*.pdf
+*-style.json
+
+# 编辑器与系统
+.DS_Store
+
+# Public schemas/templates must survive parent repository ignore rules.
+!config/profile.schema.json
+!references/research/
+!references/research/*.md
+!references/research/slides_outline.schema.json
+!references/templates/
+!references/templates/*.html
+!references/templates/*.css
+!references/templates/README.md
+!references/templates/previews/
+!references/templates/previews/*.png
+node_modules/

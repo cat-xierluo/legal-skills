@@ -10,7 +10,7 @@
 #   3. scope-guard.py + spawn-worker.sh reviewer 写范围纪律
 #      （默认只写自身 Session Context；config/*.local.yaml 永远拒绝）
 #
-# 用法：bash skills/multi-agent-orchestration/scripts/test-blocker-recovery.sh
+# 用法：bash skills/multi-agent-orca/scripts/test-blocker-recovery.sh
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

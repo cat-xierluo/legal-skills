@@ -3,7 +3,7 @@
 #
 # 职责边界（与 git-workflow 分工）：删除资格真值来自 git-workflow 的分支清理规则
 # （PR state == MERGED、精确 head 一致、无 stacked child、worktree 干净、非长期集成/
-# 默认分支）；本脚本是 multi-agent-orchestration 的生命周期执行者：先经
+# 默认分支）；本脚本是 multi-agent-orca 的生命周期执行者：先经
 # clean-worktree.sh 释放 terminal/lease/worktree/本地分支，再删除远端短分支，最后
 # 机械验证零残留。任何门禁不确定或失败都输出 deferred-cleanup 理由并保持现场不动。
 #

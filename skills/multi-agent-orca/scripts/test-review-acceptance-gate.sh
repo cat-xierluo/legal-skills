@@ -28,8 +28,8 @@ base = {
     "review_expiry": "交付合并后随契约归档；重开深度审查必须签发新契约",
     "blocking_findings": [],
     "verification_evidence": [
-        {"command": "bash skills/multi-agent-orchestration/scripts/test-review-acceptance-gate.sh", "exit_code": 0},
-        {"command": "python3 skills/multi-agent-orchestration/scripts/review-acceptance-gate.py skills/multi-agent-orchestration/templates/review-acceptance.example.json", "exit_code": 0},
+        {"command": "bash skills/multi-agent-orca/scripts/test-review-acceptance-gate.sh", "exit_code": 0},
+        {"command": "python3 skills/multi-agent-orca/scripts/review-acceptance-gate.py skills/multi-agent-orca/templates/review-acceptance.example.json", "exit_code": 0},
     ],
     "role_exception": None,
 }

@@ -1,0 +1,60 @@
+{
+  "name": "极简编辑白",
+  "description": "现代极简编辑风格。纯白底高对比排版，翡翠绿(#10B981)为唯一强调色，大面积留白，极细分隔线。适合专业培训、讲座与前瞻分享。",
+  "source": "slides 内置中性预设",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": { "width": 1280, "height": 720, "ratio": "1.78" },
+  "colors": {
+    "backgrounds": ["#FFFFFF", "#F9FAFB"],
+    "textColors": ["#111827", "#4B5563"],
+    "accents": ["#10B981"],
+    "dividers": ["#E5E7EB"],
+    "palette": ["#FFFFFF", "#111827", "#4B5563", "#10B981", "#E5E7EB", "#F9FAFB"]
+  },
+  "typography": {
+    "fontFamilies": ["Playfair Display", "Inter"],
+    "titleSizes": [64, 44],
+    "bodySizes": [20, 24],
+    "captionSizes": [14],
+    "fontRoles": {
+      "heading": "'Playfair Display', serif",
+      "body": "'Inter', sans-serif"
+    }
+  },
+  "spacing": {
+    "pagePadding": "80px",
+    "sectionGap": "40px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "preferredComposition": "asymmetrical-balanced",
+    "negativeSpacePriority": "high",
+    "dividerWidth": "0.5px"
+  },
+  "tone": {
+    "keywords": ["专业严谨", "前瞻创新", "干练高效", "启发引导"]
+  },
+  "prohibited": [
+    "purple-dominant-gradient",
+    "heavy-shadow",
+    "thick-border",
+    "flashy-3d-chart"
+  ],
+  "promptSnippet": "Modern minimalist editorial style. Pure white background with high-contrast black typography. Emerald green (#10B981) as the primary accent color. Large negative space, ultra-thin 0.5px dividers, and sophisticated serif/sans-serif pairing (Playfair Display + Inter). Focus on clarity and professional elegance.",
+  "components": [
+    { "type": "accent-text", "style": "color: #10B981; font-weight: 600" },
+    { "type": "thin-divider", "style": "height: 0.5px; background: #E5E7EB" },
+    { "type": "quote-block", "style": "background: #F9FAFB; border-left: 3px solid #10B981; padding: 16px 20px" },
+    { "type": "caption", "style": "font-size: 14px; color: #4B5563; text-transform: uppercase; letter-spacing: 0.05em" }
+  ],
+  "cssVariables": {
+    "--primary": "#111827",
+    "--accent": "#10B981",
+    "--bg-main": "#FFFFFF",
+    "--bg-surface": "#F9FAFB",
+    "--text-body": "#4B5563",
+    "--divider": "#E5E7EB",
+    "--font-heading": "'Playfair Display', serif",
+    "--font-body": "'Inter', sans-serif"
+  }
+}

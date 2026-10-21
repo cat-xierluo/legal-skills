@@ -19,7 +19,8 @@ from urllib.parse import urlparse
 SCRIPT_DIR = Path(__file__).parent.resolve()
 MANAGER_DIR = SCRIPT_DIR.parent
 ASSETS_DIR = MANAGER_DIR / "assets"
-REGISTRY_FILE = ASSETS_DIR / "skill-registry.json"
+# SKILL_MANAGER_REGISTRY 环境变量可覆盖（测试/非标准安装位置，与 relink-skill.py 一致）
+REGISTRY_FILE = Path(os.environ.get("SKILL_MANAGER_REGISTRY") or (ASSETS_DIR / "skill-registry.json"))
 EXAMPLE_FILE = ASSETS_DIR / "skill-registry.example.json"
 
 # 确保 assets 目录存在
@@ -426,10 +427,23 @@ def record_install(skill_name: str, source: str, skill_path: Path = None, action
                 if not info["current_version"]:
                     info["current_version"] = remote_version
     
+    # 保留已有 install_links（链接位置建档，供 relink-skill.py --from-registry 秒查），
+    # 并登记本次安装位置（幂等去重）
+    previous = registry.get(skill_name) or {}
+    if isinstance(previous.get("install_links"), list):
+        info["install_links"] = previous["install_links"]
+    if skill_path:
+        link_path = str(skill_path)
+        if not any((i.get("path") if isinstance(i, dict) else i) == link_path
+                   for i in info.get("install_links", [])):
+            info.setdefault("install_links", []).append({
+                "path": link_path, "target": source,
+                "recorded_at": get_current_timestamp(), "via": "install"})
+
     # 更新或创建记录
     registry[skill_name] = info
     save_registry(registry)
-    
+
     return info
 
 

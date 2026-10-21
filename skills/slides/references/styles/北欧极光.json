@@ -1,0 +1,105 @@
+{
+  "name": "北欧极光",
+  "description": "北欧高纬清冷风格。冰灰蓝底 + 极光绿/粉强调色，清冷高级。适合设计展示、品牌定位、高端消费品。",
+  "source": "Nordic design aesthetics",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#F0F4F8",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#1E293B",
+      "#64748B"
+    ],
+    "accents": [
+      "#06B6D4",
+      "#A78BFA"
+    ],
+    "dividers": [
+      "#CBD5E1"
+    ],
+    "palette": [
+      "#F0F4F8",
+      "#1E293B",
+      "#06B6D4",
+      "#A78BFA",
+      "#64748B",
+      "#CBD5E1"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      40,
+      32
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "64px",
+    "sectionGap": "32px",
+    "itemGap": "16px"
+  },
+  "layout": {
+    "preferredComposition": "scandinavian-clean",
+    "negativeSpacePriority": "high"
+  },
+  "tone": {
+    "keywords": [
+      "清冷",
+      "高级",
+      "极简",
+      "功能"
+    ]
+  },
+  "prohibited": [
+    "warm-colors",
+    "gradient",
+    "dense-layout",
+    "decorative-elements"
+  ],
+  "promptSnippet": "Nordic high-latitude clarity. Cool ice-grey (#F0F4F8) ground with slate (#1E293B) text, and aurora cyan (#06B6D4) plus soft violet (#A78BFA) used like light rather than paint. Wide margins, restrained type, functional-first. Calm, expensive, no ornament.",
+  "components": [
+    {
+      "type": "spec-list",
+      "usage": "参数列表",
+      "style": "border-top: 1px solid #CBD5E1; padding: 12px 0; font-family: 'PingFang SC', sans-serif"
+    },
+    {
+      "type": "feature-tile",
+      "usage": "特性块",
+      "style": "background: #F0F4F8; border: 1px solid #CBD5E1; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "price-tier",
+      "usage": "价格档位",
+      "style": "background: #F0F4F8; border-top: 2px solid #06B6D4; padding: 16px 20px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1E293B",
+    "--ink-rgb": "30,41,59",
+    "--paper": "#F0F4F8",
+    "--paper-rgb": "240,244,248",
+    "--accent": "#06B6D4",
+    "--accent-light": "#A78BFA",
+    "--muted": "#64748B",
+    "--divider": "#CBD5E1"
+  }
+}

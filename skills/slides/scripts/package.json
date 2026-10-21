@@ -1,0 +1,25 @@
+{
+  "name": "html2pptx",
+  "version": "1.5.16",
+  "description": "将 HTML 幻灯片转换为高保真可编辑 PPTX 或 PDF",
+  "main": "html2pptx.js",
+  "scripts": {
+    "convert": "node convert.js",
+    "validate": "node validate-slides.js",
+    "validate:strict": "node validate-slides.js --strict",
+    "previews": "node generate-previews.js",
+    "test:privacy": "node --test tests/test-privacy.cjs",
+    "test:conversion": "node --test tests/test-conversion.cjs",
+    "test:publication": "node --test tests/test-publication.cjs"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0",
+    "pptxgenjs": "^3.12.0",
+    "sharp": "^0.33.0",
+    "commander": "^13.0.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

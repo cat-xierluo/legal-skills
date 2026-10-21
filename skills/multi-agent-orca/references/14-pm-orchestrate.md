@@ -1,6 +1,6 @@
 # PM 统一控制入口
 
-> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.28.0。
+> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orca`（v2.28.0 编写，v3.0.1 名称收敛复核）。
 
 ## 目录
 

@@ -2,7 +2,7 @@
 name: skill-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.7.2"
+version: "1.9.1"
 description: 管理 Claude Code、Codex、OpenClaw、WorkBuddy/CodeBuddy 和 QoderWork Skills 的安装、版本追踪、更新检查与项目 Agent 初始化。支持从本地路径或 GitHub 仓库安装，优先以项目 `.claude/skills` 为单一来源，并识别 `.codebuddy`、`.workbuddy` 等全局配置根，避免嵌套误装。
 license: Complete terms in LICENSE.txt
 ---
@@ -264,6 +264,58 @@ skill-manager update claude-code
 # 查看安装记录
 python3 scripts/record.py list
 ```
+
+## 改名后的本机软链收敛
+
+skill 目录改名或迁移后（如 `multi-agent-orchestration` → `multi-agent-orca`），本机用户级（`~/.claude`、`~/.codex`、`~/.agents`、`~/.zcode`）与项目级（各项目 `.claude/skills/` 等）配置目录里会残留指向旧路径的符号链接。用 `scripts/relink-skill.py` 有界扫描并批量修复：
+
+```bash
+# 1. 先 dry-run 看计划（默认只打印，不动任何链接）
+python3 scripts/relink-skill.py \
+  --old /path/to/skills/old-name \
+  --new /path/to/skills/new-name
+
+# 2. 项目级安装位置因人而异，把你的项目根传进来（可多次）
+python3 scripts/relink-skill.py --old ... --new ... \
+  --roots ~/code/project-a --roots "~/Library/Application Support/MyProjects"
+
+# 3. 历史快照目录（visualizations、post-freeze 等不再运行的现场）默认不修，用排除模式跳过
+python3 scripts/relink-skill.py --old ... --new ... \
+  --exclude-glob '*/visualizations/*' --exclude-glob '*/post-freeze/*'
+
+# 4. 确认计划无误后执行，并留 JSON 报告备查
+python3 scripts/relink-skill.py --old ... --new ... \
+  --exclude-glob '*/visualizations/*' --apply --report /tmp/relink-report.json
+
+# 5. 不确定项目都在哪时，全盘扫描整个用户主目录
+#    （自动跳过 Caches/Containers/iCloud 挂载/图库等重资源区，耗时数分钟；
+#     外置卷另用 --roots /Volumes/卷名 追加，exFAT 不支持软链通常可略）
+python3 scripts/relink-skill.py --old ... --new ... --full-home \
+  --exclude-glob '*/visualizations/*' --exclude-glob '*/post-freeze/*'
+
+# 6. 登记优先（最快路径）：先为当前技能的链接建档，之后改名直接查表零扫描
+python3 scripts/relink-skill.py --old /当前/技能目录 --new /当前/技能目录 --register --roots <项目根>
+#    下次改名（秒级，读 registry install_links 直接定位）：
+python3 scripts/relink-skill.py --old /旧目录 --new /新目录 --from-registry --apply
+```
+
+行为规则：
+
+- 只处理符号链接，不移动任何实体文件；默认 dry-run，`--apply` 才执行。
+- **三档扫描深度**（按需选，日常用默认档即可）：
+  | 档位 | 命令 | 范围 | 耗时量级 |
+  |------|------|------|----------|
+  | 浅层（默认） | 无参数 | 8 类用户级 harness（`.claude`/`.codex`/`.agents`/`.zcode`/`.openclaw`/`.workbuddy`/`.qoderworkcn`/`.codebuddy`）+ `--roots` 项目根，各自只查顶层、`skills/`、`commands/` 一层 | 毫秒级 |
+  | 递归 | `--deep` | 对上述根完整递归（覆盖深埋链接） | 秒-分钟级 |
+  | 全盘 | `--full-home` | 整个用户主目录（跳过 Caches/Containers/iCloud 挂载/图库等重资源区） | 可达数十分钟 |
+- 浅层假设的依据：真实消费者链接（安装链、脚本链）都挂在配置根浅层；更深的链接几乎都是历史快照/归档，默认不碰、需要时 `--deep`。
+- 不猜测项目位置（公开分发要求）：项目根一律 `--roots` 显式传入；传入项目根自动按 `<项目>/<harness>/` 浅层检查并向下发现一层子项目（项目集合目录场景），传 harness 根则直用。
+- Spotlight（mdfind）不能用于此场景：实测不索引符号链接，勿走此路。
+- 链接名等于旧技能名（skills 安装链）：同目录已有新名链接则只删旧链，否则删旧链并以新名建新链。
+- 链接名不同（如 `night-watch.sh` 指向旧目录内脚本）：链接名不变，重指新路径；相对链接修复后保持相对形态，不把本机绝对路径写进仓库。
+- **登记优先，扫描兜底**：经本 skill 安装的链接**安装即登记**（install.sh 自动写 registry `install_links`，无需事后补录）；`--register` 兜底手工建的链接；`--apply` 修复后也会自动登记。`--from-registry` 直接查表定位（毫秒级、零扫描），无登记时自动回退浅层扫描并提示。registry 路径可用环境变量 `SKILL_MANAGER_REGISTRY` 覆盖。
+- 原理说明：符号链接是单向路径字符串，文件系统不维护"谁指向我"的反向索引（Spotlight 也不索引符号链接），所以"按目标文件夹反查链接"只能靠登记表（registry）或遍历——本工具四类来源（registry/浅层/递归/全盘）即按此成本分级。
+- 修复后建议用 `record.py` 核对 registry（`assets/skill-registry.json`）里的 source 路径与 `name_migration_history`。
 
 ## 安全检查
 

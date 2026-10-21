@@ -417,6 +417,7 @@ for AGENT_DIR in "${ALL_AGENT_DIRS[@]}"; do
 
                             ln -s "$skill_dir" "$target_path"
                             echo "  ✓ 已链接: $skill_name"
+                            record_install "$skill_name" "$skill_dir" "$target_path"
                             ((local_count++)) || true
                         fi
                     fi
@@ -460,6 +461,7 @@ for AGENT_DIR in "${ALL_AGENT_DIRS[@]}"; do
 
                         ln -s "$cmd_file" "$target_path"
                         echo "  ✓ 已链接: $cmd_name"
+                        record_install "$cmd_name" "$cmd_file" "$target_path"
                         ((local_count++)) || true
                     fi
                 done
@@ -508,6 +510,7 @@ for AGENT_DIR in "${ALL_AGENT_DIRS[@]}"; do
             echo "🔗 正在创建 command 符号链接..."
             ln -s "$SOURCE" "$TARGET_PATH"
             echo "✓ 已链接 command: $TARGET_PATH -> $SOURCE"
+            record_install "$COMMAND_NAME" "$SOURCE" "$TARGET_PATH"
             ((install_count++)) || true
             success_dirs+=("$agent_name")
             echo ""

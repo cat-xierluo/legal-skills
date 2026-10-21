@@ -1,0 +1,107 @@
+{
+  "name": "政策公文",
+  "description": "政策公文风格。深蓝红双色 + 庄重排版，适合政策解读、政府报告、行业规范。传递权威与公信力。",
+  "source": "government document standards",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F5F6FA"
+    ],
+    "textColors": [
+      "#1A1A2E",
+      "#4A4A6A"
+    ],
+    "accents": [
+      "#C41E3A",
+      "#1A365D"
+    ],
+    "dividers": [
+      "#D4D4E8"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#1A1A2E",
+      "#C41E3A",
+      "#1A365D",
+      "#4A4A6A",
+      "#D4D4E8"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "FangSong",
+      "SimSun",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'FangSong', serif",
+      "body": "'SimSun', 'PingFang SC', serif"
+    },
+    "titleSizes": [
+      36,
+      28
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "24px",
+    "itemGap": "12px"
+  },
+  "layout": {
+    "preferredComposition": "formal-grid",
+    "negativeSpacePriority": "low"
+  },
+  "tone": {
+    "keywords": [
+      "权威",
+      "庄重",
+      "公信力",
+      "规范"
+    ]
+  },
+  "prohibited": [
+    "playful-fonts",
+    "bright-colors",
+    "animation",
+    "informal-tone"
+  ],
+  "promptSnippet": "Policy-document style. Deep ink-navy (#1A1A2E / #1A365D) carrying the body with crimson (#C41E3A) marking articles, clauses and deadlines. Song/FangSong type for formality, tight even leading, boxed clauses, official numbering. Reads as a government circular.",
+  "components": [
+    {
+      "type": "clause-box",
+      "usage": "条款正文框",
+      "style": "background: #FFFFFF; border: 1px solid #D4D4E8; border-left: 3px solid #C41E3A; padding: 12px 18px; font-family: 'SimSun', 'PingFang SC', serif; color: #1A1A2E"
+    },
+    {
+      "type": "article-no",
+      "usage": "条文编号",
+      "style": "font-family: 'FangSong', serif; font-size: 28px; font-weight: 700; color: #C41E3A"
+    },
+    {
+      "type": "seal",
+      "usage": "发文标识",
+      "style": "display: inline-block; border: 1px solid #C41E3A; color: #C41E3A; border-radius: 999px; padding: 2px 10px; font-family: 'SimSun', 'PingFang SC', serif; font-size: 12px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1A1A2E",
+    "--ink-rgb": "26,26,46",
+    "--paper": "#FFFFFF",
+    "--paper-rgb": "255,255,255",
+    "--accent": "#C41E3A",
+    "--accent-alt": "#1A365D",
+    "--muted": "#4A4A6A",
+    "--surface": "#F5F6FA",
+    "--divider": "#D4D4E8"
+  }
+}

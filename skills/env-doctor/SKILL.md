@@ -2,7 +2,7 @@
 name: env-doctor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.3.0"
+version: "0.4.0"
 license: MIT
 description: 本机开发环境与全局包的体检、账本与安装纪律，覆盖所有包管理器（npm/npx、nvm、pip/pipx、uv、brew、bun）与运行时环境面（~/.local/bin 垫片、PATH、python 解释器版图、LaunchAgents、cron、shell rc 漂移对照）。当用户问「node/python 为什么是这个版本」「npm/pip 全局包装到哪了」「环境怎么又乱了」「PATH/rc 被谁改了」「多了个 LaunchAgent」，或任何 agent 在执行 npm i -g / uv tool install / pipx install / brew install 等全局安装、修改 shell rc 文件、注册 LaunchAgent/cron、触碰 ~/.local/bin 符号链接、或在厂商应用（Hermes/Deck/Wukong 等）更新后复核环境之前，必须先读本 skill 并遵守其纪律。不要用于：单个项目内的 node_modules / venv 依赖管理、CI 环境、Linux 服务器初始化。仅 macOS。
 ---
@@ -44,7 +44,7 @@ bash "<本skill目录>/scripts/env-doctor.sh" snapshot      # 立漂移基线（
 bash "<本skill目录>/scripts/env-doctor.sh" record "说明"  # 记账
 ```
 
-输出八段：① node/npm/npx 垫片归属比对（✅/🚨）② PATH 实际解析与解释器版图（node
+输出八段：① node/npm/npx 垫片归属比对（✅/🚨）＋nvm 版本目录健康扫描（0 字节损坏）与垫片半迁移告警 ② PATH 实际解析与解释器版图（agent 壳 PATH 缺垫片层时显式提示；node
 与 python3 全量清单）③ 各包管理器与全局落点（npm 全局清单 / uv tools / pipx /
 pip --user / bun / brew leaves 与 services / cron 概览）④ 缓存体积（npm/bun/uv/pip/
 brew）⑤ `~/.local/bin` 全部符号链接与死链 ⑥ LaunchAgents 与 cron 明细 ⑦ 账本尾部

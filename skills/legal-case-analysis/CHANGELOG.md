@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [1.1.2] - 2026-10-18
+
+### 内部文件清理
+
+- 删除 `references/iteration-context.md` 与 `examples/skill-iteration-evaluation.md`：两者面向迭代者/交接者，不随公开 Skill 发布（历史内容可从 Git 记录找回）。
+- 刑事支架的体系选择依据与学理来源从 `iteration-context.md` 迁入 `references/criminal-case-analysis.md` 文末「附」节，公开正文不再引用已删文件。
+- SKILL.md 工作方法清单移除 `iteration-context.md` 条目；frontmatter 版本号补齐（1.1.1 的更名同步当时漏升）。
+
 ## [1.1.1] - 2026-10-13
 
 ### 文档完善

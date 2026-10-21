@@ -1,0 +1,113 @@
+{
+  "name": "政务红",
+  "description": "红色+金色的政务风格。适合政府报告、党建宣传、公检法演示。",
+  "source": "templates.md Gov 配色方案",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#991B1B",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#DC2626"
+    ],
+    "accents": [
+      "#FBBF24",
+      "#FEF3C7"
+    ],
+    "palette": [
+      "#DC2626",
+      "#991B1B",
+      "#FBBF24",
+      "#FEF3C7",
+      "#FFFFFF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.5,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "84px",
+    "sectionGap": "36px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "庄重",
+      "规范",
+      "权威",
+      "正式"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "playful-fonts",
+    "neon",
+    "rounded-card",
+    "informal-tone",
+    "animation"
+  ],
+  "promptSnippet": "Government-communication style. Chinese red (#DC2626) as the dominant identity colour with a deeper red (#991B1B) for weight and gold (#FBBF24) for seals and numerals, on white or pale gold (#FEF3C7). Square, symmetrical, formal. No softness, no play.",
+  "components": [
+    {
+      "type": "title-band",
+      "usage": "标题色带",
+      "style": "background: #991B1B; color: #FFFFFF; padding: 20px; border-radius: 6px"
+    },
+    {
+      "type": "article-mark",
+      "usage": "条目标记",
+      "style": "font-family: Microsoft YaHei; font-size: 28px; font-weight: 700; color: #FBBF24"
+    },
+    {
+      "type": "bullet-row",
+      "usage": "条目行",
+      "style": "border-top: 1px solid #FFFFFF; border-left: 3px solid #FBBF24; padding: 12px 0 12px 14px; font-family: Microsoft YaHei"
+    },
+    {
+      "type": "seal-tag",
+      "usage": "印章标识",
+      "style": "display: inline-block; border: 1px solid #FBBF24; color: #FBBF24; border-radius: 999px; padding: 2px 10px; font-family: Microsoft YaHei; font-size: 12px"
+    }
+  ],
+  "cssVariables": {
+    "--primary": "#dc2626",
+    "--primary-dark": "#991b1b",
+    "--secondary": "#fbbf24",
+    "--accent": "#ffffff",
+    "--accent-light": "#fef3c7"
+  }
+}

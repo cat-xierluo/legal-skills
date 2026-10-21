@@ -3,7 +3,7 @@ name: multi-agent-orca
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "3.0.0"
+  version: "3.0.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -289,4 +289,4 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 从 3.0.0 起使用 `multi-agent-orca`。安装迁移先运行 `python3 scripts/skill-name-migration.py plan --source NEW_SOURCE --old-link OLD_INSTALL_LINK --owner OWNER --manifest PRIVATE_MANIFEST`，核清单后依次 `apply / verify`；撤销本次新增链接用 `rollback`。脚本只依赖 Python 标准库，默认 plan 不修改安装入口，清单保存到仓库外或本地 archive。
 
-旧 `multi-agent-orchestration/` 是冻结的兼容运行时，不包含 `SKILL.md`，不接收新的业务派发。保留原脚本、references、config 和模板的字节/路径用于在途任务；新任务读取本入口。不要重算旧 authority/helper 摘要或迁移旧状态；schema、`MAO_*`、`MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG`、原状态/锁目录继续兼容。私人配置在本机按原来源单独绑定，不进入发布包。
+旧目录 `skills/multi-agent-orchestration/` 已按用户决策整体退役删除（3.0.1）：历史 archive 与私人 config 已并入本目录，旧名只保留在 wire schema 字面量（`multi-agent-orchestration.*.v1`）、`MAO_*`/`MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG` 环境变量和 `~/.local/state/multi-agent-orchestration/` 状态目录中继续兼容，不创建第二状态树。旧绝对路径消费者一律改用本入口；在途任务如仍引用旧路径，先迁移再派发。私人配置不进入发布包。

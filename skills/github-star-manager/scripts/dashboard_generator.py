@@ -9,7 +9,33 @@ Dashboard 生成器 - 将 GitHub Star 数据导出为 HTML Dashboard
 """
 
 import json
+import os
+import sys
 from pathlib import Path
+
+from lockutil import write_lock
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """tmp + os.replace 原子写：并发读者永不见半截文件（D-7 并发验收教训）"""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _locked_write(output_dir: Path, path: Path, text: str) -> None:
+    """R6/J1b：与 star-board 共用 output/.gsm-write.lock；锁不可用时 fail-closed
+    （不写投影、抛 LockUnavailable），不退回无锁写。data.js 为纯投影，写失败仅
+    使 UI 停留在上一版，不损坏权威数据。"""
+    with write_lock(output_dir):
+        _atomic_write(path, text)
 
 
 def generate_dashboard(projects: list, output_dir: str = "output") -> dict:
@@ -17,7 +43,7 @@ def generate_dashboard(projects: list, output_dir: str = "output") -> dict:
     生成 Dashboard HTML 和数据文件
 
     Args:
-        projects: 项目数据列表
+        projects: 项目数据
         output_dir: 输出目录（相对于项目根目录）
 
     Returns:
@@ -31,8 +57,7 @@ def generate_dashboard(projects: list, output_dir: str = "output") -> dict:
     json_str = json.dumps(projects, ensure_ascii=False)
     # 修复 JavaScript 不兼容的字符：U+2028 (Line Separator) 和 U+2029 (Paragraph Separator)
     json_str = json_str.replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
-    with open(data_js_path, "w", encoding="utf-8") as f:
-        f.write(f"const PROJECTS_DATA = {json_str};\n")
+    _locked_write(output_path, data_js_path, f"const PROJECTS_DATA = {json_str};\n")
 
     # 查找模板文件（锚定技能目录自身，避免随 cwd 漂移找不到模板）
     example_path = Path(__file__).parent.parent / "assets" / "dashboard.example.html"
@@ -55,7 +80,7 @@ def _generate_from_template(projects: list, template_path: Path, output_dir: Pat
     html_content = template_path.read_text(encoding='utf-8')
 
     dashboard_path = output_dir / "dashboard.html"
-    dashboard_path.write_text(html_content, encoding='utf-8')
+    _atomic_write(dashboard_path, html_content)
 
     return dashboard_path
 

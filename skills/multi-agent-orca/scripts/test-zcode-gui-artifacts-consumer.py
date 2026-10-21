@@ -38,7 +38,7 @@ delivery.json、pr-body.md 打包传输；PM 作为消费者只凭 emit-chunk �
 
 用法：
   ZCODE_GUI_ARTIFACTS=/path/to/zcode-gui-artifacts.py \
-    python3 skills/multi-agent-orchestration/scripts/test-zcode-gui-artifacts-consumer.py
+    python3 skills/multi-agent-orca/scripts/test-zcode-gui-artifacts-consumer.py
 
 仅用标准库；所有临时目录自建并在 finally 中清理；输出为有界单行日志，
 末尾打印一行 JSON 摘要。任何用例失败 -> exit 1。

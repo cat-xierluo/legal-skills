@@ -6,11 +6,49 @@ GitHub Star 追踪器 - 核心分析模块
 import os
 import json
 import time
-import yaml
-import requests
-from datetime import datetime, timedelta
+
+try:
+    import yaml
+except ImportError:
+    yaml = None  # 分类 YAML 加载时给出安装提示，见 _load_categories
+
+try:
+    import requests
+except ImportError:
+    print("❌ 缺少依赖: requests")
+    print("   请运行: pip install requests")
+    print("   或运行: pip install -r assets/requirements.txt")
+    raise SystemExit(1)
+
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except ImportError:
+    OpenAI = None
+    HAS_OPENAI = False  # AI 摘要可选：缺失时自动降级为基础摘要（修复 F03 NameError）
+
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Set
 from pathlib import Path
+
+
+class SnapshotConflictError(RuntimeError):
+    """R6/J1a+J1b：基线被外部写者推进（CAS 失败）或跨进程锁不可用时，
+    save_latest fail-closed 拒绝写入的显式信号。调用方可重读最新基线后重试。"""
+
+
+def _atomic_replace(path: Path, text: str) -> None:
+    """tmp + os.replace 原子替换（读者永不见半截文件）。"""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 class StarTracker:
@@ -36,6 +74,11 @@ class StarTracker:
         self.github_token = github_token or os.getenv("GITHUB_PAT")
         self.user = None
         self._auth_username = None
+        # 最近一次 get_starred_repos 的抓取完整性元数据（审计 F01）
+        self.last_fetch_meta: Optional[Dict] = None
+        # AI 客户端惰性初始化状态（F03：此前未初始化即被 _ensure_ai_client 引用）
+        self._client = None
+        self._use_ai = False
         self.headers = {"Accept": "application/vnd.github.v3+json"}
         if self.github_token:
             self.headers["Authorization"] = f"token {self.github_token}"
@@ -92,11 +135,25 @@ class StarTracker:
     def _load_categories(self) -> List[Dict]:
         """加载分类配置"""
         if self.CATEGORIES_FILE.exists():
-            try:
-                with open(self.CATEGORIES_FILE, 'r', encoding='utf-8') as f:
-                    return yaml.safe_load(f)
-            except Exception:
-                pass
+            if yaml is None:
+                print("⚠️ 检测到分类配置但缺少依赖: pyyaml")
+                print("   请运行: pip install pyyaml（或 pip install -r assets/requirements.txt）")
+                print("   本次将使用内置默认分类")
+            else:
+                try:
+                    with open(self.CATEGORIES_FILE, 'r', encoding='utf-8') as f:
+                        loaded = yaml.safe_load(f)
+                        # 兼容两种格式：裸列表 或 {categories: [...]}（generate_categories.py 生成后者）
+                        if isinstance(loaded, dict) and 'categories' in loaded:
+                            loaded = loaded['categories']
+                        if isinstance(loaded, list) and loaded:
+                            return loaded
+                        # 空文件/空列表：回落默认
+                except Exception as e:
+                    # 不静默：环境问题（如旧版 pyyaml 与新版 Python 不兼容）必须可见
+                    print(f"⚠️ 分类配置加载失败（{type(e).__name__}: {e}），本次使用内置默认分类")
+                    print(f"   配置文件: {self.CATEGORIES_FILE}")
+                    print("   若为 pyyaml 版本过旧（<6.0）请运行: pip install -U pyyaml")
         # 返回默认分类
         return self._get_default_categories()
 
@@ -156,8 +213,6 @@ class StarTracker:
         """获取分类映射字典，用于快速查找"""
         return {cat["id"]: cat for cat in self.categories}
 
-        # 缓存当前认证用户名
-        self._auth_username = None
     def get_authenticated_user(self) -> Optional[str]:
         """获取当前 Token 对应的用户名"""
         if self._auth_username:
@@ -186,6 +241,10 @@ class StarTracker:
     def get_starred_repos(self, username: str, limit: int = 9999, include_starred_at: bool = True) -> List[Dict]:
         """获取用户 Star 的所有仓库
 
+        分页中途失败不再静默返回子集（审计 F01）：完整抓取状态记录在
+        self.last_fetch_meta，调用方在提交快照前必须检查 complete 字段，
+        部分数据只能作临时对比，不得覆盖基线。
+
         Args:
             username: GitHub 用户名
             limit: 最大获取数量，默认 9999 表示获取全部
@@ -196,6 +255,16 @@ class StarTracker:
         per_page = 100  # GitHub API 每页最大 100
         categories_map = self.get_categories_map()
 
+        fetch_meta = {
+            "account_id": username,
+            "complete": True,
+            "failed_pages": [],
+            "limit_requested": limit,
+            "limit_truncated": False,
+            "starred_at_available": False,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        }
+
         # 检查是否可以获取 starred_at（需要认证用户自己）
         auth_user = self.get_authenticated_user()
         can_get_starred_at = (
@@ -204,6 +273,7 @@ class StarTracker:
             and auth_user
             and auth_user.lower() == username.lower()
         )
+        fetch_meta["starred_at_available"] = bool(can_get_starred_at)
 
         if can_get_starred_at:
             # 使用特殊 API 获取带 starred_at 的数据（只能获取自己的）
@@ -223,7 +293,11 @@ class StarTracker:
             response = self._request_with_retry("GET", url, headers=starred_headers)
 
             if response is None or response.status_code != 200:
-                print(f"警告: 获取 Star 列表失败 (状态码: {response.status_code if response else '网络异常重试耗尽'})")
+                status_desc = str(response.status_code) if response else "网络异常重试耗尽"
+                print(f"警告: 获取 Star 列表失败 (状态码: {status_desc})")
+                # F01: 标记抓取不完整，由调用方决定是否允许提交快照
+                fetch_meta["complete"] = False
+                fetch_meta["failed_pages"].append({"page": page, "status": status_desc})
                 break
 
             data = response.json()
@@ -243,9 +317,13 @@ class StarTracker:
 
             page += 1
 
-            # 获取数量已足够
+            # 获取数量已足够（R5/J5：limit 截断 ≠ 完整快照——上游 F01 反例：
+            # --check --limit 1 标 limit_truncated=true 却仍称 complete，把未抓到的
+            # 旧条目误判为「取消收藏」。截断时 complete 必须为 False。）
             if len(repos) >= limit:
                 repos = repos[:limit]
+                fetch_meta["limit_truncated"] = True
+                fetch_meta["complete"] = False   # 截断即非完整快照
                 break
 
         # 为每个仓库匹配分类
@@ -255,42 +333,18 @@ class StarTracker:
                 repo['category'] = category
             repo['matched_keywords'] = category.get('keywords', []) if category else []
 
+        self.last_fetch_meta = fetch_meta
         return repos
 
     def _match_category(self, repo: Dict, categories_map: Dict[str, Dict]) -> Optional[Dict]:
-        """根据仓库信息匹配合适分类"""
-        # 收集仓库的所有可匹配信息
-        language = (repo.get('language') or '').lower()
-        description = (repo.get('description') or '').lower()
-        topics = [t.lower() for t in repo.get('topics', [])]
-        name = repo.get('name', '').lower()
-        full_name = repo.get('full_name', '').lower()
+        """根据仓库信息匹配合适分类
 
-        # 检查每个分类的匹配度
-        best_match = None
-        best_score = 0
-
-        for cat_id, cat in categories_map.items():
-            score = 0
-            keywords = cat.get('keywords', [])
-
-            # 检查关键词匹配
-            repo_keywords = f"{language} {description} {' '.join(topics)} {name} {full_name}"
-            for kw in keywords:
-                if kw.lower() in repo_keywords:
-                    score += 3
-                    break  # 关键词匹配得高分，不再检查其他
-
-            # 检查语言匹配
-            if language and any(kw.lower() in language for kw in keywords):
-                score += 2
-
-            # 最低要求至少有一个关键词匹配
-            if score > 0 and score > best_score:
-                best_match = cat
-                best_score = score
-
-        return best_match
+        0.8.0 起与 quick_export.py 共用统一评分规则（common.match_categories），
+        收敛审计「分类/导出分叉」：在线单分类 = 多标签结果的首个（min_score=1）。
+        """
+        from common import match_categories
+        best = match_categories(repo, list(categories_map.values()), min_score=1)
+        return best[0] if best else None
 
     def get_latest_release(self, repo_full_name: str) -> Optional[Dict]:
         """获取项目的最新 Release"""
@@ -303,7 +357,7 @@ class StarTracker:
 
     def get_recent_commits(self, repo_full_name: str, days: int = 7) -> List[Dict]:
         """获取最近的 Commit"""
-        since = (datetime.utcnow() - timedelta(days=days)).isoformat() + "Z"
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         url = f"{self.API_BASE}/repos/{repo_full_name}/commits?since={since}"
         response = self._request_with_retry("GET", url, headers=self.headers)
 
@@ -490,12 +544,10 @@ class StarTracker:
         """使用 AI 总结项目
 
         Args:
-            use_ai: 是否使用 AI（默认 True），如果为 False 则强制使用基础摘要
+            use_ai: 是否使用 AI（默认 True）。openai 未安装或初始化失败时自动降级为基础摘要。
         """
-        self._ensure_ai_client(use_ai=use_ai)
-        if not self._client:
+        if not self._ensure_ai_client(use_ai=use_ai) or not self._client:
             return self._basic_summary(repo_info)
-
         prompt = f"""请简要分析以下 GitHub 项目：
 
 项目名称: {repo_info['name']}
@@ -523,32 +575,35 @@ README 内容（前6000字）:
             print(f"AI 摘要失败: {e}")
             return self._basic_summary(repo_info)
 
-    def _ensure_ai_client(self, use_ai: bool = True):
+    def _ensure_ai_client(self, use_ai: bool = True) -> bool:
         """确保 AI 客户端只在需要时才初始化
 
         Args:
             use_ai: 是否使用 AI（默认 True），如果为 False 则强制不使用 AI
+
+        Returns:
+            本次调用结束时 AI 摘要是否可用（HAS_OPENAI 为 False 时恒为 False）
         """
-        if not HAS_OPENAI or self._client is not None:
-            return self._use_ai == use_ai
+        if not use_ai:
+            return False
 
-        # 需要 AI 但客户端未初始化
-        if use_ai and self._client is None:
-            try:
-                self._client = OpenAI()
-                self._use_ai = True
-            except Exception as e:
-                print(f"⚠️ AI 客户端初始化失败: {e}")
-                print("💡 将使用基础摘要替代")
-                self._client = None
-                self._use_ai = False
+        if not HAS_OPENAI:
+            print("💡 未安装 openai 包，使用基础摘要替代（可选: pip install openai）")
+            return False
 
-        # 不需要 AI 但客户端已初始化
-        if not use_ai and self._client is not None:
+        if self._client is not None:
+            return True
+
+        try:
+            self._client = OpenAI()
+            self._use_ai = True
+            return True
+        except Exception as e:
+            print(f"⚠️ AI 客户端初始化失败: {e}")
+            print("💡 将使用基础摘要替代")
             self._client = None
             self._use_ai = False
-
-        return self._use_ai
+            return False
 
     def _basic_summary(self, repo_info: Dict) -> str:
         """基础摘要（无 AI 时）"""
@@ -556,76 +611,218 @@ README 内容（前6000字）:
 **技术栈**: {repo_info.get('language', '未知')}
 **Stars**: {repo_info.get('stargazers_count', 0)}"""
 
-    def save_latest(self, repos: List[Dict]) -> Path:
-        """保存最新数据（包含完整多维度信息，便于 AI 分析）"""
+    # R6/J1a：跨写者前向合并保留的插件扩展字段（技能全量快照不该丢这些）
+    FORWARD_MERGE_FIELDS = ("description_zh", "tags_zh", "_lite", "reason",
+                            "matched_keywords")
+
+    # B 方案（单权威写者）协议版本：save_latest 的规范化已直通上述插件扩展字段
+    # （description_zh/tags_zh/_lite 输入有则写入），star-board 插件据此把
+    # original_latest.json 的全部写入路由给 save_latest 而无需锁外补写。
+    # v2 完整合同（协议 2 ⇒ 以下全部成立，插件按此调用）：
+    #   a) 双形态输入：owner/license 接受 dict（GitHub 原始对象）或 str（v2 快照行）；
+    #      is_fork/is_archived 接受原始键 fork/archived 或 v2 键——v2 规范化行往返不降级
+    #   b) normalized_rows=True：输入已是 v2 快照行（含插件扩展字段，如 category/
+    #      value/avatar_url/has_new_release），未列入已知映射的键**原样直通**（raw
+    #      输入路径不受影响，仍剥离未知键）
+    #   c) lock_timeout：显式锁超时秒数（None → lockutil 默认）——调用方不得临时
+    #      改 lockutil._DEFAULT_TIMEOUT 全局（并行调用还原竞态）
+    #   d) description_zh/tags_zh/_lite：输入有值则写入；_lite 缺省/非 bool 写 None
+    #      （前向合并可从现有快照回填，显式 False 保留——缺省与显式假值必须可区分）
+    # 注意：协议 2 是「唯一写入口实现」，不是单一常驻写进程——多进程并发调用时
+    # flock/CAS/冲突语义仍然生效。
+    SNAPSHOT_WRITER_PROTOCOL = 2
+
+    def save_latest(self, repos: List[Dict], fetch_meta: Optional[Dict] = None,
+                    base_timestamp: Optional[str] = None,
+                    normalized_rows: bool = False,
+                    lock_timeout: Optional[float] = None) -> Path:
+        """保存最新数据（包含完整多维度信息，便于 AI 分析）
+
+        Args:
+            repos: 仓库列表。默认按 GitHub 原始对象规范化；normalized_rows=True 时
+                输入是 v2 快照行（含插件扩展字段），已知映射兼容双形态，未知键直通
+                （协议 2 合同 b，见 SNAPSHOT_WRITER_PROTOCOL 注释）。
+            fetch_meta: 抓取完整性元数据（来自 get_starred_repos 的 last_fetch_meta）。
+                不传时按「完整性未知」处理，快照标记为 partial 并说明原因。
+            base_timestamp: 调用方读取本次对比基线时的快照 timestamp（R6/J1a CAS）。
+                提供时，锁内重读当前快照：若 timestamp 已被外部写者推进 → 抛
+                SnapshotConflictError（fail-closed，调用方用最新数据重读后再写）；
+                否则在锁内做扩展字段前向合并（description_zh 等插件产物不被全量快照冲掉）。
+            lock_timeout: 获取写锁的最长等待秒数；None → lockutil 默认。协议 2 调用方
+                必须用此参数传超时，不得临时修改 lockutil 全局默认值。
+        """
         latest_file = self.CACHE_DIR / "original_latest.json"
         fetch_time = datetime.now().isoformat()
 
+        if fetch_meta is None:
+            snapshot_meta = {
+                "complete": False,
+                "completeness": "unknown",
+                "note": "保存时未提供抓取元数据，无法证明快照完整",
+            }
+        else:
+            snapshot_meta = dict(fetch_meta)
+            snapshot_meta["completeness"] = "complete" if fetch_meta.get("complete") else "partial"
+
+        def _normalize(r: Dict) -> Dict:
+            """单行规范化（协议 2 双形态合同）。
+
+            GitHub 原始对象与 v2 快照行都接受：owner/license 兼容 dict/str，
+            fork/archived 兼容原始键/v2 键（is_fork/is_archived）。v2 行经此函数
+            往返不得降级（B1：插件把读出的快照行原样写回时字段保真）。
+            """
+            row = {
+                # 基本信息
+                # id：GitHub 数字主键，改名后保持稳定（消费者应以 id 为主键、
+                # full_name 为展示名，避免改名被误判为新仓库——D-00 对账发现的缺口）
+                "id": r.get("id"),
+                "full_name": r["full_name"],
+                "name": r.get("name"),
+                "owner": (r.get("owner") or {}).get("login")
+                    if isinstance(r.get("owner"), dict) else r.get("owner"),
+                "html_url": r.get("html_url"),
+                "description": r.get("description"),
+                "homepage": r.get("homepage"),
+
+                # 时间维度（关键分析维度）
+                "starred_at": r.get("starred_at"),  # 用户何时 star 的（需要特殊 API）
+                "created_at": r.get("created_at"),   # 仓库创建时间
+                "updated_at": r.get("updated_at"),   # 仓库最后更新时间
+                "pushed_at": r.get("pushed_at"),     # 最后推送时间
+                # 原始对象无此键 → fetch_time；v2 行已有 → 保留（插件写入不是重新抓取）
+                "local_fetched_at": r.get("local_fetched_at", fetch_time),
+
+                # 统计数据（活跃度指标）
+                "stargazers_count": r.get("stargazers_count", 0),
+                "forks_count": r.get("forks_count", 0),
+                "watchers_count": r.get("watchers_count", 0),
+                "open_issues_count": r.get("open_issues_count", 0),
+
+                # 分类信息（技术栈/主题识别）
+                "language": r.get("language"),
+                "topics": r.get("topics", []),
+                "license": (r.get("license") or {}).get("spdx_id")
+                    if isinstance(r.get("license"), dict) else r.get("license"),
+                "visibility": r.get("visibility"),
+
+                # 项目特征（健康度判断）——原始键 fork/archived 与 v2 键 is_fork/
+                # is_archived 双兼容
+                "is_fork": bool(r.get("fork", r.get("is_fork", False))),
+                "is_archived": bool(r.get("archived", r.get("is_archived", False))),
+                "is_template": bool(r.get("is_template", False)),
+                "has_wiki": bool(r.get("has_wiki", False)),
+                "has_pages": bool(r.get("has_pages", False)),
+                "has_discussions": bool(r.get("has_discussions", False)),
+
+                # 其他
+                "default_branch": r.get("default_branch"),
+                "size": r.get("size", 0),  # KB
+
+                # B 方案：插件扩展字段直通（输入有则写入；无则 None——None 可被
+                # 前向合并从现有快照回填）。_lite 缺省/非 bool → None 而非 False：
+                # False 是合法显式值，写死 False 会让旧 true 无法回填（B3）
+                "description_zh": r.get("description_zh"),
+                "tags_zh": r.get("tags_zh"),
+                "_lite": r["_lite"] if isinstance(r.get("_lite"), bool) else None,
+            }
+            if normalized_rows:
+                # 协议 2 合同 b：v2 快照行的插件扩展字段（category/value/avatar_url/
+                # has_new_release 等）原样直通，不因不在已知映射而被剥掉。仅显式
+                # 声明 normalized_rows 的调用方（插件 B 路径）可触发；raw 输入路径
+                # 仍按白名单剥离未知键，行为不变。
+                for k, v in r.items():
+                    if k not in row:
+                        row[k] = v
+            return row
+
         data = {
+            "schema_version": 2,
             "timestamp": fetch_time,
             "total_count": len(repos),
-            "repos": [
-                {
-                    # 基本信息
-                    "full_name": r["full_name"],
-                    "name": r.get("name"),
-                    "owner": r.get("owner", {}).get("login") if isinstance(r.get("owner"), dict) else None,
-                    "html_url": r.get("html_url"),
-                    "description": r.get("description"),
-                    "homepage": r.get("homepage"),
-
-                    # 时间维度（关键分析维度）
-                    "starred_at": r.get("starred_at"),  # 用户何时 star 的（需要特殊 API）
-                    "created_at": r.get("created_at"),   # 仓库创建时间
-                    "updated_at": r.get("updated_at"),   # 仓库最后更新时间
-                    "pushed_at": r.get("pushed_at"),     # 最后推送时间
-                    "local_fetched_at": fetch_time,      # 本地抓取时间
-
-                    # 统计数据（活跃度指标）
-                    "stargazers_count": r.get("stargazers_count", 0),
-                    "forks_count": r.get("forks_count", 0),
-                    "watchers_count": r.get("watchers_count", 0),
-                    "open_issues_count": r.get("open_issues_count", 0),
-
-                    # 分类信息（技术栈/主题识别）
-                    "language": r.get("language"),
-                    "topics": r.get("topics", []),
-                    "license": r.get("license", {}).get("spdx_id") if isinstance(r.get("license"), dict) else None,
-                    "visibility": r.get("visibility"),
-
-                    # 项目特征（健康度判断）
-                    "is_fork": r.get("fork", False),
-                    "is_archived": r.get("archived", False),
-                    "is_template": r.get("is_template", False),
-                    "has_wiki": r.get("has_wiki", False),
-                    "has_pages": r.get("has_pages", False),
-                    "has_discussions": r.get("has_discussions", False),
-
-                    # 其他
-                    "default_branch": r.get("default_branch"),
-                    "size": r.get("size", 0),  # KB
-                }
-                for r in repos
-            ],
+            "snapshot_meta": snapshot_meta,
+            "repos": [_normalize(r) for r in repos],
         }
 
-        with open(latest_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        # R6/J1a + J1b：锁内重读 + CAS + 前向合并，fail-closed。
+        # 与 star-board 插件共用 output/.gsm-write.lock；读-改-写在同一锁内完成，
+        # 不再"锁外读、锁内盲覆盖"（上游 J1a 反例：插件确认条目被旧读覆盖）。
+        from lockutil import write_lock, LockUnavailable
+
+        def _commit_locked():
+            cur = None
+            if latest_file.exists():
+                try:
+                    cur = json.loads(latest_file.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    cur = None
+            # CAS：基线被外部写者推进则拒绝旧提交
+            if base_timestamp is not None and isinstance(cur, dict):
+                if cur.get("timestamp") != base_timestamp:
+                    raise SnapshotConflictError(
+                        f"快照基线已被外部写者推进（{base_timestamp} → "
+                        f"{cur.get('timestamp')}），本次基于旧读的写入被拒绝（fail-closed），"
+                        f"请用最新数据重读后再写")
+            merged = dict(data)
+            # 前向合并：保留 cur 中插件扩展字段（技能 repos 不含它们）
+            if isinstance(cur, dict) and isinstance(cur.get("repos"), list):
+                cur_extra = {r.get("full_name"): r for r in cur["repos"] if r.get("full_name")}
+                for r in merged["repos"]:
+                    ex = cur_extra.get(r.get("full_name"))
+                    if ex:
+                        for fld in self.FORWARD_MERGE_FIELDS:
+                            if r.get(fld) in (None, "", []) and fld in ex:
+                                r[fld] = ex[fld]
+            merged["timestamp"] = datetime.now().isoformat()
+            _atomic_replace(latest_file, json.dumps(merged, ensure_ascii=False, indent=2))
+
+        try:
+            with write_lock(self.CACHE_DIR, timeout=lock_timeout):
+                _commit_locked()
+        except LockUnavailable as e:
+            # J1b fail-closed：锁不可用/超时绝不退回无锁写
+            raise SnapshotConflictError(f"跨进程写锁不可用（{e}），已拒绝写入，旧数据保持不变") from e
 
         return latest_file
 
     def load_latest(self) -> Optional[Dict]:
-        """加载最新数据"""
+        """加载最新数据（兼容 v1 无元数据快照）"""
         latest_file = self.CACHE_DIR / "original_latest.json"
 
         if not latest_file.exists():
             return None
 
         try:
-            return json.loads(latest_file.read_text(encoding="utf-8"))
+            data = json.loads(latest_file.read_text(encoding="utf-8"))
+            # v1 快照（无 snapshot_meta）标记完整性未知，避免被当成完整快照消费
+            if "snapshot_meta" not in data:
+                data["snapshot_meta"] = {
+                    "complete": False,
+                    "completeness": "unknown",
+                    "note": "v1 旧快照，无抓取完整性元数据",
+                }
+            return data
         except Exception as e:
             print(f"读取数据失败: {e}")
             return None
+
+    @staticmethod
+    def is_snapshot_submittable(snapshot: Optional[Dict]) -> tuple[bool, str]:
+        """判断快照能否作为新基线提交（审计 F01 守卫）
+
+        Returns:
+            (是否可提交, 不可提交的原因)
+        """
+        if not snapshot:
+            return False, "快照不存在"
+        meta = snapshot.get("snapshot_meta") or {}
+        # R5/J5：limit 截断的快照不是完整基线（上游 F01：截断却称完整 → 误判取消）
+        if meta.get("limit_truncated") is True:
+            return False, ("快照为 limit 截断的子集（limit_truncated=true），"
+                           "不允许作为基线覆盖旧数据")
+        if meta.get("complete") is True:
+            return True, ""
+        completeness = meta.get("completeness", "unknown")
+        return False, f"快照完整性为 {completeness}（complete={meta.get('complete')}），不允许作为基线覆盖旧数据"
 
     def check_updates(self, username: str) -> Dict:
         """检查更新"""
@@ -679,22 +876,84 @@ README 内容（前6000字）:
         return config
 
     def import_config(self, config_data: Dict) -> bool:
-        """导入配置"""
+        """校验并持久化配置到 user_settings.json
+
+        此前只校验不落盘（审计第 6 节：设置从未进入价值判断），
+        现在校验通过即写入 user_settings.json，assess_value 等可读取。
+        """
         required_keys = ["username"]
         for key in required_keys:
             if key not in config_data:
                 return False
-        return True
+        return self.save_settings(config_data)
+
+    def save_settings(self, settings: Dict) -> bool:
+        """保存用户设置到 user_settings.json"""
+        try:
+            with open(self.SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(settings, f, ensure_ascii=False, indent=2)
+            self.settings = settings
+            return True
+        except Exception as e:
+            print(f"⚠️ 保存设置失败: {e}")
+            return False
+
+    def get_value_config(self) -> Dict:
+        """读取价值评估配置（value_keywords/min_stars），供价值判断使用"""
+        return {
+            "value_keywords": self.settings.get("value_keywords",
+                ["claude", "ai", "llm", "agent", "python"]),
+            "min_stars": self.settings.get("min_stars", 100),
+            "ignore_repos": self.settings.get("ignore_repos", []),
+        }
 
     def get_version_diff(self, repo_full_name: str, old_version: str, new_version: str) -> Dict:
-        """获取版本之间的差异信息"""
-        commits = self.get_commits_between_releases(repo_full_name, limit=20)
+        """获取两个版本（tag/分支/commit）之间的真实差异
 
+        修复审计「版本对比名实不符」：此前只是取最近 N 条 commits 加上
+        一个 compare_url，并未真正做版本间比较。现改用 GitHub compare API。
+
+        Args:
+            repo_full_name: 仓库全名 (owner/repo)
+            old_version: 基准版本（tag 名如 v1.0.0，或分支名/commit SHA）
+            new_version: 目标版本
+        """
+        url = f"{self.API_BASE}/repos/{repo_full_name}/compare/{old_version}...{new_version}"
+        response = self._request_with_retry("GET", url, headers=self.headers)
+
+        if response is None:
+            return {
+                "error": "网络异常重试耗尽",
+                "old_version": old_version,
+                "new_version": new_version,
+                "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
+            }
+        if response.status_code == 404:
+            return {
+                "error": f"仓库或版本不存在（检查 tag 是否正确）: {repo_full_name} {old_version}...{new_version}",
+                "old_version": old_version,
+                "new_version": new_version,
+                "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
+            }
+        if response.status_code != 200:
+            return {
+                "error": f"GitHub API 返回 {response.status_code}",
+                "old_version": old_version,
+                "new_version": new_version,
+                "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
+            }
+
+        data = response.json()
+        commits = data.get("commits", [])
         return {
             "old_version": old_version,
             "new_version": new_version,
-            "commits_count": len(commits),
-            "commits": commits[:5],  # 只返回前5条
+            "status": data.get("status"),          # ahead/behind/identical 等
+            "ahead_by": data.get("ahead_by"),
+            "behind_by": data.get("behind_by"),
+            "total_commits": data.get("total_commits", len(commits)),
+            "commits_count": data.get("total_commits", len(commits)),  # 兼容旧字段名
+            "commits": commits,
             "compare_url": f"https://github.com/{repo_full_name}/compare/{old_version}...{new_version}",
         }
 
@@ -702,7 +961,7 @@ README 内容（前6000字）:
         """生成更新报告"""
         repos = self.get_starred_repos(username)
         updates = self.check_updates(username)
-        snapshot = self.load_latest(username)
+        snapshot = self.load_latest()  # F03: load_latest 不接受 username 参数
 
         report_lines = [
             f"# GitHub Star 更新报告",
@@ -839,7 +1098,7 @@ README 内容（前6000字）:
             (成功数, 失败数, 失败列表)
         """
         success = 0
-        failed = []
+        failed = 0
         failed_repos = []
 
         for repo in repo_list:
@@ -871,7 +1130,7 @@ README 内容（前6000字）:
             (成功数, 失败数, 失败列表)
         """
         success = 0
-        failed = []
+        failed = 0
         failed_repos = []
 
         for repo in repo_list:
@@ -908,9 +1167,10 @@ README 内容（前6000字）:
 
         print(f"\n检查 {len(repos)} 个 Star 项目（阈值: {days_threshold} 天）...")
 
+        now = datetime.now(timezone.utc)  # 与 API 返回的 aware 时间统一（修复 naive/aware 相减崩溃）
         for repo in repos:
             updated = datetime.fromisoformat(repo.get("updated_at", "").replace("Z", "+00:00"))
-            days_since = (datetime.now() - updated).days
+            days_since = (now - updated).days
 
             if days_since > days_threshold:
                 stale_repos.append({

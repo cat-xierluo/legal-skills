@@ -216,7 +216,7 @@ rm -f "$LEDGER_DIR/alpha/rs3.json"
 # ---- 7) provision：缺 remote_root → 3；--provision 自动补装 → 走通 ----
 sed "s|\"remote_root\": \"$CASE_ROOT/node-root\"|\"remote_root\": \"$CASE_ROOT/fresh-root\"|" \
   "$CASE_ROOT/personal.json" > "$CASE_ROOT/personal-fresh.json"
-sed "s|\"skill_root\": \"$NODE_SKILL_ROOT\"|\"skill_root\": \"$CASE_ROOT/fresh-root/skills/multi-agent-orchestration\"|" \
+sed "s|\"skill_root\": \"$NODE_SKILL_ROOT\"|\"skill_root\": \"$CASE_ROOT/fresh-root/skills/multi-agent-orca\"|" \
   "$CASE_ROOT/personal-fresh.json" > "$CASE_ROOT/personal-fresh2.json"
 export MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$CASE_ROOT/personal-fresh2.json"
 bash "$REMOTE" spawn --node alpha --branch fix/new --session rp1 --worker-backend claude-code \
@@ -224,9 +224,9 @@ bash "$REMOTE" spawn --node alpha --branch fix/new --session rp1 --worker-backen
 expect_rc 3 "缺 remote_root 无 --provision → 3" "$rc"
 
 # provision 子命令：clone 走 mock（模拟建目录+skill CHANGELOG），注册走 mock
-mkdir -p "$CASE_ROOT/fresh-root/skills/multi-agent-orchestration"
+mkdir -p "$CASE_ROOT/fresh-root/skills/multi-agent-orca"
 printf '## [%s] - 2026-09-29\n' "$(grep -m1 -oE '\[[0-9]+\.[0-9]+\.[0-9]+\]' "$SCRIPT_DIR/../CHANGELOG.md" | tr -d '[]')" \
-  > "$CASE_ROOT/fresh-root/skills/multi-agent-orchestration/CHANGELOG.md"
+  > "$CASE_ROOT/fresh-root/skills/multi-agent-orca/CHANGELOG.md"
 git init -q "$CASE_ROOT/fresh-root"
 git -C "$CASE_ROOT/fresh-root" remote add origin "$CASE_ROOT/origin.git"
 git -C "$CASE_ROOT/fresh-root" fetch -q origin

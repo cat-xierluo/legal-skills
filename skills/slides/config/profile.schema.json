@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/cat-xierluo/legal-skills/skills/slides/config/profile.schema.json",
+  "title": "slides 本地配置（profile）",
+  "description": "描述单次使用者的讲者身份、联系方式、品牌与展示偏好。一次运行只加载一个配置文件；相对路径相对于该配置文件所在目录解析。",
+  "type": "object",
+  "required": ["schema_version"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "配置格式版本。升级不兼容时递增；加载器只接受已支持的版本。"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "讲者身份。留空表示该项无资料，生成时省略，不得虚构。",
+      "properties": {
+        "name": { "type": "string", "description": "讲者姓名。" },
+        "titles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "头衔列表，如「律师」「专利代理师」。"
+        },
+        "organization": { "type": "string", "description": "单位/机构名称。" },
+        "bio": { "type": "string", "description": "一句话简介，用于身份页。不写会变动的统计数字。" }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "联系方式。属于个人资料，不进入公开发布包。",
+      "properties": {
+        "wechat": { "type": "string" },
+        "email": { "type": "string" },
+        "website": { "type": "string" }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "私有素材路径。相对路径相对于被选配置文件所在目录解析；允许显式本机绝对路径，但绝对路径不得进入公开模板。仅当对应 show_* 为 true 时才会被读取。",
+      "properties": {
+        "avatar": { "type": "string", "description": "头像图片路径。受 show_profile 控制。" },
+        "logo": { "type": "string", "description": "Logo 图片路径。受 show_profile 控制。" },
+        "wechat_qr": { "type": "string", "description": "个人微信二维码路径。受 show_wechat_qr 控制。" },
+        "public_account_qr": { "type": "string", "description": "公众号二维码路径。受 show_public_account_qr 控制。" },
+        "footprint_photos": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "授课现场照片路径列表。受 show_footprints 控制。"
+        }
+      }
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "品牌与页脚。留空则使用中性默认，不套用任何个人品牌。",
+      "properties": {
+        "style": {
+          "type": "string",
+          "description": "默认风格名，对应 references/styles/*.json 中的 name。留空表示由版式需要决定。"
+        },
+        "custom_style_file": {
+          "type": "string",
+          "description": "个人风格 JSON 路径（如自提取风格）。优先级高于内置风格库同名项。"
+        },
+        "footer_text": { "type": "string", "description": "页脚文本，如「张三 律师 · 某某律师事务所」。留空则页脚为空。" },
+        "footer_style": {
+          "type": "string",
+          "enum": ["minimal", "classic", "modern"],
+          "description": "页脚样式预设。"
+        }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "单次课件可覆盖的表现参数。false、空字符串、空数组是有效覆盖，不会被低层默认值补回。",
+      "properties": {
+        "locale": { "type": "string", "description": "语言/地区，默认 zh-CN。" },
+        "aspect_ratio": { "type": "string", "enum": ["16:9", "4:3"], "description": "画布比例。" },
+        "font_families": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "字体栈，按优先级排列。留空表示使用风格文件中的字体。"
+        },
+        "show_profile": {
+          "type": "boolean",
+          "description": "是否生成个人介绍页。false 时不读取头像/Logo/简介来源。"
+        },
+        "show_footprints": {
+          "type": "boolean",
+          "description": "是否生成授课足迹/现场照片页。false 时不读取照片与足迹来源。"
+        },
+        "show_wechat_qr": {
+          "type": "boolean",
+          "description": "是否在收尾页展示个人微信二维码。false 时不读取该图片。"
+        },
+        "show_public_account_qr": {
+          "type": "boolean",
+          "description": "是否在收尾页展示公众号二维码。false 时不读取该图片。"
+        },
+        "intro_pages": {
+          "type": "integer",
+          "enum": [0, 2, 3],
+          "description": "介绍部分页数。0=不生成；2=身份+现场两页；3=身份+路径总览+现场三页。"
+        },
+        "closing_mode": {
+          "type": "string",
+          "enum": ["summary", "thanks", "none"],
+          "description": "收尾页形态。summary=总结金句（可配二维码）；thanks=致谢；none=不单独生成收尾页。"
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "权威资料来源指针。只作为核对入口，不内联内容；数字不核实不补写。",
+      "properties": {
+        "bio_file": { "type": "string", "description": "个人介绍权威来源文件路径。受 show_profile 控制。" },
+        "footprints_file": { "type": "string", "description": "授课足迹权威来源文件路径。受 show_footprints 控制。" }
+      }
+    },
+    "preferences_file": {
+      "type": "string",
+      "description": "个人写作与排版补充说明文件路径（自由文本，作为资料处理，不提供执行入口）。"
+    }
+  }
+}

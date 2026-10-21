@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.8"
+version: "0.9.0"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -116,15 +116,16 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
 
 | 依赖 | 安装方式 |
 |------|----------|
-| Python 3.8+ | macOS: `brew install python3`<br>Linux: `sudo apt-get install python3` |
+| Python 3.9+ | macOS: `brew install python3`<br>Linux: `sudo apt-get install python3` |
 
 ### Python 包
 
 | 包名 | 用途 | 安装命令 |
 |------|------|----------|
 | `requests` | HTTP 请求，调用 GitHub API | `pip install requests` |
+| `pyyaml` | 分类配置解析（必需） | `pip install pyyaml` |
 | `python-dotenv` | 从 .env 文件加载配置 | `pip install python-dotenv` |
-| `openai` | AI 摘要生成（可选） | `pip install openai` |
+| `openai` | AI 摘要生成（可选，未安装时自动降级） | `pip install openai` |
 
 ### 依赖包文件
 
@@ -140,7 +141,7 @@ pip install -r assets/requirements.txt
 
 ```bash
 # 1. 复制示例配置文件
-cp assets/.env.example .env
+cp assets/.env.example assets/.env
 
 # 2. 编辑 .env 文件，填入你的 API 密钥
 # GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxx
@@ -203,15 +204,72 @@ python scripts/main.py --check --user 你的用户名
 
 ### 5. 生成完整报告
 ```bash
-python scripts/main.py --report --user 你的用户名 --days 7
+python scripts/main.py --report --user 你的用户名 --report-days 7
 ```
 生成包含项目摘要和更新状态的完整报告。
 
 ### 6. 定期运行（推荐）
+脚本本身不含定时功能，用系统 cron/launchd 每周执行一次 `--check` 即可，例如：
 ```bash
-# 每周检查一次
-python scripts/main.py --check --user 你的用户名 --weekly
+# crontab -e 添加（每周一 09:00 检查一次）
+0 9 * * 1 python /path/to/skills/github-star-manager/scripts/main.py --check --user 你的用户名
 ```
+
+### 7. 查看版本差异
+```bash
+python scripts/main.py --version-diff --repo owner/repo --old-version v1.0.0 --new-version v2.0.0
+```
+版本参数支持 tag、分支名或 commit SHA；缺参时直接报错退出，不再进入交互模式。
+
+## 数据完整性保障（重要）
+
+脚本模块的快照机制带**抓取完整性元数据**：
+
+- `--check` / `--init` 在分页失败或限流导致抓取不完整时，**自动放弃保存**，旧快照保持不变——部分数据不会被误判为「用户取消收藏」
+- 快照文件（`output/original_latest.json`）带 `snapshot_meta` 字段（complete/failed_pages/账户/抓取时间）
+- `--export` 允许部分数据展示，但会显式警告
+- 无 `snapshot_meta` 的 v1 旧快照会被标记为「完整性未知」消费
+
+## Agent 查询接口（无需面板/模型 Key）
+
+`scripts/star_query.py` 为对话中的 Agent 提供只读事实与候选：stdout 只写 JSON envelope（schema_version/account_id/snapshot_id/generated_at/status/coverage/items/warnings/errors），日志走 stderr，失败返回非零，部分数据显式标 partial。
+
+```bash
+# 近期关注（真实 starred_at 时间窗；未知时间单独归 unknown_time_items，不冒充）
+python scripts/star_query.py recent --since 2026-09-15 --until 2026-10-15
+
+# 主题窗口计数（可比窗口对比；无分类数据时明确返回 needs_analysis，不暗中调模型）
+python scripts/star_query.py interests --window 30 --compare previous
+
+# 项目需求 ↔ 收藏召回（分数=关键词命中数，只是召回依据不是适用性证明）
+python scripts/star_query.py match --project myproj --query "字幕 时间轴"
+
+# 单仓库缓存证据包（缺缓存显式标记 missing，不自动联网）
+python scripts/star_query.py evidence --repo owner/name
+
+# 显式联网取证（唯一联网命令）：抓 meta/README/Release 写缓存，README 记 blob sha 锚点
+python scripts/star_query.py evidence-fetch --repo owner/name
+
+# 组装供 Agent 分析的最小候选+证据包（项目必须已登记）
+python scripts/star_query.py research --project myproj --limit 5
+```
+
+**evidence 证据缓存**：`evidence-fetch` 显式联网取证（与只读查询分离，审计 §3「取证与查询分离」），写入 `output/evidence/<owner>__<repo>/`（meta.json + readme.md），README 记录 blob sha 作为证据锚点、原文权威不翻译；`evidence` 只读缓存导出，含 README 摘录、repo 元数据、最新 Release、抓取时间与新鲜度（`--max-age-days` 过期阈值，过期标 stale 并建议重新取证）。
+
+**分类匹配统一**：`common.match_categories` 是唯一评分实现（关键词命中×3 + 语言精确 +2 + topic 精确 +2）——在线导出（单分类=多标签首个）与 quick_export（多标签）共用（收敛审计「分类/导出分叉」）。
+
+**项目登记**：`output/projects/<project_id>.json`，字段 `project_id/capabilities/needs/constraints`。match/research 读取它对齐项目需求；未登记时 match 退化为通用召回并警告。
+
+**机会卡与采用反馈**（`scripts/opportunity.py`）：research 产出的候选经当前 Agent 分析后，用机会卡记录判断（signal/target/evidence/gap/hypothesis/experiment/decision 七字段必答）。decision 状态机强制：`tested` 必须带 `run_evidence`（运行产物+验证日志），`adopted` 必须再有 `adoption_evidence`（目标项目产物/提交+验收回执）——没有证据时只允许 `researched`/`experiment_proposed`，写下"已测试/已采用"不能关单。
+
+```bash
+python scripts/opportunity.py validate --input card.json   # 校验（不落盘）
+python scripts/opportunity.py record --input card.json     # 校验通过后持久化到 output/feedback/
+python scripts/opportunity.py list --project myproj        # 列出反馈
+python scripts/opportunity.py suppress --repo owner/name --project myproj  # 查询拒绝抑制
+```
+
+拒绝抑制只针对同候选+同方向的重复推荐；携带新 repo revision/需求版本时可重新出卡。gap 枚举：新增能力/接入缺口/执行缺陷/验证缺口/**已有等价能力**/不适用——「已有等价能力，无需吸收」是合法结论。
 
 ## 配置与自定义
 
@@ -221,11 +279,12 @@ python scripts/main.py --check --user 你的用户名 --weekly
 
 | 文件 | 用途 |
 |------|------|
-| `assets/categories.yaml` | 分类定义和关键词规则 |
+| `assets/categories.yaml` | 分类定义模板（首次运行后实际生效的是 `output/categories.yaml`） |
+| `output/user_settings.json` | 用户设置（价值关键词、阈值；由 `--import-config` 写入） |
 | `assets/tags.json` | 标签管理和别名配置 |
 | `assets/.env.example` | 环境变量模板 |
 
-首次运行时，配置文件会自动复制到 `~/.github-star-manager/` 目录。
+注意：配置实际读写位置是技能目录的 `output/`（`original_latest.json`、`categories.yaml`、`user_settings.json` 同目录），不是 `~/.github-star-manager/`。
 
 ## 适用场景
 - **开发者**：及时了解依赖库的版本更新
@@ -278,5 +337,5 @@ python scripts/main.py --check --user 你的用户名 --weekly
 
 ## 参考文档
 
-- [SKILL-GUIDE.md](../../../SKILL-GUIDE.md) - 技能开发指南
+- [skill-lint 技能开发规范](../skill-lint/references/skill-dev-guide.md) - 技能开发指南（唯一维护源）
 - [AGENTS.md](../../../AGENTS.md) - 项目协作规范

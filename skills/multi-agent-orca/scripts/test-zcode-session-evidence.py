@@ -5,7 +5,7 @@
 Builds synthetic SQLite fixtures in a temp directory and drives the real CLI
 via subprocess; never touches a live ZCode database. Run with:
 
-    python3 skills/multi-agent-orchestration/scripts/test-zcode-session-evidence.py
+    python3 skills/multi-agent-orca/scripts/test-zcode-session-evidence.py
 
 Standard library only; supports Python 3.9+.
 """
