@@ -15,11 +15,16 @@ DEFAULT_MEDIUM_STARS = 1000
 
 
 def load_value_config(settings_file: Path) -> dict:
-    """从 user_settings.json 读取价值评估配置，损坏/缺失时回落默认"""
+    """从 user_settings.json 读取价值评估配置，损坏/缺失时回落默认
+
+    R1（上游审计）：min_stars/ignore_repos 此前只落盘未消费——现在接入评估。
+    """
     config = {
         "value_keywords": list(DEFAULT_VALUE_KEYWORDS),
         "high_value_stars": DEFAULT_HIGH_STARS,
         "medium_value_stars": DEFAULT_MEDIUM_STARS,
+        "min_stars": 0,
+        "ignore_repos": [],
     }
     try:
         if settings_file.exists():
@@ -30,6 +35,10 @@ def load_value_config(settings_file: Path) -> dict:
                 "high_value_stars", config["high_value_stars"])
             config["medium_value_stars"] = user_cfg.get(
                 "medium_value_stars", config["medium_value_stars"])
+            config["min_stars"] = user_cfg.get("min_stars", 0) or 0
+            ign = user_cfg.get("ignore_repos")
+            if isinstance(ign, list):
+                config["ignore_repos"] = {str(r).lower() for r in ign}
     except Exception:
         pass  # 配置损坏时回落默认值，不阻塞导出
     return config
@@ -39,7 +48,7 @@ def assess_value(repo: dict, value_config: dict = None) -> str:
     """评估项目价值（统一实现）
 
     Args:
-        repo: 仓库数据（需要 stargazers_count/language/description）
+        repo: 仓库数据（需要 stargazers_count/language/description/full_name）
         value_config: 价值配置（load_value_config 的返回值），不传用默认
     """
     cfg = value_config or load_value_config(
@@ -48,6 +57,13 @@ def assess_value(repo: dict, value_config: dict = None) -> str:
     stars = repo.get('stargazers_count', 0)
     language = repo.get('language') or ''
     description = (repo.get('description') or '').lower()
+
+    # R1：min_stars/ignore_repos 实际消费（此前只落盘不生效——上游审计发现）
+    full_name = str(repo.get('full_name') or '').lower()
+    if full_name and full_name in cfg.get("ignore_repos", set()):
+        return 'ignored'          # 显式忽略名单：不参与价值评级
+    if stars < cfg.get("min_stars", 0):
+        return 'low'              # 低于用户设定的关注阈值
 
     if stars > cfg["high_value_stars"] or any(
             kw in description for kw in cfg["value_keywords"]):

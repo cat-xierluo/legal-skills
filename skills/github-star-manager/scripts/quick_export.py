@@ -57,9 +57,26 @@ def generate_data_js(output_path: Path, projects: List[Dict], categories: List[D
     # 生成分类数据
     categories_str = json.dumps(categories_map, ensure_ascii=False)
 
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(f"const PROJECTS_DATA = {projects_str};\n\n")
-        f.write(f"const CATEGORIES_DATA = {categories_str};\n")
+    # R6/J1b：与 star-board 共用 output/.gsm-write.lock；锁不可用时 fail-closed
+    # （不写投影、抛 LockUnavailable），不退回无锁写。data.js 为纯投影。
+    import os
+    from lockutil import write_lock
+    text = f"const PROJECTS_DATA = {projects_str};\n\nconst CATEGORIES_DATA = {categories_str};\n"
+
+    def _atomic():
+        tmp = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, output_path)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            raise
+
+    with write_lock(output_path.parent):
+        _atomic()
 
 
 def quick_export(

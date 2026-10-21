@@ -256,7 +256,7 @@ def card_dict(**over):
                    "source": "抖音截图"},
         "target": {"project_id": "myproj", "capability": "字幕时间轴机制"},
         "evidence": {"url": "https://github.com/owner/subtitle-tool",
-                     "code_evidence": "src/cue.py 的换行算法"},
+                     "code_evidence": "commit abc1234 的 cue 换行实现"},
         "gap": "接入缺口",
         "hypothesis": "其 cue 换行机制可借鉴",
         "experiment": {"consumer": "code-video captions", "inputs": "中文长句",
@@ -294,9 +294,11 @@ with tempfile.TemporaryDirectory() as td:
         card_dict(decision={"status": "adopted", "run_evidence": {"log": "x"}}))
     check("无 adoption_evidence 的 adopted 被拒", not ok and any("adoption_evidence" in e for e in errors))
 
-    # 带证据的 tested/adopted 通过
+    # 带证据的 tested/adopted 通过（R1 后证据路径必须真实存在——用本临时目录真文件）
+    _real_ev = Path(td) / "run-ev.log"
+    _real_ev.write_text("3 cases pass\nexit_code=0", encoding="utf-8")
     ok, errors, _ = opp.validate_card(card_dict(decision={
-        "status": "tested", "run_evidence": {"artifacts": "/tmp/run.log", "log": "ok"}}))
+        "status": "tested", "run_evidence": {"artifacts": str(_real_ev), "log": "ok"}}))
     check("带 run_evidence 的 tested 通过", ok)
 
     # starred_at 缺失 → 警告不得声称近期关注
@@ -456,6 +458,454 @@ for s in samples:
     check(f"单分类=多标签首个 ({s['full_name']})",
           (single or {}).get("id") == (expected_first or {}).get("id"))
 check("无匹配时返回 None", t_probe._match_category(samples[3], cat_map) is None)
+
+
+# ============ R1 返修回归（上游终审计 UA:GSM-AUDIT-ABCD-FINAL-261016） ============
+print("\n[R1] min_stars/ignore_repos 消费 + 证据实质校验")
+import common as _common
+import os as _os
+import tempfile as _tf
+
+# min_stars：低于阈值 → low（即便命中关键词也不抬升？不——关键词命中仍 high，只挡纯低星路径）
+cfg = _common.load_value_config(Path("/nonexistent.json"))
+cfg_ms = dict(cfg, min_stars=50)
+check("min_stars 低于阈值判 low",
+      _common.assess_value({"stargazers_count": 10, "language": "Rust", "description": "misc",
+                            "full_name": "a/tiny"}, cfg_ms) == "low")
+check("min_stars 高于阈值不受影响",
+      _common.assess_value({"stargazers_count": 9000, "full_name": "a/big"}, cfg_ms) == "high")
+
+# ignore_repos：忽略名单命中 → ignored（优先于一切评级）
+cfg_ig = dict(cfg, ignore_repos={"ghost/old"})
+check("ignore_repos 命中判 ignored",
+      _common.assess_value({"stargazers_count": 9000, "full_name": "Ghost/Old",
+                            "description": "claude"}, cfg_ig) == "ignored")
+check("ignore_repos 未命中不受影响",
+      _common.assess_value({"stargazers_count": 9000, "full_name": "a/keep"}, cfg_ig) == "high")
+
+# load_value_config 读取完整配置
+with _tf.TemporaryDirectory() as td:
+    _cfg_file = Path(td) / "user_settings.json"
+    _cfg_file.write_text(json.dumps({"value_keywords": ["law"], "min_stars": 30,
+                                     "ignore_repos": ["x/y"]}), encoding="utf-8")
+    c = _common.load_value_config(_cfg_file)
+    check("min_stars 从设置读取", c["min_stars"] == 30)
+    check("ignore_repos 从设置读取并归一大小写", c["ignore_repos"] == {"x/y"})
+
+# 证据实质校验（F08）：虚构路径拒收、空文件拒收、真路径通过
+import opportunity as _opp
+import contextlib as _cl
+import io as _io
+
+def _card_with_evidence(run_ev):
+    return {
+        "signal": {"repo": "a/b", "starred_at": "2026-10-01T00:00:00Z", "source": "测试"},
+        "target": {"project_id": "p", "capability": "c"},
+        "evidence": {"url": "https://github.com/a/b", "code_evidence": "commit abc1234 cue 换行"},
+        "gap": "接入缺口", "hypothesis": "h", "experiment": {"consumer": "c"},
+        "decision": {"status": "tested", "run_evidence": run_ev},
+    }
+
+with _tf.TemporaryDirectory() as td:
+    real = Path(td) / "run.log"
+    real.write_text("executed 3 cases\nRESULT: PASS\nexit_code=0", encoding="utf-8")
+    empty = Path(td) / "empty.log"
+    empty.write_text("", encoding="utf-8")
+
+    buf = _io.StringIO()
+    with _cl.redirect_stdout(buf):
+        ok, errs, warns = _opp.validate_card(_card_with_evidence(
+            {"artifacts": str(real), "log": "ok"}))
+    check("真实产物路径的 tested 通过", ok)
+
+    ok, errs, _ = _opp.validate_card(_card_with_evidence(
+        {"artifacts": str(Path(td) / "ghost" / "fabricated.log")}))
+    check("虚构路径的 tested 被拒", not ok and any("不存在" in e for e in errs))
+
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"artifacts": str(empty)}))
+    check("空文件产物被拒", not ok and any("空文件" in e for e in errs))
+
+    ok, errs, warns = _opp.validate_card(_card_with_evidence(
+        {"report": "https://example.com/report"}))
+    # R5/J2：URL 仅线索, 不能支撑 tested（无可核验文件 → 拒）
+    check("纯 URL 证据不能签 tested（R5/J2）", not ok and any("URL" in w for w in warns))
+
+    ok, errs, warns = _opp.validate_card(_card_with_evidence({"note": "只写了文字"}))
+    check("无路径证据拒绝（R5/J2）", not ok and any("未含任何可核验" in e for e in errs))
+
+
+    # F08 补强（自审发现）：裸文件名同样是路径主张，不能绕过
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"artifacts": "run.log"}))
+    check("裸文件名虚构产物被拒（F08 补强）", not ok and any("不存在" in e for e in errs))
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"log": "ok"}))
+    check("纯状态词不算路径主张（但无文件仍拒）", not ok and not any("不存在" in e for e in errs))
+    ok, errs, _ = _opp.validate_card(_card_with_evidence({"note": "只写了文字"}))
+    check("中文散文不算路径主张（但无文件仍拒）", not ok and not any("不存在" in e for e in errs))
+
+
+# ============ R5/J2 上游反例矩阵（证据绕过面全量回归） ============
+print("\n[R5] 上游 J2 证据绕过矩阵")
+with _tf.TemporaryDirectory() as td:
+    bd = Path(td)
+    (bd / "real.log").write_text("executed 3 cases\nRESULT: PASS\nexit_code=0", encoding="utf-8")
+    (bd / "empty.log").write_text("", encoding="utf-8")
+    (bd / "unrelated.txt").write_text("unrelated nonempty text", encoding="utf-8")
+    (bd / "link.txt").symlink_to(bd / "unrelated.txt")
+    (bd / "somedir").mkdir()
+
+    def _c(dec, ce="commit abc1234 cue"):
+        return {"signal": {"repo": "a/b", "starred_at": "2026-10-01T00:00:00Z", "source": "t"},
+                "target": {"project_id": "p", "capability": "c"},
+                "evidence": {"url": "https://x/y", "code_evidence": ce},
+                "gap": "接入缺口", "hypothesis": "h", "experiment": {"consumer": "c"},
+                "decision": dec}
+
+    matrix = [
+        ("裸相对文件名不存在", {"status": "tested", "run_evidence": {"log": "absent.log"}}),
+        ("纯 URL（adopted）", {"status": "adopted", "run_evidence": {"log": "ok"},
+                              "adoption_evidence": {"r": "https://x/y"}}),
+        ("目录而非文件", {"status": "tested", "run_evidence": {"log": "somedir"}}),
+        ("布尔值", {"status": "tested", "run_evidence": True}),
+        ("嵌套数组含不存在", {"status": "tested", "run_evidence": {"logs": ["ok", ["absent2.log"]]}}),
+        ("空文件", {"status": "tested", "run_evidence": {"log": "empty.log"}}),
+        ("无关非空文本", {"status": "tested", "run_evidence": {"log": "unrelated.txt"}}),
+        ("符号链接→无关文本", {"status": "tested", "run_evidence": {"log": "link.txt"}}),
+    ]
+    for name, dec in matrix:
+        ok, errs, _ = _opp.validate_card(_c(dec), base_dir=bd)
+        check(f"J2 反例拒收: {name}", not ok)
+
+    # 虚构源码路径（含行号）必须拒
+    ok, errs, _ = _opp.validate_card(
+        _c({"status": "tested", "run_evidence": {"log": "real.log"}},
+           ce="missing/source.py:999 fabricated quote"), base_dir=bd)
+    check("J2 反例拒收: 虚构源码路径", not ok and any("不存在" in e for e in errs))
+
+    # 合法正例：真产物 + 真源码（相对卡目录基准）
+    (bd / "src").mkdir()
+    (bd / "src" / "x.py").write_text("def f():\n    return 42\n", encoding="utf-8")
+    ok, errs, _ = _opp.validate_card(
+        _c({"status": "tested", "run_evidence": {"log": "real.log"}},
+           ce="src/x.py:2"), base_dir=bd)
+    check("J2 正例通过: 真产物+真源码(行界内)", ok and not errs)
+    ok, errs, _ = _opp.validate_card(
+        _c({"status": "tested", "run_evidence": {"log": str(bd / "real.log")}}), base_dir=bd)
+    check("J2 正例通过: 绝对路径", ok and not errs)
+
+
+# ============ R5/J2：失效 profile 引用 ============
+print("\n[R5] 失效项目引用（research 不得出包）")
+import os as _os2
+with _tf.TemporaryDirectory() as td:
+    sq2, _ = make_env(Path(td))
+    proj = Path(td) / "projects"; proj.mkdir()
+    (proj / "bad.json").write_text(json.dumps({
+        "project_id": "bad", "needs": ["x"],
+        "source_ref": "/definitely/missing",
+        "hashes": {"/definitely/missing": "0" * 64}}), encoding="utf-8")
+    errs = sq2._verify_profile_refs(json.loads((proj / "bad.json").read_text(encoding="utf-8")))
+    check("失效引用被检出（不存在）", any("不存在" in e for e in errs))
+    # 路径不存在时先报「不存在」；零哈希检查在路径存在时生效（下段验证）
+    check("缺失引用至少一条错误", len(errs) >= 2)
+    check("无引用 profile 通过", sq2._verify_profile_refs({"project_id": "ok", "needs": ["x"]}) == [])
+    # 哈希不匹配
+    realf = Path(td) / "src.txt"; realf.write_text("hello", encoding="utf-8")
+    import hashlib as _hl
+    good = _hl.sha256(b"hello").hexdigest()
+    (proj / "h.json").write_text(json.dumps({
+        "project_id": "h", "needs": ["x"], "hashes": {str(realf): good}}), encoding="utf-8")
+    check("哈希匹配通过", sq2._verify_profile_refs(json.loads((proj / "h.json").read_text())) == [])
+    (proj / "z.json").write_text(json.dumps({
+        "project_id": "z", "needs": ["x"], "hashes": {str(realf): "0" * 64}}), encoding="utf-8")
+    check("路径存在但零哈希被检出",
+          any("零/空" in e for e in sq2._verify_profile_refs(json.loads((proj / "z.json").read_text()))))
+    (proj / "h2.json").write_text(json.dumps({
+        "project_id": "h2", "needs": ["x"], "hashes": {str(realf): "ab" * 32}}), encoding="utf-8")
+    check("哈希不匹配被检出",
+          any("不匹配" in e for e in sq2._verify_profile_refs(json.loads((proj / "h2.json").read_text()))))
+
+
+# ============ R6/J1 事务协议（fail-closed + CAS） ============
+print("\n[R6] J1 事务协议")
+import star_tracker as _st
+from star_tracker import SnapshotConflictError as _SCE
+
+# J1a CAS：基线推进后带旧 base 写被拒
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    def _mkt():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"
+        t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t)
+        t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    t = _mkt()
+    t.save_latest([{"full_name": "base/one", "id": 1}], fetch_meta=meta)
+    base_ts = json.loads((tmp / "original_latest.json").read_text())["timestamp"]
+    # 外部（插件）推进基线
+    t.save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "plugin/x", "id": 2}],
+                  fetch_meta=meta)
+    # skill 带旧 base_ts 写 → 应拒
+    try:
+        _mkt().save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "skill/y", "id": 3}],
+                           fetch_meta=meta, base_timestamp=base_ts)
+        check("J1a CAS 拒绝旧基线写", False)
+    except _SCE:
+        final = {r["full_name"] for r in json.loads((tmp / "original_latest.json").read_text())["repos"]}
+        check("J1a CAS 拒绝旧基线写", "plugin/x" in final)  # 插件确认条目保留
+
+# J1b fail-closed：锁被真实子进程持有时，save 抛 LockUnavailable 且不改数据
+import subprocess
+holder_code = (
+    "import sys,fcntl,os,time;"
+    "fd=os.open(sys.argv[1],os.O_CREAT|os.O_RDWR,0o644);"
+    "fcntl.flock(fd,fcntl.LOCK_EX);print('HELD',flush=True);time.sleep(5)"
+)
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    lk = tmp / ".gsm-write.lock"
+    def _mkt2():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    t = _mkt2()
+    t.save_latest([{"full_name": "base/one", "id": 1}], fetch_meta=meta)
+    before = (tmp / "original_latest.json").read_text()
+    holder = subprocess.Popen([sys.executable, "-c", holder_code, str(lk)],
+                              stdout=subprocess.PIPE, text=True)
+    holder.stdout.readline()  # 等 HELD
+    try:
+        import lockutil
+        # 缩短超时避免真等 10s：直接测 write_lock 超时抛 LockUnavailable
+        try:
+            with lockutil.write_lock(tmp, timeout=0.2):
+                pass
+            check("J1b 锁被持有时 write_lock 抛 LockUnavailable", False)
+        except lockutil.LockUnavailable:
+            check("J1b 锁被持有时 write_lock 抛 LockUnavailable", True)
+        # save 用极短超时也 fail-closed：数据不变
+        import unittest.mock as _m2
+        with _m2.patch("lockutil._DEFAULT_TIMEOUT", 0.2):
+            try:
+                _mkt2().save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "should/not/write", "id": 9}],
+                                    fetch_meta=meta)
+                rejected = False
+            except _SCE:
+                rejected = True
+        check("J1b save_latest 锁不可用 fail-closed 抛错", rejected)
+        check("J1b fail-closed 后旧数据不变",
+              (tmp / "original_latest.json").read_text() == before)
+    finally:
+        holder.terminate(); holder.wait(timeout=10)
+
+
+# ============ R9 上游反例判别（UA:GSM-R5R8-REVIEW 追加） ============
+print("\n[R9] 上游 R5R8 复审反例")
+with _tf.TemporaryDirectory() as td:
+    bd = Path(td)
+    (bd / "agenda.txt").write_text(
+        "团队周会\n议程：1) 上周进展 2) 本周计划\n与会人：张三、李四\n下次会议：周五",
+        encoding="utf-8")
+    (bd / "failed.log").write_text(
+        "running tests...\nexit_code=1\nverdict=failed", encoding="utf-8")
+    (bd / "src").mkdir()
+    (bd / "src" / "real.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    (bd / "good.log").write_text("tests 5 passed\nexit_code=0", encoding="utf-8")
+    (bd / "中文路径不存在的.log").unlink(missing_ok=True)
+
+    def _c9(dec, ce="commit abc1234"):
+        return {"signal": {"repo": "a/b", "starred_at": "2026-10-01T00:00:00Z", "source": "t"},
+                "target": {"project_id": "p", "capability": "c"},
+                "evidence": {"url": "https://x/y", "code_evidence": ce},
+                "gap": "接入缺口", "hypothesis": "h", "experiment": {"consumer": "c"},
+                "decision": dec}
+
+    # 1. 会议议程作为运行证据 → 拒（无运行结论结构）
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "agenda.txt"}}), base_dir=bd)
+    check("R9 反例拒: 会议议程无运行结论", not ok and any("运行结论" in e for e in errs))
+
+    # 2. 失败回执 → 拒
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "failed.log"}}), base_dir=bd)
+    check("R9 反例拒: exit_code=1/verdict=failed", not ok and any("失败指标" in e for e in errs))
+
+    # 3. 行号越界 → 拒（src/real.py 只有 2 行，引用 :999999）
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "good.log"}},
+            ce="src/real.py:999999 fabricated quote"), base_dir=bd)
+    check("R9 反例拒: 行号 999999 越界", not ok and any("越界" in e for e in errs))
+
+    # 4. 列表夹带不存在的中文路径 → 拒
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested",
+             "run_evidence": {"logs": ["good.log", "中文路径不存在的.log"]}}), base_dir=bd)
+    check("R9 反例拒: 列表夹带不存在中文路径",
+          not ok and any("不存在" in e for e in errs))
+
+    # 正例：合法运行产物+行界内源码 → 过
+    ok, errs, _ = _opp.validate_card(
+        _c9({"status": "tested", "run_evidence": {"log": "good.log"}},
+            ce="src/real.py:2"), base_dir=bd)
+    check("R9 正例: 合法产物+行界内源码", ok and not errs)
+
+# R9/G3 flag 收窄：活锁下 flag 也不放行
+import subprocess as _sp
+_holder = (
+    "import sys,fcntl,os,time;"
+    "fd=os.open(sys.argv[1],os.O_CREAT|os.O_RDWR,0o644);"
+    "fcntl.flock(fd,fcntl.LOCK_EX);print('HELD',flush=True);time.sleep(5)"
+)
+with _tf.TemporaryDirectory() as td:
+    lk = Path(td) / ".gsm-write.lock"
+    h = _sp.Popen([sys.executable, "-c", _holder, str(lk)],
+                  stdout=_sp.PIPE, text=True)
+    h.stdout.readline()
+    try:
+        import os as _os
+        _os.environ["GSM_ALLOW_UNLOCKED_WRITE"] = "1"
+        import lockutil as _lu
+        import unittest.mock as _m
+        with _m.patch.object(_lu, "_DEFAULT_TIMEOUT", 0.2):
+            try:
+                with _lu.write_lock(Path(td)):
+                    pass
+                check("R9/G3 flag 不放行活锁", False)  # 不应成功
+            except _lu.LockUnavailable:
+                check("R9/G3 flag 不放行活锁", True)
+        del _os.environ["GSM_ALLOW_UNLOCKED_WRITE"]
+    finally:
+        h.terminate(); h.wait(timeout=10)
+
+
+# ============ B 单权威写者协议（插件把写入全部路由给 save_latest） ============
+print("\n[B] 单权威写者协议（协议 2 合同 a/b/c/d）")
+check("B 协议常量 SNAPSHOT_WRITER_PROTOCOL == 2",
+      getattr(_st.StarTracker, "SNAPSHOT_WRITER_PROTOCOL", 0) == 2)
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    def _mkt3():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    _rd = lambda: {r["full_name"]: r for r in json.loads((tmp / "original_latest.json").read_text())["repos"]}
+    # ── 合同 d：zh/_lite 直通 ──
+    # 1) 无现有快照 → zh 仍写入：证明是规范化直通，不是前向合并兜的底；_lite 缺省 → None（B3）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "description_zh": "中文说明",
+                          "tags_zh": ["标签"], "_lite": True},
+                         {"full_name": "a/y", "id": 2}], fetch_meta=meta)
+    got = _rd()
+    check("B zh 直通: 首写无基线 description_zh 入快照", got["a/x"].get("description_zh") == "中文说明")
+    check("B zh 直通: tags_zh 入快照", got["a/x"].get("tags_zh") == ["标签"])
+    check("B zh 直通: _lite=True 入快照", got["a/x"].get("_lite") is True)
+    check("B3 新行缺省 _lite → None（非 False，留给前向合并）",
+          got["a/y"].get("description_zh") is None and got["a/y"].get("_lite") is None)
+    # 2) 输入 zh 非空 → 覆盖旧值（翻译重跑语义，输入优先）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "description_zh": "新译文"},
+                         {"full_name": "a/y", "id": 2}], fetch_meta=meta)
+    got = _rd()
+    check("B 输入优先: 新 zh 覆盖旧 zh", got["a/x"].get("description_zh") == "新译文")
+    check("B 前向合并: 输入缺 tags_zh 时从现有快照回填", got["a/x"].get("tags_zh") == ["标签"])
+    # ── B3 矩阵：旧 true + 技能 CLI 形态输入（不带 _lite）→ 保留 true ──
+    check("B3 旧 _lite=true + 缺省输入 → 前向合并保留 true（上游反例）", got["a/x"].get("_lite") is True)
+    # 旧 true + 显式 False → False（明确输入优先）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "_lite": False}], fetch_meta=meta)
+    check("B3 旧 true + 显式 False → False", _rd()["a/x"].get("_lite") is False)
+    # 旧 False + 非法类型 → 按缺省处理 → 回填旧值 False（不把脏值写进权威源）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1, "_lite": "yes"}], fetch_meta=meta)
+    check("B3 非法 _lite 按缺省处理（回填旧值，不写脏值）", _rd()["a/x"].get("_lite") is False)
+    # 3) 输入不带 zh（技能 CLI 全量写）→ 现有 zh 全部保留（插件依赖此保证）
+    _mkt3().save_latest([{"full_name": "a/x", "id": 1}, {"full_name": "a/y", "id": 2}], fetch_meta=meta)
+    check("B 前向合并: 技能全量写不丢插件 zh", _rd()["a/x"].get("description_zh") == "新译文")
+
+# ── 合同 a/b：双形态 + normalized_rows 直通（B1 上游反例：v2 行往返 owner/license 变 null、
+#    is_fork/is_archived 变 false、category/value/avatar_url/has_new_release 丢失）──
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    def _mkt4():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    _rd = lambda: {r["full_name"]: r for r in json.loads((tmp / "original_latest.json").read_text())["repos"]}
+    # raw GitHub 对象形态（技能 CLI 路径）：行为与 R9 一致——dict 取 login/spdx_id、fork/archived 原始键、未知键剥离
+    raw = {"full_name": "o/r", "id": 7, "owner": {"login": "o", "avatar_url": "x"}, "license": {"spdx_id": "MIT"},
+           "fork": True, "archived": True, "permissions": {"admin": False}, "node_id": "junk"}
+    _mkt4().save_latest([raw], fetch_meta=meta)
+    g = _rd()["o/r"]
+    check("B1 raw: owner dict → login", g["owner"] == "o")
+    check("B1 raw: license dict → spdx_id", g["license"] == "MIT")
+    check("B1 raw: fork/archived 原始键 → is_fork/is_archived", g["is_fork"] is True and g["is_archived"] is True)
+    check("B1 raw: 未知键剥离（permissions/node_id 不入快照）", "permissions" not in g and "node_id" not in g)
+    check("B1 raw: local_fetched_at 取本次时间", isinstance(g.get("local_fetched_at"), str))
+    # v2 快照行形态（插件 B 路径）：读出的行加扩展字段原样写回 → 全部保真
+    v2 = dict(g)  # 上一步产出的规范化行 = 真实 v2 形态（owner str / license str / is_fork bool）
+    v2.update({"category": "工具", "value": "A", "avatar_url": "https://a/x.png", "has_new_release": True,
+               "description_zh": "译文", "_lite": True, "local_fetched_at": "2026-10-01T00:00:00"})
+    _mkt4().save_latest([v2], fetch_meta=meta, normalized_rows=True)
+    g2 = _rd()["o/r"]
+    check("B1 v2 往返: owner str 保真（不变 null）", g2["owner"] == "o")
+    check("B1 v2 往返: license str 保真", g2["license"] == "MIT")
+    check("B1 v2 往返: is_fork/is_archived 保真（不变 false）", g2["is_fork"] is True and g2["is_archived"] is True)
+    check("B1 v2 直通: category/value 保留", g2.get("category") == "工具" and g2.get("value") == "A")
+    check("B1 v2 直通: avatar_url/has_new_release 保留",
+          g2.get("avatar_url") == "https://a/x.png" and g2.get("has_new_release") is True)
+    check("B1 v2 往返: local_fetched_at 保留（插件写入不是重新抓取）", g2["local_fetched_at"] == "2026-10-01T00:00:00")
+    check("B1 v2 往返: zh/_lite 随行", g2["description_zh"] == "译文" and g2["_lite"] is True)
+    # 二次往返不退化（canonical 行再规范化幂等）
+    _mkt4().save_latest([dict(g2)], fetch_meta=meta, normalized_rows=True)
+    g3 = _rd()["o/r"]
+    check("B1 v2 二次往返幂等", {k: v for k, v in g3.items()} == {k: v for k, v in g2.items()})
+    # 不带 flag 的 v2 行：已知映射仍双形态兼容（owner/license/is_* 不降级），但未知键按 raw 规则剥离
+    _mkt4().save_latest([dict(g2)], fetch_meta=meta)
+    g4 = _rd()["o/r"]
+    check("B1 无 flag 的 v2 行: 已知字段不降级", g4["owner"] == "o" and g4["is_fork"] is True)
+    check("B1 无 flag: 未知扩展键由前向合并兜底（已知合并集之外的不保证）",
+          g4.get("description_zh") == "译文" and g4.get("_lite") is True)
+
+# ── 合同 c：lock_timeout 显式参数（B4：不再要求调用方临时改 lockutil 全局）──
+with _tf.TemporaryDirectory() as td:
+    tmp = Path(td)
+    lk = tmp / ".gsm-write.lock"
+    def _mkt5():
+        t = _st.StarTracker.__new__(_st.StarTracker)
+        t.CACHE_DIR = tmp; t.CONFIG_DIR = tmp
+        t.CATEGORIES_FILE = tmp / "c.yaml"; t.TAGS_FILE = tmp / "t.json"; t.SETTINGS_FILE = tmp / "s.json"
+        t.categories = _st.StarTracker._get_default_categories(t); t.tags = {}; t.settings = {}
+        return t
+    meta = {"complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False}
+    _mkt5().save_latest([{"full_name": "base/one", "id": 1}], fetch_meta=meta)
+    before = (tmp / "original_latest.json").read_text()
+    h = _sp.Popen([sys.executable, "-c", _holder, str(lk)], stdout=_sp.PIPE, text=True)
+    h.stdout.readline()
+    try:
+        import lockutil as _lu2
+        _default_before = _lu2._DEFAULT_TIMEOUT
+        t0 = __import__("time").monotonic()
+        try:
+            _mkt5().save_latest([{"full_name": "base/one", "id": 1}, {"full_name": "x/y", "id": 2}],
+                                fetch_meta=meta, lock_timeout=0.2)
+            rejected = False
+        except _SCE:
+            rejected = True
+        dt = __import__("time").monotonic() - t0
+        check("B4 lock_timeout=0.2 持锁时 fail-closed 抛 SnapshotConflictError", rejected)
+        check("B4 lock_timeout 确实生效（<2s 返回，而非等 10s 默认）", dt < 2.0, f"dt={dt:.2f}")
+        check("B4 旧数据不变", (tmp / "original_latest.json").read_text() == before)
+        check("B4 未触碰 lockutil 全局默认值", _lu2._DEFAULT_TIMEOUT == _default_before)
+    finally:
+        h.terminate(); h.wait(timeout=10)
 
 
 # ============ 汇总 ============

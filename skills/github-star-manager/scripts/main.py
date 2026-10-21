@@ -38,14 +38,17 @@ def init_command(tracker: StarTracker, args):
         pages = ", ".join(str(p["page"]) for p in fetch_meta["failed_pages"])
         print(f"⚠️ 有 {len(fetch_meta['failed_pages'])} 页抓取失败（页码: {pages}），本次数据不完整")
 
-    # F01: 抓取不完整时禁止覆盖既有基线
+    # F01 + R5/J5: 抓取不完整或 limit 截断时禁止覆盖既有基线
     if not fetch_meta.get("complete"):
         existing = tracker.load_latest()
+        reason = ("被 --limit 截断（子集）" if fetch_meta.get("limit_truncated")
+                  else "抓取不完整")
         if existing:
-            print("❌ 抓取不完整且已存在旧快照，已保留旧快照不被覆盖（审计 F01 守卫）")
-            print("   提示：请检查网络/Token 后重试，或删除 output/original_latest.json 强制重建基线")
+            print(f"❌ 本次{reason}且已存在旧快照，已保留旧快照不被覆盖（审计 F01 守卫）")
+            print("   提示：请检查网络/Token 或调整 --limit 后重试，"
+                  "或删除 output/original_latest.json 强制重建基线")
             return 1
-        print("⚠️ 抓取不完整且无旧快照，仍将保存（首次建基线，快照标记为 partial）")
+        print(f"⚠️ 本次{reason}且无旧快照，仍将保存（首次建基线，快照标记为 partial）")
 
     # 对 description 为 null 的项目重新抓取元数据
     repos = tracker.retry_null_descriptions(repos)
@@ -53,8 +56,19 @@ def init_command(tracker: StarTracker, args):
     # 记录数据质量日志
     tracker.log_null_descriptions(repos, source="init")
 
-    # 保存快照（携带完整性元数据）
-    snapshot_file = tracker.save_latest(repos, fetch_meta=fetch_meta or None)
+    # 保存快照（携带完整性元数据 + 基线代际 CAS——R9/G1 接活：插件写方现会 bump
+    # timestamp，若本次 fetch 期间有外部写者提交，save_latest 在锁内检出并拒绝）
+    from star_tracker import SnapshotConflictError as _SCE
+    existing = tracker.load_latest()
+    try:
+        snapshot_file = tracker.save_latest(
+            repos, fetch_meta=fetch_meta or None,
+            base_timestamp=(existing or {}).get("timestamp"))
+    except _SCE as e:
+        print(f"❌ {e}")
+        print("   另一写者（star-board 插件）在本次抓取期间已提交。请直接重跑本命令——"
+              "重跑会读到最新基线，通常一次即成功。")
+        return 1
     print(f"✓ 原始数据已保存: {snapshot_file}")
 
     # 生成项目摘要（可选）
@@ -92,12 +106,16 @@ def check_command(tracker: StarTracker, args):
     fetch_meta = tracker.last_fetch_meta or {}
     print(f"当前 Star 数量: {len(current_repos)}")
 
-    # F01: 抓取不完整时保留旧基线，不做取消判定
+    # F01 + R5/J5: 抓取不完整或 limit 截断时保留旧基线，不做取消判定
     if not fetch_meta.get("complete"):
-        failed = fetch_meta.get("failed_pages", [])
-        pages = ", ".join(str(p["page"]) for p in failed)
-        print(f"❌ 本次抓取不完整（失败页: {pages}），已放弃保存与对比，旧快照保持不变")
-        print("   部分抓取无法区分「用户取消收藏」与「分页失败漏抓」，继续对比会产生误报")
+        if fetch_meta.get("limit_truncated"):
+            print("❌ 本次抓取被 --limit 截断（子集），已放弃保存与对比，旧快照保持不变")
+            print("   截断子集会把未抓到的旧条目误判为「取消收藏」——请提高 --limit 或去掉该参数")
+        else:
+            failed = fetch_meta.get("failed_pages", [])
+            pages = ", ".join(str(p["page"]) for p in failed)
+            print(f"❌ 本次抓取不完整（失败页: {pages}），已放弃保存与对比，旧快照保持不变")
+            print("   部分抓取无法区分「用户取消收藏」与「分页失败漏抓」，继续对比会产生误报")
         return 1
 
     # 加载历史数据
@@ -156,8 +174,16 @@ def check_command(tracker: StarTracker, args):
     # === 新增：数据质量日志 ===
     tracker.log_null_descriptions(current_repos, source="check_incremental")
 
-    # 保存新数据（包含刷新后的元数据与抓取完整性元数据，此时已确认 complete）
-    tracker.save_latest(current_repos, fetch_meta=fetch_meta)
+    # 保存新数据（R9/G1 接活 CAS：传入本次对比开始时的基线 timestamp，
+    # 锁内若检出插件在 fetch 期间已提交则 fail-closed，旧数据保留）
+    from star_tracker import SnapshotConflictError as _SCE
+    try:
+        tracker.save_latest(current_repos, fetch_meta=fetch_meta,
+                           base_timestamp=snapshot.get("timestamp"))
+    except _SCE as e:
+        print(f"❌ {e}")
+        print("   另一写者（star-board 插件）在本次检查期间已提交。请直接重跑本命令。")
+        return 1
 
     # 输出结果
     print("\n" + "=" * 50)

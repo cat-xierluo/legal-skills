@@ -1,0 +1,112 @@
+{
+  "name": "科技蓝",
+  "description": "深夜蓝+青色的科技风格。适合科技公司、互联网产品、AI展示。",
+  "source": "templates.md Tech 配色方案",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#020617",
+      "#0F172A"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#E2E8F0"
+    ],
+    "accents": [
+      "#06B6D4",
+      "#FFFFFF"
+    ],
+    "palette": [
+      "#0F172A",
+      "#020617",
+      "#06B6D4",
+      "#FFFFFF",
+      "#E2E8F0"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.5,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "80px",
+    "sectionGap": "34px",
+    "itemGap": "18px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "理性",
+      "前沿",
+      "清晰",
+      "可靠"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "rounded-card",
+    "playful-fonts",
+    "warm-colors",
+    "heavy-shadow"
+  ],
+  "promptSnippet": "Deep-tech style. Midnight navy (#0F172A / #020617) with cyan (#06B6D4) as the single interactive/active accent and white for text. Cool, product-led, high contrast. Reserve cyan for what the audience should act on.",
+  "components": [
+    {
+      "type": "active-bar",
+      "usage": "激活条",
+      "style": "background: #06B6D4; height: 100%; border-radius: 2px"
+    },
+    {
+      "type": "metric",
+      "usage": "指标",
+      "style": "font-family: Microsoft YaHei; font-size: 44px; font-weight: 700; line-height: 1.05; color: #06B6D4"
+    },
+    {
+      "type": "card",
+      "usage": "卡片",
+      "style": "background: #020617; border: 1px solid #E2E8F0; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "row",
+      "usage": "条目",
+      "style": "border-top: 1px solid #E2E8F0; padding: 12px 0; font-family: Microsoft YaHei"
+    }
+  ],
+  "cssVariables": {
+    "--primary": "#0f172a",
+    "--primary-dark": "#020617",
+    "--secondary": "#06b6d4",
+    "--accent": "#ffffff",
+    "--accent-light": "#e2e8f0"
+  }
+}

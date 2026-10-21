@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { background: #001d3d; font-family: "PingFang SC", sans-serif; }
+    canvas.bg { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
+    #deck { position: fixed; inset: 0; display: flex; z-index: 1; }
+    .slide { width: 100vw; height: 100vh; flex: 0 0 100vw; padding: 72px; color: white; position: relative; }
+    h1 { margin: 0 0 24px; font-size: 54px; }
+    p { margin: 0; font-size: 24px; }
+  </style>
+</head>
+<body>
+  <canvas class="bg" data-ppt-background aria-hidden="true"></canvas>
+  <main id="deck">
+    <section class="slide" data-note="第一页讲者备注">
+      <h1>前景文字可编辑</h1>
+      <p>PowerPoint 只冻结背景层。</p>
+    </section>
+    <section class="slide" data-note="第二页讲者备注">
+      <h1>第二页</h1>
+      <p>验证多页与 notes。</p>
+    </section>
+  </main>
+  <script>
+    const canvas = document.querySelector('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+    const gradient = ctx.createLinearGradient(0, 0, innerWidth, innerHeight);
+    gradient.addColorStop(0, '#001d3d');
+    gradient.addColorStop(1, '#5a4310');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, innerWidth, innerHeight);
+    ctx.fillStyle = 'rgba(232,199,102,.28)';
+    ctx.font = '22px monospace';
+    for (let y = 24; y < innerHeight; y += 34) ctx.fillText('LEGAL AI · AGENT · SKILL', 18 + (y % 68), y);
+  </script>
+</body>
+</html>

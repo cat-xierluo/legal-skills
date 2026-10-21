@@ -1,5 +1,26 @@
 # Changelog · env-doctor
 
+## 0.4.0 - 2026-10-17
+
+沉淀自 2026-10-16/17 node 环境同步实战（v24.11.0 二进制 0 字节损坏 + nvm default
+lts 死链 + 垫片半迁移三连，用户授权 env-doctor 通道修复）：
+
+- **alias v 前缀归一化**：`nvm alias default 24.14.0`（不带 v）写入 alias 文件的是裸
+  版本号、版本目录却带 v——解析器现按带 v 形态归一后再查目录，不再误报「无法解析
+  nvm 默认」。已知边界：设 alias 建议直接用 `nvm alias default vX.Y.Z` 形态。
+- **nvm 版本目录健康扫描**：任一 `~/.nvm/versions/node/*/bin/node` 为 0 字节即告警
+  （nvm 下载中断的静默损坏——v24.11.0 实例损坏数日无人察觉，直到依赖它的测试门禁
+  失败才暴露）。
+- **垫片半迁移告警**：node/npm/npx 三垫片指向的 nvm 版本不一致时直接告警，不再
+  依赖 default 可解析才比对（实例：node 已改指 v24.14.0、npm/npx 仍指 v24.11.0，
+  因 default 为 lts 死链而静默）。
+- **agent 壳 PATH 提示**：第 2 节在当前 shell PATH 缺 `~/.local/bin` 时显式说明
+  （agent 壳常见形态；用户 shell 由 .zshenv 注入）——解释「为什么 doctor 的 node
+  解析到 /usr/local/bin 的老版本」。
+- known-baseline 更新：node 分布表换新格局（default=v24.14.0、v24.11.0 转次级并
+  记修复事件、v25 的 localStorage 语义警示、v20 对 agent 壳的实际影响）＋ nvm
+  alias 稳定形态纪律（钉具体 vX.Y.Z，勿用 lts/*——会随上游漂到未安装版本成死链）。
+
 ## 0.3.0 - 2026-09-30
 
 - **环境漂移对照（第 8 节）+ `snapshot` 子命令**：对 shell rc 文件（zshenv/zprofile/

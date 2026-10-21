@@ -1,0 +1,112 @@
+{
+  "name": "咨询蓝",
+  "description": "管理咨询报告风格。专业深蓝 + 清晰层级 + 数据密度高。适合战略分析、市场研究、管理报告。",
+  "source": "management consulting standards",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F7F9FC"
+    ],
+    "textColors": [
+      "#0F172A",
+      "#475569"
+    ],
+    "accents": [
+      "#1E3A5F",
+      "#2563EB"
+    ],
+    "dividers": [
+      "#CBD5E1"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#0F172A",
+      "#1E3A5F",
+      "#2563EB",
+      "#475569",
+      "#CBD5E1",
+      "#F7F9FC"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      32,
+      24
+    ],
+    "bodySizes": [
+      14,
+      12
+    ]
+  },
+  "spacing": {
+    "pagePadding": "48px",
+    "sectionGap": "20px",
+    "itemGap": "10px"
+  },
+  "layout": {
+    "preferredComposition": "pyramid-principle",
+    "negativeSpacePriority": "low"
+  },
+  "tone": {
+    "keywords": [
+      "专业",
+      "结构化",
+      "数据密集",
+      "结论先行"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "large-photo",
+    "playful-fonts",
+    "animation"
+  ],
+  "promptSnippet": "Consulting deliverable. Navy (#1E3A5F) for headings, blue (#2563EB) to mark the answer, pale grey-blue (#F7F9FC) panels for structure. Answer-first layout, tight information density, charts over prose, every page ending in a so-what. No narrative arc, just evidence.",
+  "components": [
+    {
+      "type": "kpi-card",
+      "usage": "KPI 数值卡",
+      "style": "background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "so-what",
+      "usage": "结论条",
+      "style": "background: #FFFFFF; border: 1px solid #CBD5E1; border-left: 3px solid #1E3A5F; padding: 12px 18px; font-family: 'PingFang SC', sans-serif; color: #0F172A"
+    },
+    {
+      "type": "table-header",
+      "usage": "表头行",
+      "style": "background: #FFFFFF; border-bottom: 2px solid #0F172A; padding: 8px 12px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px"
+    },
+    {
+      "type": "chart-caption",
+      "usage": "图表说明",
+      "style": "font-family: 'PingFang SC', sans-serif; font-size: 12px; line-height: 1.5; color: #475569"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#0F172A",
+    "--ink-rgb": "15,23,42",
+    "--paper": "#FFFFFF",
+    "--paper-rgb": "255,255,255",
+    "--accent": "#1E3A5F",
+    "--accent-light": "#2563EB",
+    "--muted": "#475569",
+    "--surface": "#F7F9FC",
+    "--divider": "#CBD5E1"
+  }
+}

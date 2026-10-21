@@ -1,0 +1,105 @@
+{
+  "name": "金融深灰",
+  "description": "金融投资风格。深灰炭色 + 金色强调，传递稳重与专业。适合投资分析、财务报告、基金路演。",
+  "source": "financial industry design",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#1C1C1E",
+      "#2C2C2E"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#A1A1AA"
+    ],
+    "accents": [
+      "#C9A84C",
+      "#E2C97E"
+    ],
+    "dividers": [
+      "#3F3F46"
+    ],
+    "palette": [
+      "#1C1C1E",
+      "#2C2C2E",
+      "#C9A84C",
+      "#E2C97E",
+      "#FFFFFF",
+      "#A1A1AA"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      40,
+      32
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "28px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "data-dense",
+    "negativeSpacePriority": "low"
+  },
+  "tone": {
+    "keywords": [
+      "稳重",
+      "专业",
+      "数据驱动",
+      "权威"
+    ]
+  },
+  "prohibited": [
+    "bright-colors",
+    "playful-fonts",
+    "gradient",
+    "large-photo"
+  ],
+  "promptSnippet": "Investment style. Charcoal (#1C1C1E / #2C2C2E) ground with gold (#C9A84C / #E2C97E) as the single accent and white for figures, grey (#A1A1AA) for axis labels. Steady, data-first, no colour noise. Signals funds and discipline.",
+  "components": [
+    {
+      "type": "nav-card",
+      "usage": "净值/指标卡",
+      "style": "background: #1C1C1E; border: 1px solid #3F3F46; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "allocation-bar",
+      "usage": "资产配置条",
+      "style": "background: #C9A84C; height: 100%; border-radius: 2px"
+    },
+    {
+      "type": "footnote",
+      "usage": "数据脚注",
+      "style": "font-family: 'PingFang SC', sans-serif; font-size: 12px; line-height: 1.5; color: #A1A1AA"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1C1C1E",
+    "--ink-rgb": "28,28,30",
+    "--paper": "#2C2C2E",
+    "--paper-rgb": "44,44,46",
+    "--accent": "#C9A84C",
+    "--accent-light": "#E2C97E",
+    "--muted": "#A1A1AA",
+    "--surface": "#3F3F46"
+  }
+}

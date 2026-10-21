@@ -1,5 +1,19 @@
 # 变更日志
 
+## [1.9.1] - 2026-10-16
+
+### 修复
+- **`--apply --register` 组合失效**：REGISTER 分支优先级高于修复分支，导致组合使用时只登记不修复（真实踩坑：一批链接连续两轮"修复"实际零动作，靠旧链接 mtime 未变发现）。现改为 register 仅在**不带 --apply** 时走纯登记；组合使用正常执行修复并在尾部统一登记。
+
+### 改进
+- 默认 harness 列表扩充 `.hermes`、`.myagents`（真实存在且承载技能安装的 Agent 框架，实测全盘扫描发现其内有漏网旧链）。
+- 浅层模式支持 skills/commands 下的**分类子目录一层**（如 `~/.hermes/skills/personal/<skill>` 三层结构），仍毫秒级。
+- `--full-home` 耗时描述如实修正：全 home 树实测可达十余小时（视目录规模），非"数分钟"；分层设计的默认档（浅层）与登记档（--from-registry）才是日常路径。
+
+### 验证
+- 云同步目录（Documents/Mac同步文件夹）深层漏网链接修复后 20s/15s 两次复扫零回滚；.hermes/.myagents/Documents 三根 deep 终验 0；registry 累计登记 multi-agent-orca 56 处。
+
+
 ## [1.9.0] - 2026-10-16
 
 ### 新增

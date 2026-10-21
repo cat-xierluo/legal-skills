@@ -1,0 +1,113 @@
+{
+  "name": "商务金",
+  "description": "藏青+金色的经典商务风格。适合商务报告、法律文书、企业宣传。",
+  "source": "templates.md Business 配色方案",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#0F1F33",
+      "#FFFFFF"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#1E3A5F"
+    ],
+    "accents": [
+      "#D4AF37",
+      "#F5E6A3"
+    ],
+    "palette": [
+      "#1E3A5F",
+      "#0F1F33",
+      "#6B7280",
+      "#D4AF37",
+      "#F5E6A3",
+      "#FFFFFF"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Microsoft YaHei",
+      "PingFang SC"
+    ],
+    "titleSizes": [
+      36,
+      28,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.5,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "80px",
+    "sectionGap": "36px",
+    "itemGap": "18px"
+  },
+  "layout": {
+    "positioning": "absolute",
+    "marginPattern": [
+      60,
+      40
+    ],
+    "contentWidth": 880
+  },
+  "tone": {
+    "keywords": [
+      "经典",
+      "稳重",
+      "专业",
+      "可信"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "playful-fonts",
+    "neon",
+    "rounded-card",
+    "dense-decoration"
+  ],
+  "promptSnippet": "Navy-and-gold business style. Deep navy (#1E3A5F / #0F1F33) carrying the structure, muted gold (#D4AF37 with #F5E6A3 tint) as the only accent. Serif-free formal type, even spacing, restrained rules. Suits business reports, legal documents and corporate communications.",
+  "components": [
+    {
+      "type": "section-rule",
+      "usage": "章节分隔线",
+      "style": "height: 2px; background: #FFFFFF"
+    },
+    {
+      "type": "gold-label",
+      "usage": "金色标签",
+      "style": "font-family: Microsoft YaHei; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #1E3A5F"
+    },
+    {
+      "type": "key-point",
+      "usage": "要点块",
+      "style": "background: #0F1F33; border: 1px solid #FFFFFF; border-left: 3px solid #D4AF37; padding: 12px 18px; font-family: Microsoft YaHei; color: #FFFFFF"
+    },
+    {
+      "type": "stat",
+      "usage": "数据",
+      "style": "font-family: Microsoft YaHei; font-size: 44px; font-weight: 700; line-height: 1.05; color: #D4AF37"
+    }
+  ],
+  "cssVariables": {
+    "--primary": "#1e3a5f",
+    "--primary-dark": "#0f1f33",
+    "--secondary": "#6b7280",
+    "--accent": "#d4af37",
+    "--accent-light": "#f5e6a3"
+  }
+}

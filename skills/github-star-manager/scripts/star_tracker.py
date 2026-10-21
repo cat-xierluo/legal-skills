@@ -32,6 +32,25 @@ from typing import List, Dict, Optional, Set
 from pathlib import Path
 
 
+class SnapshotConflictError(RuntimeError):
+    """R6/J1a+J1b：基线被外部写者推进（CAS 失败）或跨进程锁不可用时，
+    save_latest fail-closed 拒绝写入的显式信号。调用方可重读最新基线后重试。"""
+
+
+def _atomic_replace(path: Path, text: str) -> None:
+    """tmp + os.replace 原子替换（读者永不见半截文件）。"""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
 class StarTracker:
     """GitHub Star 更新追踪器"""
 
@@ -298,10 +317,13 @@ class StarTracker:
 
             page += 1
 
-            # 获取数量已足够
+            # 获取数量已足够（R5/J5：limit 截断 ≠ 完整快照——上游 F01 反例：
+            # --check --limit 1 标 limit_truncated=true 却仍称 complete，把未抓到的
+            # 旧条目误判为「取消收藏」。截断时 complete 必须为 False。）
             if len(repos) >= limit:
                 repos = repos[:limit]
                 fetch_meta["limit_truncated"] = True
+                fetch_meta["complete"] = False   # 截断即非完整快照
                 break
 
         # 为每个仓库匹配分类
@@ -589,13 +611,45 @@ README 内容（前6000字）:
 **技术栈**: {repo_info.get('language', '未知')}
 **Stars**: {repo_info.get('stargazers_count', 0)}"""
 
-    def save_latest(self, repos: List[Dict], fetch_meta: Optional[Dict] = None) -> Path:
+    # R6/J1a：跨写者前向合并保留的插件扩展字段（技能全量快照不该丢这些）
+    FORWARD_MERGE_FIELDS = ("description_zh", "tags_zh", "_lite", "reason",
+                            "matched_keywords")
+
+    # B 方案（单权威写者）协议版本：save_latest 的规范化已直通上述插件扩展字段
+    # （description_zh/tags_zh/_lite 输入有则写入），star-board 插件据此把
+    # original_latest.json 的全部写入路由给 save_latest 而无需锁外补写。
+    # v2 完整合同（协议 2 ⇒ 以下全部成立，插件按此调用）：
+    #   a) 双形态输入：owner/license 接受 dict（GitHub 原始对象）或 str（v2 快照行）；
+    #      is_fork/is_archived 接受原始键 fork/archived 或 v2 键——v2 规范化行往返不降级
+    #   b) normalized_rows=True：输入已是 v2 快照行（含插件扩展字段，如 category/
+    #      value/avatar_url/has_new_release），未列入已知映射的键**原样直通**（raw
+    #      输入路径不受影响，仍剥离未知键）
+    #   c) lock_timeout：显式锁超时秒数（None → lockutil 默认）——调用方不得临时
+    #      改 lockutil._DEFAULT_TIMEOUT 全局（并行调用还原竞态）
+    #   d) description_zh/tags_zh/_lite：输入有值则写入；_lite 缺省/非 bool 写 None
+    #      （前向合并可从现有快照回填，显式 False 保留——缺省与显式假值必须可区分）
+    # 注意：协议 2 是「唯一写入口实现」，不是单一常驻写进程——多进程并发调用时
+    # flock/CAS/冲突语义仍然生效。
+    SNAPSHOT_WRITER_PROTOCOL = 2
+
+    def save_latest(self, repos: List[Dict], fetch_meta: Optional[Dict] = None,
+                    base_timestamp: Optional[str] = None,
+                    normalized_rows: bool = False,
+                    lock_timeout: Optional[float] = None) -> Path:
         """保存最新数据（包含完整多维度信息，便于 AI 分析）
 
         Args:
-            repos: 仓库列表
+            repos: 仓库列表。默认按 GitHub 原始对象规范化；normalized_rows=True 时
+                输入是 v2 快照行（含插件扩展字段），已知映射兼容双形态，未知键直通
+                （协议 2 合同 b，见 SNAPSHOT_WRITER_PROTOCOL 注释）。
             fetch_meta: 抓取完整性元数据（来自 get_starred_repos 的 last_fetch_meta）。
                 不传时按「完整性未知」处理，快照标记为 partial 并说明原因。
+            base_timestamp: 调用方读取本次对比基线时的快照 timestamp（R6/J1a CAS）。
+                提供时，锁内重读当前快照：若 timestamp 已被外部写者推进 → 抛
+                SnapshotConflictError（fail-closed，调用方用最新数据重读后再写）；
+                否则在锁内做扩展字段前向合并（description_zh 等插件产物不被全量快照冲掉）。
+            lock_timeout: 获取写锁的最长等待秒数；None → lockutil 默认。协议 2 调用方
+                必须用此参数传超时，不得临时修改 lockutil 全局默认值。
         """
         latest_file = self.CACHE_DIR / "original_latest.json"
         fetch_time = datetime.now().isoformat()
@@ -610,61 +664,123 @@ README 内容（前6000字）:
             snapshot_meta = dict(fetch_meta)
             snapshot_meta["completeness"] = "complete" if fetch_meta.get("complete") else "partial"
 
+        def _normalize(r: Dict) -> Dict:
+            """单行规范化（协议 2 双形态合同）。
+
+            GitHub 原始对象与 v2 快照行都接受：owner/license 兼容 dict/str，
+            fork/archived 兼容原始键/v2 键（is_fork/is_archived）。v2 行经此函数
+            往返不得降级（B1：插件把读出的快照行原样写回时字段保真）。
+            """
+            row = {
+                # 基本信息
+                # id：GitHub 数字主键，改名后保持稳定（消费者应以 id 为主键、
+                # full_name 为展示名，避免改名被误判为新仓库——D-00 对账发现的缺口）
+                "id": r.get("id"),
+                "full_name": r["full_name"],
+                "name": r.get("name"),
+                "owner": (r.get("owner") or {}).get("login")
+                    if isinstance(r.get("owner"), dict) else r.get("owner"),
+                "html_url": r.get("html_url"),
+                "description": r.get("description"),
+                "homepage": r.get("homepage"),
+
+                # 时间维度（关键分析维度）
+                "starred_at": r.get("starred_at"),  # 用户何时 star 的（需要特殊 API）
+                "created_at": r.get("created_at"),   # 仓库创建时间
+                "updated_at": r.get("updated_at"),   # 仓库最后更新时间
+                "pushed_at": r.get("pushed_at"),     # 最后推送时间
+                # 原始对象无此键 → fetch_time；v2 行已有 → 保留（插件写入不是重新抓取）
+                "local_fetched_at": r.get("local_fetched_at", fetch_time),
+
+                # 统计数据（活跃度指标）
+                "stargazers_count": r.get("stargazers_count", 0),
+                "forks_count": r.get("forks_count", 0),
+                "watchers_count": r.get("watchers_count", 0),
+                "open_issues_count": r.get("open_issues_count", 0),
+
+                # 分类信息（技术栈/主题识别）
+                "language": r.get("language"),
+                "topics": r.get("topics", []),
+                "license": (r.get("license") or {}).get("spdx_id")
+                    if isinstance(r.get("license"), dict) else r.get("license"),
+                "visibility": r.get("visibility"),
+
+                # 项目特征（健康度判断）——原始键 fork/archived 与 v2 键 is_fork/
+                # is_archived 双兼容
+                "is_fork": bool(r.get("fork", r.get("is_fork", False))),
+                "is_archived": bool(r.get("archived", r.get("is_archived", False))),
+                "is_template": bool(r.get("is_template", False)),
+                "has_wiki": bool(r.get("has_wiki", False)),
+                "has_pages": bool(r.get("has_pages", False)),
+                "has_discussions": bool(r.get("has_discussions", False)),
+
+                # 其他
+                "default_branch": r.get("default_branch"),
+                "size": r.get("size", 0),  # KB
+
+                # B 方案：插件扩展字段直通（输入有则写入；无则 None——None 可被
+                # 前向合并从现有快照回填）。_lite 缺省/非 bool → None 而非 False：
+                # False 是合法显式值，写死 False 会让旧 true 无法回填（B3）
+                "description_zh": r.get("description_zh"),
+                "tags_zh": r.get("tags_zh"),
+                "_lite": r["_lite"] if isinstance(r.get("_lite"), bool) else None,
+            }
+            if normalized_rows:
+                # 协议 2 合同 b：v2 快照行的插件扩展字段（category/value/avatar_url/
+                # has_new_release 等）原样直通，不因不在已知映射而被剥掉。仅显式
+                # 声明 normalized_rows 的调用方（插件 B 路径）可触发；raw 输入路径
+                # 仍按白名单剥离未知键，行为不变。
+                for k, v in r.items():
+                    if k not in row:
+                        row[k] = v
+            return row
+
         data = {
             "schema_version": 2,
             "timestamp": fetch_time,
             "total_count": len(repos),
             "snapshot_meta": snapshot_meta,
-            "repos": [
-                {
-                    # 基本信息
-                    # id：GitHub 数字主键，改名后保持稳定（消费者应以 id 为主键、
-                    # full_name 为展示名，避免改名被误判为新仓库——D-00 对账发现的缺口）
-                    "id": r.get("id"),
-                    "full_name": r["full_name"],
-                    "name": r.get("name"),
-                    "owner": r.get("owner", {}).get("login") if isinstance(r.get("owner"), dict) else None,
-                    "html_url": r.get("html_url"),
-                    "description": r.get("description"),
-                    "homepage": r.get("homepage"),
-
-                    # 时间维度（关键分析维度）
-                    "starred_at": r.get("starred_at"),  # 用户何时 star 的（需要特殊 API）
-                    "created_at": r.get("created_at"),   # 仓库创建时间
-                    "updated_at": r.get("updated_at"),   # 仓库最后更新时间
-                    "pushed_at": r.get("pushed_at"),     # 最后推送时间
-                    "local_fetched_at": fetch_time,      # 本地抓取时间
-
-                    # 统计数据（活跃度指标）
-                    "stargazers_count": r.get("stargazers_count", 0),
-                    "forks_count": r.get("forks_count", 0),
-                    "watchers_count": r.get("watchers_count", 0),
-                    "open_issues_count": r.get("open_issues_count", 0),
-
-                    # 分类信息（技术栈/主题识别）
-                    "language": r.get("language"),
-                    "topics": r.get("topics", []),
-                    "license": r.get("license", {}).get("spdx_id") if isinstance(r.get("license"), dict) else None,
-                    "visibility": r.get("visibility"),
-
-                    # 项目特征（健康度判断）
-                    "is_fork": r.get("fork", False),
-                    "is_archived": r.get("archived", False),
-                    "is_template": r.get("is_template", False),
-                    "has_wiki": r.get("has_wiki", False),
-                    "has_pages": r.get("has_pages", False),
-                    "has_discussions": r.get("has_discussions", False),
-
-                    # 其他
-                    "default_branch": r.get("default_branch"),
-                    "size": r.get("size", 0),  # KB
-                }
-                for r in repos
-            ],
+            "repos": [_normalize(r) for r in repos],
         }
 
-        with open(latest_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        # R6/J1a + J1b：锁内重读 + CAS + 前向合并，fail-closed。
+        # 与 star-board 插件共用 output/.gsm-write.lock；读-改-写在同一锁内完成，
+        # 不再"锁外读、锁内盲覆盖"（上游 J1a 反例：插件确认条目被旧读覆盖）。
+        from lockutil import write_lock, LockUnavailable
+
+        def _commit_locked():
+            cur = None
+            if latest_file.exists():
+                try:
+                    cur = json.loads(latest_file.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    cur = None
+            # CAS：基线被外部写者推进则拒绝旧提交
+            if base_timestamp is not None and isinstance(cur, dict):
+                if cur.get("timestamp") != base_timestamp:
+                    raise SnapshotConflictError(
+                        f"快照基线已被外部写者推进（{base_timestamp} → "
+                        f"{cur.get('timestamp')}），本次基于旧读的写入被拒绝（fail-closed），"
+                        f"请用最新数据重读后再写")
+            merged = dict(data)
+            # 前向合并：保留 cur 中插件扩展字段（技能 repos 不含它们）
+            if isinstance(cur, dict) and isinstance(cur.get("repos"), list):
+                cur_extra = {r.get("full_name"): r for r in cur["repos"] if r.get("full_name")}
+                for r in merged["repos"]:
+                    ex = cur_extra.get(r.get("full_name"))
+                    if ex:
+                        for fld in self.FORWARD_MERGE_FIELDS:
+                            if r.get(fld) in (None, "", []) and fld in ex:
+                                r[fld] = ex[fld]
+            merged["timestamp"] = datetime.now().isoformat()
+            _atomic_replace(latest_file, json.dumps(merged, ensure_ascii=False, indent=2))
+
+        try:
+            with write_lock(self.CACHE_DIR, timeout=lock_timeout):
+                _commit_locked()
+        except LockUnavailable as e:
+            # J1b fail-closed：锁不可用/超时绝不退回无锁写
+            raise SnapshotConflictError(f"跨进程写锁不可用（{e}），已拒绝写入，旧数据保持不变") from e
 
         return latest_file
 
@@ -699,6 +815,10 @@ README 内容（前6000字）:
         if not snapshot:
             return False, "快照不存在"
         meta = snapshot.get("snapshot_meta") or {}
+        # R5/J5：limit 截断的快照不是完整基线（上游 F01：截断却称完整 → 误判取消）
+        if meta.get("limit_truncated") is True:
+            return False, ("快照为 limit 截断的子集（limit_truncated=true），"
+                           "不允许作为基线覆盖旧数据")
         if meta.get("complete") is True:
             return True, ""
         completeness = meta.get("completeness", "unknown")

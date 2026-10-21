@@ -113,6 +113,36 @@ with tempfile.TemporaryDirectory() as td:
     ok5, _ = StarTracker.is_snapshot_submittable(None)
     check("空快照拒绝提交", not ok5)
 
+    # 7. 原子写语义（D-7 并发验收遗留卡）：写失败旧文件保留、无 tmp 残留
+    t.save_latest([{"full_name": "a/orig"}], fetch_meta={
+        "complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False})
+    before = (Path(td) / "original_latest.json").read_text(encoding="utf-8")
+    import unittest.mock as _mock
+    real_replace = __import__("os").replace
+    with _mock.patch("os.replace", side_effect=OSError(28, "No space left on device")):
+        try:
+            t.save_latest([{"full_name": "a/boom"}], fetch_meta={
+                "complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False})
+            failed = False
+        except OSError:
+            failed = True
+    check("写失败时抛出 OSError", failed)
+    check("写失败后旧快照原样保留",
+          (Path(td) / "original_latest.json").read_text(encoding="utf-8") == before)
+    check("写失败无 tmp 残留", not list(Path(td).glob("*.tmp")))
+    # 正常写后也无残留
+    t.save_latest([{"full_name": "a/new"}], fetch_meta={
+        "complete": True, "failed_pages": [], "account_id": "u", "limit_truncated": False})
+    check("正常写无 tmp 残留", not list(Path(td).glob("*.tmp")))
+
+    # R5/J5（上游复审）：limit 截断快照不得可提交、不得称完整
+    t.save_latest([{"full_name": "a/trunc", "id": 9}], fetch_meta={
+        "complete": False, "limit_truncated": True, "failed_pages": [], "account_id": "u"})
+    snap_t = t.load_latest()
+    ok_t, reason_t = StarTracker.is_snapshot_submittable(snap_t)
+    check("limit 截断快照拒绝提交（R5/J5）", not ok_t and "截断" in reason_t)
+    check("截断快照 complete 记 False", snap_t["snapshot_meta"]["complete"] is False)
+
 
 # ============ F03：三断点 ============
 print("\n[F03] 三个可复现断点")

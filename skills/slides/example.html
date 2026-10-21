@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1000">
+<style>
+  /* ── 全局重置 ── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; }
+
+  /* ── 幻灯片容器 ── */
+  .slide {
+    width: 1000px;
+    height: 562.5px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── CSS 变量（风格提取时自动读取）── */
+  :root {
+    --primary: #0F1F33;
+    --primary-light: #1E3A5F;
+    --accent: #D4AF37;
+    --accent-light: #F5E6A3;
+    --bg-light: #FFFFFF;
+    --text-dark: #1E3A5F;
+    --text-muted: #6B7280;
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     第 1 页：封面
+     ════════════════════════════════════════════ -->
+<section class="slide" style="background-color: var(--primary);">
+  <!-- 装饰线 -->
+  <div style="position: absolute; top: 80px; left: 60px; width: 60px; height: 3px; background: var(--accent);"></div>
+
+  <!-- 主标题 -->
+  <h1 style="position: absolute; top: 110px; left: 60px; width: 880px; font-size: 42px; color: #FFFFFF; font-weight: 700; line-height: 1.3;">
+    诉讼类 Skills 开发实战
+  </h1>
+
+  <!-- 副标题 -->
+  <p style="position: absolute; top: 200px; left: 60px; width: 880px; font-size: 20px; color: var(--accent); font-weight: 400;">
+    从零构建你的第一个 AI 法律技能
+  </p>
+
+  <!-- 分割线 -->
+  <div style="position: absolute; top: 260px; left: 60px; width: 880px; height: 0.5px; background: rgba(212,175,55,0.3);"></div>
+
+  <!-- 讲师信息：实际生成时由本地配置提供；未配置身份时整行省略 -->
+  <p style="position: absolute; bottom: 60px; left: 60px; font-size: 16px; color: rgba(255,255,255,0.8);">
+    讲师：示例讲者
+  </p>
+
+  <!-- 日期 -->
+  <p style="position: absolute; bottom: 60px; right: 60px; font-size: 14px; color: var(--text-muted);">
+    2026 年 10 月 · 示例场合
+  </p>
+
+  <!-- 右下角装饰 -->
+  <div style="position: absolute; bottom: 0; right: 0; width: 200px; height: 200px; background: linear-gradient(135deg, transparent 50%, rgba(212,175,55,0.08) 50%);"></div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     第 2 页：目录页
+     ════════════════════════════════════════════ -->
+<section class="slide" style="background-color: var(--bg-light);">
+  <!-- 左侧装饰条 -->
+  <div style="position: absolute; top: 0; left: 0; width: 6px; height: 562.5px; background: var(--accent);"></div>
+
+  <!-- 章节标签 -->
+  <p style="position: absolute; top: 40px; left: 60px; font-size: 12px; color: var(--accent); letter-spacing: 2px; text-transform: uppercase;">
+    CONTENTS
+  </p>
+
+  <!-- 页面标题 -->
+  <h2 style="position: absolute; top: 70px; left: 60px; font-size: 32px; color: var(--text-dark); font-weight: 700;">
+    课程大纲
+  </h2>
+
+  <!-- 目录列表 -->
+  <div style="position: absolute; top: 140px; left: 60px; width: 880px;">
+    <div style="margin-bottom: 24px; padding: 16px 20px; background: var(--primary); border-radius: 6px;">
+      <p style="font-size: 18px; color: #FFFFFF; font-weight: 600;">
+        <span style="color: var(--accent); margin-right: 12px;">01</span> Skill 的核心概念与最小结构
+      </p>
+    </div>
+    <div style="margin-bottom: 24px; padding: 16px 20px; background: var(--primary); border-radius: 6px;">
+      <p style="font-size: 18px; color: #FFFFFF; font-weight: 600;">
+        <span style="color: var(--accent); margin-right: 12px;">02</span> Skill 开发六步法
+      </p>
+    </div>
+    <div style="margin-bottom: 24px; padding: 16px 20px; background: var(--primary); border-radius: 6px;">
+      <p style="font-size: 18px; color: #FFFFFF; font-weight: 600;">
+        <span style="color: var(--accent); margin-right: 12px;">03</span> 完整案例：判决书分析 Skill
+      </p>
+    </div>
+    <div style="padding: 16px 20px; background: var(--primary); border-radius: 6px;">
+      <p style="font-size: 18px; color: #FFFFFF; font-weight: 600;">
+        <span style="color: var(--accent); margin-right: 12px;">04</span> 迭代与治理
+      </p>
+    </div>
+  </div>
+
+  <!-- 页码 -->
+  <p style="position: absolute; bottom: 30px; right: 60px; font-size: 12px; color: var(--text-muted);">
+    02
+  </p>
+</section>
+
+<!-- ════════════════════════════════════════════
+     第 3 页：内容页（左右布局）
+     ════════════════════════════════════════════ -->
+<section class="slide" style="background-color: var(--primary);">
+  <!-- 标题 -->
+  <p style="position: absolute; top: 40px; left: 60px; font-size: 12px; color: var(--accent); letter-spacing: 2px;">
+    01 · 核心概念
+  </p>
+  <h2 style="position: absolute; top: 70px; left: 60px; width: 880px; font-size: 28px; color: #FFFFFF; font-weight: 700;">
+    Skill 的本质是「手法」的沉淀
+  </h2>
+
+  <!-- 分割线 -->
+  <div style="position: absolute; top: 120px; left: 60px; width: 60px; height: 2px; background: var(--accent);"></div>
+
+  <!-- 左列：核心观点 -->
+  <div style="position: absolute; top: 150px; left: 60px; width: 420px;">
+    <div style="padding: 24px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid var(--accent);">
+      <p style="font-size: 18px; color: var(--accent); font-weight: 600; margin-bottom: 12px;">
+        三层协作体系
+      </p>
+      <ul style="padding-left: 20px;">
+        <li style="font-size: 14px; color: rgba(255,255,255,0.85); line-height: 2;">
+          提示词管姿态（你是谁）
+        </li>
+        <li style="font-size: 14px; color: rgba(255,255,255,0.85); line-height: 2;">
+          知识库管事实（你知道什么）
+        </li>
+        <li style="font-size: 14px; color: rgba(255,255,255,0.85); line-height: 2;">
+          <span style="color: var(--accent); font-weight: 600;">Skill 管手法（你怎么做）</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 右列：类比说明 -->
+  <div style="position: absolute; top: 150px; right: 60px; width: 420px;">
+    <div style="padding: 24px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+      <p style="font-size: 16px; color: #FFFFFF; font-weight: 600; margin-bottom: 12px;">
+        类比：报税时你选谁？
+      </p>
+      <p style="font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.8;">
+        数学天才但对税务一窍不通，还是做了二十年的普通税务师？AI 就像那个数学天才——有海量知识，但缺你在行业里踩过坑的那种稳定手感。
+      </p>
+      <p style="font-size: 14px; color: var(--accent); margin-top: 16px; font-weight: 600;">
+        Skill = 把手感从人身上剥离出来
+      </p>
+    </div>
+  </div>
+
+  <!-- 页码 -->
+  <p style="position: absolute; bottom: 30px; right: 60px; font-size: 12px; color: var(--text-muted);">
+    03
+  </p>
+</section>
+
+<!-- ════════════════════════════════════════════
+     第 4 页：金句/总结页
+     ════════════════════════════════════════════ -->
+<section class="slide" style="background-color: var(--primary);">
+  <!-- 装饰大引号 -->
+  <p style="position: absolute; top: 100px; left: 60px; font-size: 120px; color: var(--accent); opacity: 0.15; font-weight: 900; line-height: 1;">
+    "
+  </p>
+
+  <!-- 金句文字 -->
+  <p style="position: absolute; top: 180px; left: 80px; width: 840px; font-size: 24px; color: #FFFFFF; line-height: 1.8; font-weight: 400;">
+    决定你使用 AI 上限的，不是你用什么工具，<br>
+    而是你能不能把自己的工作流程<br>
+    总结成一个<span style="color: var(--accent); font-weight: 600;">明确的东西</span>。
+  </p>
+
+  <!-- 出处 -->
+  <p style="position: absolute; bottom: 80px; right: 60px; font-size: 14px; color: var(--text-muted);">
+    —— 课程核心理念
+  </p>
+
+  <!-- 底部装饰线 -->
+  <div style="position: absolute; bottom: 60px; left: 60px; width: 880px; height: 0.5px; background: rgba(212,175,55,0.3);"></div>
+
+  <!-- 页码 -->
+  <p style="position: absolute; bottom: 30px; right: 60px; font-size: 12px; color: var(--text-muted);">
+    04
+  </p>
+</section>
+
+</body>
+</html>

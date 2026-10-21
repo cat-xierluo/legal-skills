@@ -1,0 +1,107 @@
+{
+  "name": "快消活力",
+  "description": "快消品活力风格。明亮多色 + 大号圆体字 + 饱满色块，传递活力与年轻。适合产品发布、快消营销、品牌活动。",
+  "source": "FMCG brand design",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F8FAFC"
+    ],
+    "textColors": [
+      "#0F172A",
+      "#475569"
+    ],
+    "accents": [
+      "#EC4899",
+      "#8B5CF6",
+      "#06B6D4",
+      "#F97316"
+    ],
+    "dividers": [
+      "#E2E8F0"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#0F172A",
+      "#EC4899",
+      "#8B5CF6",
+      "#06B6D4",
+      "#F97316"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      44,
+      36
+    ],
+    "bodySizes": [
+      18,
+      16
+    ]
+  },
+  "spacing": {
+    "pagePadding": "52px",
+    "sectionGap": "24px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "color-block",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "活力",
+      "年轻",
+      "多彩",
+      "亲和"
+    ]
+  },
+  "prohibited": [
+    "dark-background",
+    "dense-text",
+    "serif-fonts"
+  ],
+  "promptSnippet": "Youthful FMCG energy. White base with a bright rotating set — pink (#EC4899), violet (#8B5CF6), cyan (#06B6D4), orange (#F97316) — each owning one section. Big rounded sans type, generous spacing, product-forward. Cheerful without becoming childish.",
+  "components": [
+    {
+      "type": "product-tile",
+      "usage": "产品展示块",
+      "style": "background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "benefit-pill",
+      "usage": "卖点胶囊",
+      "style": "display: inline-block; border: 1px solid #EC4899; color: #EC4899; border-radius: 999px; padding: 2px 10px; font-family: 'PingFang SC', sans-serif; font-size: 12px"
+    },
+    {
+      "type": "price-tag",
+      "usage": "价格标识",
+      "style": "font-family: 'Inter', sans-serif; font-size: 44px; font-weight: 700; line-height: 1.05; color: #EC4899"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#0F172A",
+    "--ink-rgb": "15,23,42",
+    "--paper": "#FFFFFF",
+    "--paper-rgb": "255,255,255",
+    "--accent": "#EC4899",
+    "--accent-light": "#8B5CF6",
+    "--accent-alt": "#06B6D4",
+    "--accent-warm": "#F97316",
+    "--muted": "#475569"
+  }
+}

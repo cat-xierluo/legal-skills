@@ -4,6 +4,71 @@
 
 ---
 
+## [0.9.0] - 2026-10-16
+
+### 新增（B 单权威写入口协议：R9 收敛后的架构收口，双仓同步 Hermes star-board 0.8.0）
+
+- **`StarTracker.SNAPSHOT_WRITER_PROTOCOL = 2`**：声明 `save_latest` 可作为 `original_latest.json` 的**唯一写入口实现**——star-board 插件读到协议 ≥2 即把 sync/unstar/translate 的全部写入路由给 `save_latest`，flock + 锁内 timestamp CAS + 前向合并 + fail-closed 收敛到技能侧一处实现（此前两仓各持一套锁/复检/代际推进逻辑）。协议缺失/过旧的技能（≤0.8.7）插件自动走原 R9 直写回退，行为不变。**注意**：唯一写入口 ≠ 单一常驻写进程——技能 CLI 与多个插件进程仍并发调用它，flock/CAS/冲突/公平性边界不因此消失
+- **协议 2 完整输入合同**（上游 UA:GSM-B-SINGLE-WRITER-261016 复审 B1/B3/B4 返修后冻结）：
+  - a) **双形态规范化**：`owner`/`license` 接受 dict（GitHub 原始对象）或 str（v2 快照行）；`is_fork`/`is_archived` 接受原始键 `fork`/`archived` 或 v2 键——v2 规范化行往返不降级。上游 B1 反例：插件把 `_load_projects` 读出的快照行原样写回，旧实现把 str owner 当非 dict 置 null、无 `fork` 键置 false
+  - b) **`normalized_rows=True` 直通**：输入已是 v2 行时，未列入已知映射的插件扩展字段（`category`/`value`/`avatar_url`/`has_new_release` 等）原样直通；raw 输入路径不受影响（仍剥离未知键）。`local_fetched_at` v2 行有则保留（插件写入不是重新抓取）
+  - c) **`lock_timeout` 显式参数**：调用方传超时，不再临时改 `lockutil._DEFAULT_TIMEOUT` 全局（上游 B4：两次直接并行调用的 finally 还原会把全局泄漏成错值——"同值无竞态"断言撤回）
+  - d) **zh/_lite 直通**：`description_zh`/`tags_zh` 输入有值则写入；**`_lite` 缺省/非 bool 写 None 而非 False**（上游 B3：False 是合法显式值，写死 False 让前向合并无法回填旧 `true`——技能 CLI 全量写会把用户已标 `_lite=true` 的行冲成 false）。显式 False 保留
+- **跨仓 runner 模式判别**：`tests/r3_dual_process_check.py` 插件子进程经 `GITHUB_STAR_BOARD_DATA` 指向**被测技能**（此前加载机器上已安装技能，版本不受控），并按插件 `_save_authoritative` 实际调用计数回执写路径——被测技能协议 ≥2 时要求 `single-writer` 否则 FAIL。**判别力**：新技能+新插件 40/40 PASS；新技能+旧插件(ee3f9dd) 0/40 → `no-routing` FAIL；旧技能(e9445e14)+新插件 → `fallback` PASS（混配不降级）
+- 测试：`test_batch_b.py` `[B]` 段 30 项（协议常量 / zh 直通 / B3 矩阵：新行缺省→None、旧 true+缺省→true、旧 true+显式 False→False、非法→回填 / B1 raw 形态不变+v2 往返保真+直通+二次往返幂等+无 flag 行为 / B4 lock_timeout 生效且不触碰全局）：136/136；`test_batch_a` 40/40。**突变红检**：回退双形态+直通 → 5 项+真实翻译消费者红；回退 `_lite` None→False → 2 项红
+
+### 边界（NOT_VERIFIED / 诚实声明）
+
+- 负控（R9 旧插件 + 新技能）交错下数据完整性同样成立——B 的价值是**消除第二套写者实现**（单锁/单 CAS/单规范化），不是修复一个已观察到的丢失
+- B 路径在真实部署激活需两仓都采用：技能 ≥0.9.0 **且** 插件 ≥0.8.0；任一侧旧版即回退 R9 直写（兼容但非单写入口）。采用、Hermes serve 热重载分别核，不以 MERGED 代替
+- 协议 2 未开放任意未知字段的无约束写入：直通只在调用方显式 `normalized_rows=True` 且输入来自权威快照行时发生
+
+## [0.8.7] - 2026-10-16
+
+### 修复（R9 = 上游 R5R8 复审返修，方案 C 有界收敛）
+
+- **G1 接活 CAS**：`init_command`/`check_command` 传 `base_timestamp` 到 `save_latest`——上游反例「插件提交后技能旧读覆盖不被拦」现被 CAS 拒；配合 Hermes H1（插件 bump timestamp），跨仓写者代际检测真正生效（跨仓 runner 实测 conflict=1 → 旧读被拒、终态保留全部成功条目）
+- **G3 flag 收窄**：`GSM_ALLOW_UNLOCKED_WRITE=1` 仅放行无 fcntl 平台——超时/打不开锁时无论 flag 与否一律 fail-closed（上游实测旧实现连活锁都能绕）
+- **G4 证据绑定**：tested/adopted 产物须含运行结论结构（exit_code/verdict/tests passed/RESULT/STATUS 模式——会议议程不构成运行证据）；失败指标拒（exit_code≠0/verdict=failed 的回执不签完成）；code_evidence 行号界核验（path:line 不超文件实际行数——999999 虚构行拒）；列表内中文路径不豁免散文规则（合法文件旁夹带不存在中文路径拒）；profile 标量 source_sha256 绑定首个 source_ref 校验
+- **G2 runner 完整性**：逐成功操作核终态（非仅最后一次）——上游变异测试「删掉较早成功的 plug/1 仍 PASS」现被检出（判别力验证：注入删除→FAIL）
+
+## [0.8.6] - 2026-10-16
+
+### 修复（R6：上游定向复审 J1 事务协议，gsm 侧）
+
+- **J1a 旧读覆盖（P1）**：`save_latest` 新增 `base_timestamp` CAS 参数——锁内重读当前快照，基线被外部写者推进则抛 `SnapshotConflictError`（fail-closed，调用方重读重试）；并做**扩展字段前向合并**：`description_zh/tags_zh/_lite/reason/matched_keywords` 等插件产物在全量快照重写时保留（按 full_name 对齐，仅本方无值时从前值补）。技能 init/check 走全量远端快照语义（不传 base_timestamp），前向合并保证插件确认条目不丢；上游 `locked_stale_skill_write` 反例（插件确认被旧读覆盖）现被 CAS 拒
+- **J1b 超时不得绕过互斥（P1）**：`lockutil.write_lock` 超时/无 fcntl/锁不可开一律抛 `LockUnavailable`（不再"降级为原子写"继续无锁提交）；`save_latest`/`generate_dashboard`/`quick_export` 三处 fail-closed，超时→拒绝写入、旧数据不变、显式抛错；确需无锁平台降级设 `GSM_ALLOW_UNLOCKED_WRITE=1`
+- **J1c runner 假绿（P2）**：`tests/r3_dual_process_check.py` 重写为逐操作结构化回执（ok/conflict/error）——任何意外异常使 runner 退出码非零，覆盖新增/取消/翻译交错并核终态、断言插件 zh 保真与无 limit_truncated；**注入 RuntimeError 判别力验证：被正确报 error 并 FAIL（非零）**
+
+## [0.8.5] - 2026-10-16
+
+### 修复（R5：上游定向复审 UA:GSM-AUDIT-R1R4-REVIEW-261016 gsm 侧返修）
+
+- **F08 证据校验重做（J2，P1）**：`_verify_evidence_paths` 全面重做堵住上游反例矩阵——裸文件名（`run.log`）、目录、布尔/数字、嵌套数组均按类型拒收（此前 `run_evidence: true` 跳过检查）；相对路径以**卡文件目录**为基准（不是 cwd）；符号链接解析到实际目标；URL/状态短词/中文散文不算完成证据，整块无可核验文件时**拒绝**（此前仅 warning）；新增 `_verify_code_evidence` 要求源码证据可回查（`path:line`/commit 哈希，且 `path:line` 的源文件须真实存在——上游反例 `missing/source.py:999 fabricated quote` 被拒）；`_verify_evidence_content` 拒占位/无关文本（上游反例 `unrelated nonempty text` 被拒）
+- **F01 补全（J5，P1）**：`--limit` 截断的快照不再标记为完整——`get_starred_repos` 截断时 `complete=False`，`is_snapshot_submittable` 显式拒绝 `limit_truncated` 快照作基线，`check`/`init` 对截断子集放弃保存与取消判定（上游反例：`--check --limit 1` 曾把未抓到的旧条目误判为取消收藏）
+- **失效项目引用（J2，P1）**：`star_query research` 新增 `_verify_profile_refs`——profile 声明的 `source_ref`/`paths` 本地路径须存在、`hashes` 须匹配（零/空哈希与不匹配均判失效），失效即拒绝出包（上游反例：引用 `/definitely/missing` 且哈希为零仍返回 `status=ok`）
+
+## [0.8.4] - 2026-10-16
+
+### 修复（R3：上游终审计 F07 写入协议）
+
+- **跨进程写锁（双仓共同协议）**：新增 `scripts/lockutil.py`——`<output>/.gsm-write.lock` + `fcntl.flock(LOCK_EX)` 排他锁，`save_latest`/`generate_dashboard`/`quick_export` 读-改-写全程持锁，闭合 mtime 复检与提交之间的 TOCTOU 竞隙（上游终审：真实双进程反例中技能新增被插件旧读覆盖）；star-board 插件用同一锁文件与同名协议；锁超时（默认 10s）降级为原子写并告警；无 fcntl 平台降级为 no-op
+- **真实双进程交错验收**：`tests/r3_dual_process_check.py`——技能写者与插件写者两真实进程、25 次读-改-写交错，验收最终态为双方并集；**判别力对照成立**（禁用锁时技能侧 0 条全丢 → FAIL；持锁时并集 → PASS）
+
+## [0.8.3] - 2026-10-16
+
+### 修复（R1：上游终审计 UA:GSM-AUDIT-ABCD-FINAL-261016 返修）
+
+- **机会卡证据实质校验（F08 P1）**：tested/adopted 的 run_evidence/adoption_evidence 中凡形如本地路径的值必须真实存在且非空——虚构运行产物/验收回执不再仅凭字段存在过关（空文件同样拒收）；URL 形态离线不可核验降级为警告；无任何可核验路径时提示降级为 experiment_proposed
+- **min_stars/ignore_repos 实际消费（§6 缺口）**：`common.assess_value` 接入两项配置——星数低于 min_stars 判 low；ignore_repos 名单命中（大小写不敏感）判 ignored（显式忽略不参与评级）
+- **文档漂移三处（§6 缺口）**：`--days 7`→`--report-days 7`；`.env` 复制位置改为 `assets/.env`（与 main.py 实际加载路径一致）；Python 声明 3.8+→3.9+（与 `tuple[...]` 类型注解一致）
+
+## [0.8.2] - 2026-10-16
+
+### 修复
+
+- **技能端写入原子化（批次 D 并发验收遗留卡）**：`save_latest`（original_latest.json）、`dashboard_generator.generate_dashboard`（data.js/dashboard.html）、`quick_export.generate_data_js`（data.js）三处非原子 write_text 改为 tmp+os.replace——并发读者（star-board 插件已切权威源读 original_latest）永不见半截文件，写失败旧文件原样保留且无 tmp 残留（D-7 验收抓到的技能端半截窗口根源闭合；插件读侧退避容错保留作双保险）
+
 ## [0.8.1] - 2026-10-15
 
 ### 新增

@@ -1,0 +1,110 @@
+{
+  "name": "创业路演",
+  "description": "创业路演风格。大胆撞色 + 大字号 + 故事线驱动，强调愿景与增长。适合创业融资、商业计划书、增长汇报。",
+  "source": "startup pitch deck standards",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F8FAFC"
+    ],
+    "textColors": [
+      "#0F172A",
+      "#334155"
+    ],
+    "accents": [
+      "#7C3AED",
+      "#06B6D4"
+    ],
+    "dividers": [
+      "#E2E8F0"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#0F172A",
+      "#7C3AED",
+      "#06B6D4",
+      "#334155",
+      "#E2E8F0"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      48,
+      36
+    ],
+    "bodySizes": [
+      18,
+      16
+    ]
+  },
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "28px",
+    "itemGap": "14px"
+  },
+  "layout": {
+    "preferredComposition": "story-driven",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "大胆",
+      "愿景",
+      "增长",
+      "简洁有力"
+    ]
+  },
+  "prohibited": [
+    "dense-data",
+    "dark-background",
+    "serif-fonts",
+    "corporate-stiff"
+  ],
+  "promptSnippet": "Pitch-deck energy. Near-black (#0F172A) base, violet (#7C3AED) as the primary brand voice and cyan (#06B6D4) as the second, on white. Oversized numerals, one number per slide, minimal prose. The narrative arc does the work; the visuals stay loud and confident.",
+  "components": [
+    {
+      "type": "metric-hero",
+      "usage": "单页巨型数字",
+      "style": "font-family: 'Inter', sans-serif; font-size: 44px; font-weight: 700; line-height: 1.05; color: #7C3AED"
+    },
+    {
+      "type": "problem-solution",
+      "usage": "现状/方案对照",
+      "style": "border-top: 1px solid #E2E8F0; border-left: 3px solid #7C3AED; padding: 12px 0 12px 14px; font-family: 'PingFang SC', sans-serif"
+    },
+    {
+      "type": "traction-chart",
+      "usage": "增长趋势说明",
+      "style": "font-family: 'PingFang SC', sans-serif; font-size: 12px; line-height: 1.5; color: #334155"
+    },
+    {
+      "type": "ask-slide",
+      "usage": "融资诉求要点",
+      "style": "background: #FFFFFF; border-top: 2px solid #7C3AED; padding: 16px 20px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#0F172A",
+    "--ink-rgb": "15,23,42",
+    "--paper": "#FFFFFF",
+    "--paper-rgb": "255,255,255",
+    "--accent": "#7C3AED",
+    "--accent-light": "#06B6D4",
+    "--muted": "#334155",
+    "--divider": "#E2E8F0"
+  }
+}

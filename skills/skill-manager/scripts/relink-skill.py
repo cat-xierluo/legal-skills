@@ -36,7 +36,7 @@ REGISTRY_PATH = os.environ.get(
 # 默认只扫通用的用户级 Agent 配置目录（对任何机器成立）；
 # 项目级安装位置因人而异，用 --roots 追加或 --full-home 全盘兜底，不内置猜测。
 HARNESS_DIRS = [".claude", ".codex", ".agents", ".zcode", ".openclaw",
-                ".workbuddy", ".qoderworkcn", ".codebuddy"]
+                ".workbuddy", ".qoderworkcn", ".codebuddy", ".hermes", ".myagents"]
 # 每个配置根内只看这些子目录一层（安装链 99% 挂在这）+ 根顶层（脚本链）
 HARNESS_SUBDIRS = ["skills", "commands"]
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".Trash"}
@@ -164,6 +164,14 @@ def iter_shallow(harness_roots):
                 for entry in os.scandir(d):
                     if entry.is_symlink():
                         yield entry.path
+                    # 分类子目录一层（如 ~/.hermes/skills/personal/<skill>）
+                    elif entry.is_dir(follow_symlinks=False):
+                        try:
+                            for inner in os.scandir(entry.path):
+                                if inner.is_symlink():
+                                    yield inner.path
+                        except OSError:
+                            continue
             except OSError:
                 continue
 
@@ -328,8 +336,8 @@ def main():
     results = []
     for item in findings:
         act = item["action"]
-        if args.register:
-            status = "REGISTER"  # 只登记位置，绝不执行修复
+        if args.register and not args.apply:
+            status = "REGISTER"  # 纯登记模式；--apply --register 组合仍执行修复（尾部统一登记）
         elif not args.apply:
             status = "PLAN"
         elif act == "remove_old":

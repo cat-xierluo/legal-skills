@@ -1,0 +1,105 @@
+{
+  "name": "工程蓝图",
+  "description": "工程制图风格。蓝图蓝底 + 白色线条，技术制图美学。适合工程规格、系统架构、技术方案。",
+  "source": "engineering blueprint aesthetics",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#1B3A5C",
+      "#0F2840"
+    ],
+    "textColors": [
+      "#FFFFFF",
+      "#B8D4E8"
+    ],
+    "accents": [
+      "#4DA6FF",
+      "#FFD54F"
+    ],
+    "dividers": [
+      "#2A5580"
+    ],
+    "palette": [
+      "#1B3A5C",
+      "#0F2840",
+      "#4DA6FF",
+      "#FFD54F",
+      "#FFFFFF",
+      "#B8D4E8"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "SF Mono",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'SF Mono', monospace",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      36,
+      28
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "52px",
+    "sectionGap": "24px",
+    "itemGap": "12px"
+  },
+  "layout": {
+    "preferredComposition": "blueprint-grid",
+    "negativeSpacePriority": "medium"
+  },
+  "tone": {
+    "keywords": [
+      "精确",
+      "技术",
+      "工程",
+      "系统"
+    ]
+  },
+  "prohibited": [
+    "serif-fonts",
+    "gradient",
+    "organic-shapes",
+    "warm-colors"
+  ],
+  "promptSnippet": "Technical-drawing style. Blueprint blue (#1B3A5C / #0F2840) ground, cyan (#4DA6FF) for annotation and dimension lines, white for geometry, safety yellow (#FFD54F) for call-outs. Monospaced labels, dimension arrows, corner ticks. Reads like a real drafting sheet.",
+  "components": [
+    {
+      "type": "dimension-line",
+      "usage": "尺寸标注线",
+      "style": "height: 1px; background: #2A5580"
+    },
+    {
+      "type": "spec-table",
+      "usage": "规格参数表",
+      "style": "border-bottom: 1px solid #2A5580; padding: 8px 12px; font-family: 'PingFang SC', sans-serif; font-size: 13px"
+    },
+    {
+      "type": "callout",
+      "usage": "重点标注框",
+      "style": "display: inline-block; border: 1px solid #4DA6FF; color: #4DA6FF; border-radius: 999px; padding: 2px 10px; font-family: 'PingFang SC', sans-serif; font-size: 12px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#0F2840",
+    "--ink-rgb": "15,40,64",
+    "--paper": "#1B3A5C",
+    "--paper-rgb": "27,58,92",
+    "--accent": "#4DA6FF",
+    "--accent-light": "#FFD54F",
+    "--muted": "#B8D4E8",
+    "--surface": "#2A5580"
+  }
+}

@@ -2,7 +2,7 @@
 name: legal-case-analysis
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.0"
+version: "1.1.2"
 license: CC-BY-NC
 description: 综合案件研判。本技能应在用户需要整合案件、咨询、合同、证据、庭审笔录或检索材料，判断请求与抗辩、组织法律检索、评估风险并制定诉讼或非诉策略时使用，包括起诉状证据初评、庭审复盘和上诉再审综合研判。仅解读一份判决书用 judgment-analysis；纯检索或仅将已有结论成文分别交检索、文档技能。
 ---
@@ -86,7 +86,6 @@ description: 综合案件研判。本技能应在用户需要整合案件、咨�
 
 分析过程和工作方法放在 `references/` 中，按任务需要读取：
 
-- `references/iteration-context.md`：长期迭代上下文，包括定位、边界、资源分层和后续演进方向。
 - `references/analysis-engine-boundary.md`：法律分析引擎定位，以及与 `legal-proposal-generator` 等 Skill 的协作边界。
 - `references/workflow.md`：完整工作流，包括目标识别、案件阶段、材料处理、检索、论证和交付检查。
 - `references/report-depth-control.md`：按案件复杂度选择简版咨询、标准分析或复杂案件分阶段报告。

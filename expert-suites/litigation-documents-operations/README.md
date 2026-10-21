@@ -26,7 +26,7 @@
 | [judgment-analysis](../../skills/judgment-analysis/) | 单份判决的事实认定、裁判理由与主文深析（由 `litigation-analysis` 更名）；源码 v2.0.0 待发布 | 尚无公开下载 |
 | [legal-proposal-generator](../../skills/legal-proposal-generator/) | 生成诉讼方案、沟通报告和结案汇报 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-proposal-generator-0.4.1.zip) |
 | [md2word](../../skills/md2word/) | 输出符合中文专业排版的 Word 文档 | [已发布 v1.3.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/md2word-1.3.8.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 主导综合研判、庭审复盘与上诉再审判断；源码 v1.1.1 待发布 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 主导综合研判、庭审复盘与上诉再审判断；源码 v1.1.2 待发布 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 对文书中的法律依据和类案进行复核；源码 v1.10.1 待发布 | [已发布 v1.10.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
 | [new-case](../../skills/new-case/) | 维持案件目录、基本信息和期限结构 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/new-case-1.5.0.zip) |
 | [court-sms](../../skills/court-sms/) | 获取法院文书并归档最新程序材料；源码 v1.5.3 待发布 | [已发布 v1.5.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip) |

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>培训讲义页模板</title>
+  <link rel="stylesheet" href="_base.css">
+  <style>
+    :root {
+      --ink: #18181B; --ink-rgb: 24,24,27;
+      --paper: #FAFAF8; --paper-rgb: 250,250,248;
+      --accent: #D97706; --accent-light: #F59E0B;
+      --muted: #52525B; --surface: #FFFFFF; --surface-rgb: 255,255,255;
+    }
+    .teach-rule {
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      padding: 22px;
+    }
+    .teach-rule ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .teach-rule ul li {
+      font-size: var(--text-base);
+      line-height: 1.7;
+      color: var(--muted);
+      padding-left: 18px;
+      position: relative;
+    }
+    .teach-rule ul li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 9px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .teach-exercise {
+      background: var(--ink);
+      border-radius: var(--radius-md);
+      padding: 22px;
+      color: var(--paper);
+    }
+  </style>
+</head>
+<body>
+  <!--
+    培训讲义页 (Training)
+    左栏：规则/知识点（light surface 卡片）
+    右栏：练习/互动（dark 卡片）
+    适用：法律培训、操作指南、课程讲义
+  -->
+  <div class="slide light">
+    <div class="chrome">
+      <p>培训 · Training</p>
+      <p>12 / 15</p>
+    </div>
+
+    <div style="padding-top: 8px;">
+      <p class="kicker" data-anim>EXERCISE</p>
+      <h2 class="page-title" data-anim>如何判断某个结论？</h2>
+
+      <div class="grid-2" style="gap: 28px; margin-top: 4px;">
+        <div class="teach-rule" data-anim>
+          <h3 class="card-title">判断规则</h3>
+          <ul style="margin-top: 14px;">
+            <li>规则一：判断标准说明</li>
+            <li>规则二：判断标准说明</li>
+            <li>规则三：判断标准说明</li>
+            <li>规则四：判断标准说明</li>
+          </ul>
+        </div>
+        <div class="teach-exercise" data-anim>
+          <h3 class="card-title" style="color: var(--paper);">课堂练习</h3>
+          <p style="font-size: var(--text-base); line-height: 1.75; color: rgba(var(--paper-rgb), 0.78); margin-top: 14px;">
+            给定一个具体场景描述，请判断应该采取什么行动。
+          </p>
+          <p style="font-size: var(--text-sm); color: var(--accent-light); margin-top: 16px;">
+            输出格式：结论 → 依据 → 行动建议
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <p>课程模块名称</p>
+      <p>— · —</p>
+    </div>
+  </div>
+</body>
+</html>

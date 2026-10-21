@@ -1,0 +1,109 @@
+{
+  "name": "纸墨",
+  "description": "编辑文学风格。温暖奶油色背景配深色文字，经典优雅。适合法律文书、编辑出版、学术文章展示。",
+  "source": "STYLE_PRESETS #12 Paper & Ink",
+  "extractedAt": "2026-04-12",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FAF9F7"
+    ],
+    "textColors": [
+      "#1A1A1A",
+      "#555555"
+    ],
+    "accents": [
+      "#C41E3A"
+    ],
+    "palette": [
+      "#FAF9F7",
+      "#1A1A1A",
+      "#555555",
+      "#C41E3A"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Cormorant Garamond",
+      "Source Serif 4"
+    ],
+    "titleSizes": [
+      44,
+      32,
+      24
+    ],
+    "bodySizes": [
+      18,
+      16
+    ],
+    "smallSizes": [
+      12
+    ],
+    "lineHeight": [
+      1.4,
+      1.6
+    ]
+  },
+  "spacing": {
+    "pagePadding": "92px",
+    "sectionGap": "40px",
+    "itemGap": "20px"
+  },
+  "layout": {
+    "positioning": "centered",
+    "marginPattern": [
+      80,
+      60
+    ],
+    "contentWidth": 840
+  },
+  "tone": {
+    "keywords": [
+      "典雅",
+      "克制",
+      "文学",
+      "耐读"
+    ]
+  },
+  "prohibited": [
+    "gradient",
+    "shadow",
+    "neon",
+    "rounded-card",
+    "sans-heavy"
+  ],
+  "promptSnippet": "Literary-editorial style. Warm off-white paper (#FAF9F7) with true-black ink (#1A1A1A), mid-grey (#555555) for secondary text and a restrained crimson (#C41E3A) used at most once or twice per deck. Serif throughout, wide margins, long line lengths. Built for reading, not scanning.",
+  "components": [
+    {
+      "type": "drop-cap",
+      "usage": "首字下沉",
+      "style": "font-family: Cormorant Garamond; font-size: 44px; font-weight: 700; line-height: 1.05; color: #C41E3A"
+    },
+    {
+      "type": "rule",
+      "usage": "分隔线",
+      "style": "height: 1px; background: #C41E3A"
+    },
+    {
+      "type": "quote-block",
+      "usage": "引文",
+      "style": "border-left: 3px solid #C41E3A; padding: 6px 0 6px 20px; font-family: Cormorant Garamond; font-size: 24px; color: #1A1A1A"
+    },
+    {
+      "type": "byline",
+      "usage": "署名",
+      "style": "font-family: Cormorant Garamond; font-size: 12px; line-height: 1.5; color: #555555"
+    }
+  ],
+  "cssVariables": {
+    "--bg-cream": "#faf9f7",
+    "--text-primary": "#1a1a1a",
+    "--text-secondary": "#555",
+    "--accent-crimson": "#c41e3a"
+  },
+  "signature": "首字母下沉(drop caps)、引用段落(pull quotes)、优雅水平线装饰"
+}

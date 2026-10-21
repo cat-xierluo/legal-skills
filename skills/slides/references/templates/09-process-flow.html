@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>流程步骤页模板</title>
+  <link rel="stylesheet" href="_base.css">
+  <style>
+    :root {
+      --ink: #18181B; --ink-rgb: 24,24,27;
+      --paper: #FAFAF8; --paper-rgb: 250,250,248;
+      --accent: #D97706; --accent-light: #F59E0B;
+      --muted: #52525B; --surface: #FFFFFF; --surface-rgb: 255,255,255;
+    }
+    .step-card {
+      padding: 18px 20px;
+      border-left: 3px solid var(--accent);
+      background: var(--surface);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    }
+    .flow-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    流程步骤页 (Process Flow)
+    视觉层级：kicker → page-title → 2×2 或 2×3 步骤网格
+    每个步骤：step-number → h3 → 说明
+    步骤标题用动词开头
+    适用：诉讼流程、合规整改、操作步骤、方法论
+  -->
+  <div class="slide light">
+    <div class="chrome">
+      <p>流程 · Process</p>
+      <p>10 / 12</p>
+    </div>
+
+    <div style="padding-top: 8px;">
+      <p class="kicker" data-anim>METHOD</p>
+      <h2 class="page-title" data-anim>方法论标题</h2>
+
+      <div class="flow-grid" style="margin-top: 4px;">
+        <div class="step-card" data-anim>
+          <p class="step-number">STEP 01</p>
+          <h3 class="card-title">步骤名称</h3>
+          <p class="body-text" style="margin-top: 6px;">简要说明这一步要做什么、为什么重要。</p>
+        </div>
+        <div class="step-card" data-anim>
+          <p class="step-number">STEP 02</p>
+          <h3 class="card-title">步骤名称</h3>
+          <p class="body-text" style="margin-top: 6px;">简要说明这一步要做什么、为什么重要。</p>
+        </div>
+        <div class="step-card" data-anim>
+          <p class="step-number">STEP 03</p>
+          <h3 class="card-title">步骤名称</h3>
+          <p class="body-text" style="margin-top: 6px;">简要说明这一步要做什么、为什么重要。</p>
+        </div>
+        <div class="step-card" data-anim>
+          <p class="step-number">STEP 04</p>
+          <h3 class="card-title">步骤名称</h3>
+          <p class="body-text" style="margin-top: 6px;">简要说明这一步要做什么、为什么重要。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <p>流程说明</p>
+      <p>— · —</p>
+    </div>
+  </div>
+</body>
+</html>

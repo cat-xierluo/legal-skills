@@ -36,6 +36,12 @@ resolve_nvm_default_bin() {
     [ -r "$alias_dir/lts/$name" ] || return 1
     v=$(<"$alias_dir/lts/$name")
   fi
+  # v 前缀归一化（v0.4.0 坑）：`nvm alias default 24.14.0`（不带 v）写入 alias 文件的是
+  # 裸版本号，而版本目录是 v24.14.0——不带 v 直查目录必然「无法解析」。
+  case "$v" in
+    v*) ;;
+    *) v="v${v}" ;;
+  esac
   [ -d "$NVM_HOME/versions/node/$v/bin" ] || return 1
   printf '%s\n' "$NVM_HOME/versions/node/$v/bin"
 }
@@ -74,10 +80,38 @@ audit_shims() {
       say "$t 不存在，PATH 将落到其他 node"
     fi
   done
+  # v0.4.0 健康扫描：nvm 版本目录里 0 字节 node 二进制 = nvm 下载中断的静默损坏
+  # （2026-10-16 实例：v24.11.0 损坏数日，直到依赖它的测试门禁失败才暴露）。
+  local d
+  for d in "$NVM_HOME"/versions/node/*/bin/node; do
+    [ -e "$d" ] || continue
+    if [ ! -s "$d" ]; then
+      say "⚠️ nvm $(printf '%s' "$d" | sed 's|.*/versions/node/||; s|/bin/node$||') 的 node 二进制 0 字节（损坏）——重装该版本或按官方 tarball 单文件修复"
+    fi
+  done
+  # v0.4.0 半迁移检测：三垫片指向的 nvm 版本不一致即告警，不依赖 default 可解析
+  # （2026-10-16 实例：node 已改指 v24.14.0、npm/npx 仍指 v24.11.0，因 default 为
+  # lts 死链「无法比对」而静默数小时）。
+  local shim_versions tdir
+  shim_versions=$(for t in node npm npx; do
+    p="$LOCAL_BIN/$t"
+    [ -L "$p" ] && [ -e "$p" ] || continue
+    tdir=$(readlink "$p")
+    case "$tdir" in
+      "$NVM_HOME"/versions/node/*) printf '%s\n' "${tdir#*versions/node/}" | cut -d/ -f1 ;;
+    esac
+  done | sort -u)
+  if [ "$(printf '%s' "$shim_versions" | grep -c . || true)" -gt 1 ]; then
+    say "⚠️ 垫片指向不一致（半迁移）：$(printf '%s' "$shim_versions" | tr '\n' ' ')"
+  fi
 }
 
 audit_path() {
   sec "2. PATH 实际解析与解释器版图"
+  case ":$PATH:" in
+    *":$LOCAL_BIN:"*) ;;
+    *) say "ℹ️ 本 shell PATH 不含 ${LOCAL_BIN}（agent 壳常见；用户 shell 由 .zshenv 注入）——node 将解析到 $(command -v node 2>/dev/null || echo 'PATH 无 node')" ;;
+  esac
   if command -v node >/dev/null 2>&1; then
     say "node: $(command -v node)  ($(node -v 2>/dev/null || echo '?'))"
   else

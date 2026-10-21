@@ -1,0 +1,111 @@
+{
+  "name": "保险蓝白",
+  "description": "保险行业风格。沉稳深蓝 + 可信白底 + 绿色正面/红色风险，图表化呈现。适合保险产品介绍、理赔报告、风控分析。",
+  "source": "insurance industry design",
+  "extractedAt": "2026-06-02",
+  "slideDimensions": {
+    "width": 1000,
+    "height": 562.5,
+    "ratio": "1.78"
+  },
+  "colors": {
+    "backgrounds": [
+      "#FFFFFF",
+      "#F0F4FA"
+    ],
+    "textColors": [
+      "#1B2A4A",
+      "#5A6A8A"
+    ],
+    "accents": [
+      "#1B4F8A",
+      "#2D8A4E"
+    ],
+    "dividers": [
+      "#C8D4E8"
+    ],
+    "palette": [
+      "#FFFFFF",
+      "#1B2A4A",
+      "#1B4F8A",
+      "#2D8A4E",
+      "#5A6A8A",
+      "#C8D4E8"
+    ]
+  },
+  "typography": {
+    "fontFamilies": [
+      "Inter",
+      "PingFang SC"
+    ],
+    "fontRoles": {
+      "heading": "'Inter', sans-serif",
+      "body": "'PingFang SC', sans-serif"
+    },
+    "titleSizes": [
+      32,
+      24
+    ],
+    "bodySizes": [
+      16,
+      14
+    ]
+  },
+  "spacing": {
+    "pagePadding": "52px",
+    "sectionGap": "22px",
+    "itemGap": "12px"
+  },
+  "layout": {
+    "preferredComposition": "chart-forward",
+    "negativeSpacePriority": "low"
+  },
+  "tone": {
+    "keywords": [
+      "可信",
+      "保障",
+      "数据清晰",
+      "安全感"
+    ]
+  },
+  "prohibited": [
+    "dark-background",
+    "playful",
+    "neon",
+    "aggressive-red"
+  ],
+  "promptSnippet": "Insurance-grade clarity. Deep navy (#1B2A4A) anchors headings and structure on white, a mid blue (#1B4F8A) carries charts, green (#2D8A4E) signals positive/covered outcomes and red signals risk/exclusion — never decorative. Charts and tables do the persuasion; the layout stays quiet so the numbers land.",
+  "components": [
+    {
+      "type": "policy-card",
+      "usage": "险种/责任卡片",
+      "style": "background: #FFFFFF; border: 1px solid #C8D4E8; border-radius: 6px; padding: 20px"
+    },
+    {
+      "type": "coverage-bar",
+      "usage": "保障比例条",
+      "style": "background: #1B4F8A; height: 100%; border-radius: 2px"
+    },
+    {
+      "type": "risk-flag",
+      "usage": "风险/除外标注",
+      "style": "display: inline-block; border: 1px solid #1B4F8A; color: #1B4F8A; border-radius: 999px; padding: 2px 10px; font-family: 'PingFang SC', sans-serif; font-size: 12px"
+    },
+    {
+      "type": "compare-table",
+      "usage": "对比表格",
+      "style": "border-bottom: 1px solid #C8D4E8; padding: 8px 12px; font-family: 'PingFang SC', sans-serif; font-size: 13px"
+    }
+  ],
+  "cssVariables": {
+    "--ink": "#1B2A4A",
+    "--ink-rgb": "27,42,74",
+    "--paper": "#FFFFFF",
+    "--paper-rgb": "255,255,255",
+    "--accent": "#1B4F8A",
+    "--accent-positive": "#2D8A4E",
+    "--muted": "#5A6A8A",
+    "--surface": "#F0F4FA",
+    "--divider": "#C8D4E8"
+  }
+}

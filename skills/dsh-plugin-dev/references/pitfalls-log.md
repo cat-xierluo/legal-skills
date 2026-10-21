@@ -80,3 +80,17 @@
 | 真机取证（boot 日志/cookie 文件）入库含活凭证 | 入库前脱敏 | boot 日志的 `token=`、cookie 文件的 `v1.eyJ` 签名都是凭证。入库前正则脱敏（**正则须含 cookie 名下划线** `[A-Za-z0-9_]+`——曾漏匹配）；配套销毁隔离 home 的 credentials 使泄露 Cookie 失效 | 内容工厂 W7→PR #268 |
 | 多轮真机探针共用实例的结果被串轮污染 | 删除类探针是否破坏后续探针的夹具前提 | R18c 删 objB 批后 R11②④ 被「批不存在」污染——探针幂等重建夹具，或删除类探针放最后 | 内容工厂 W8 复跑 |
 | Web 页面路径验证通过 ≠ Desktop GUI 路径通过 | 两条 client 装配链分开验证 | client bundle 在 web server combo（外部 Chromium 连）与 desktop-shell Renderer（Electron 内置）是**两条装配链**——Web 多次通过、GUI 同代码可能「Unknown client plugin」（见上伪影条）。验收口径分开陈述 | 内容工厂 001b-001d |
+
+## slot 抢占与 client 装载契约（DSH-022 C-1 / DSH-023 标记轮实测批，2026-10-17，Desktop 2.0.17 / 0.2.0-rc.2）
+
+| 症状 | 先查 | 曾见原因与修复 | 出处 |
+|---|---|---|---|
+| web client 永卡 "Loading plugins…"，浏览器 evaluate/DOM 快照全超时、renderer 打满 | 同组合去掉自研插件的对照 profile 是否正常 | 两独立病因可各自单独致死：① slot `register()` 带 `children` 表与官方条目**排他互斥**（后到者抛 `already declared`，未捕获异常中断装载管线）；② client bundle 是裸 ESM 源码——宿主 client-modules 拉取后等待 bundle 调 `window.__ModuleLoader__.load({id, factory})` 注册工厂，裸 ESM 永不注册。修复：shadow 父座位**不带 children 注册**（异 priority 共存 + lowest 渲染，官方子座位声明与子 entry 全保留可消费）+ 构建链产出工厂封装 bundle（`build-client.mjs`，pdf-organizer/registry-board 先例：`require('react')` 由 loader 供给） | dsh-plugins PR #339（C-1 报告四场景 SlotCore 复演 + 真宿主双对照） |
+| web boot 报 "entry did not activate"，自研 client 插件不激活 | client 模块是否导出 `inject` 服务键 | client 插件契约：模块导出的插件对象需含 `inject:['slots',…]`——**服务键**（非模块 id）。`ctx.slots` 只有声明后才可读（client runner 激活门，"slots and theme are the usual UI seats"）。注意与 package.json `dsh.client.inject`（模块图依赖边，写模块 id）是**两层不同声明**，都要写 | 同上 |
+| Host 半体 `TypeError: Invalid effect`（cordis safeCollect 栈） | `apply(ctx, config)` 的 return 值 | cordis `_execute` 把 apply 的返回值当 effect 处置器收集：函数→collect、可空→忽略、**其余（含服务对象）→抛**。服务面只经 `ctx.provide` 交付，apply 不返回 | 同上 |
+| Host 半体 `failed to import`（隔离 profile `link:` 装载，仓内测试却全绿） | package.json `dependencies` vs 实际 import 清单 | undeclared 依赖（如 zod）在隔离 profile 不会被安装——仓内测试靠仓库根 node_modules 解析成功=假绿。schema 走零依赖 duck-typed（PR #35 纪律）或如实声明依赖 | 同上 |
+| 装载自检在真宿主收敛 `reading 'warn'` 类 TypeError，mock 级长期绿 | rig/派生 ctx 是否用 `{...ctx}` 展开 | 真实 cordis ctx 是 Proxy：logger/llm **非自有可枚举属性**，展开只剩 `{fiber}`；mock 普通对象展开保留字段——结构性假绿。修复：派生 ctx 用**显式字段**（`{ bizLink, logger: ctx.logger, llm: ctx.llm }`）；回归用例把字段挂**原型**复刻代理展开语义 | dsh-plugins PR #338 |
+| `dsh plugin add` 等子命令静默：零输出、零副作用、exit 0 | PATH 首位的 node 版本 | standalone dsh CLI 入口守卫 `if (import.meta.main) await runCli()`——node v20.12 无 `import.meta.main`（undefined），shebang `env node` 解析到旧 node 时整个 CLI **静默 no-op**。修复：dsh 调用统一前置 v24+ 的 bin 到 PATH | dsh-plugins DSH-023 标记轮 |
+| pre-push 全套门禁时序敏感测试闪断（全并行红、单文件绿） | 是否有隔离实验的 Electron host 未清 | 实验 host 进程吃满核导致 timing 断言漂移——**推门前先杀 lab host**（`pkill -f "profile <名>"`） | 同上 |
+| 浏览器观察 DSH web client：evaluate/DOM 快照周期性超时 | 先跑对照 profile 定基线 | 重型 SPA 会饿死观察通道（健康页面也可能间歇超时）。替代观察面：curl+cookie 会话提取 HTML 内联 `__DSH_BOOT__` manifest（client 模块图权威）、整页截图、DOM 快照文本比对 | dsh-plugins PR #339 |
+| 装配后立即抓 web token 拿到空值/旧值 | boot 日志是否已出现 "dsh web" 行 | `plugin add` 触发的 boot 里 URL 行有延迟——轮询等行出现再取 token | 同上 |

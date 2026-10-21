@@ -47,6 +47,21 @@ TIMESTAMP_ONLY_RE = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})?$")
 OLD_SPEAKER_LINE_RE = re.compile(r"^speaker_(\d+)(?::|\s|$)")
 
 
+def _is_speaker_label(label: str) -> bool:
+    """发言标签有效性：非空、非纯时间戳、非块引用行。
+
+    听悟 lab 板块的议程引用行（"> 00:00 - 03:13"）行尾同样是时间戳，
+    会被 SPEAKER_LINE_RE 捕获为「标签="> 00:00 -"」。块引用符 ">" 开头
+    的行不是发言行（Markdown 语义即引用），一律不算发言标签，否则
+    verify 的 expected_speakers 混入垃圾标签、prompt 的说话人归属被
+    污染，tingwu 转录稿的 AI 摘要校验永远无法通过。
+    """
+    label = label.strip()
+    if not label or TIMESTAMP_ONLY_RE.fullmatch(label):
+        return False
+    return not label.startswith(">")
+
+
 def _extract_speaker_orders(markdown_text: str) -> list[str]:
     """从 Markdown 文本中提取发言人标签集合（保持出现顺序）。
 
@@ -57,7 +72,7 @@ def _extract_speaker_orders(markdown_text: str) -> list[str]:
     orders: list[str] = []
     for match in SPEAKER_LINE_RE.finditer(markdown_text):
         label = match.group("label").strip()
-        if not label or TIMESTAMP_ONLY_RE.fullmatch(label):
+        if not _is_speaker_label(label):
             continue
         # 旧版 speaker_N 标签归一为 发言人N+1，避免与新格式重复入列
         old_style = re.fullmatch(r"speaker_(\d+)", label)
@@ -254,6 +269,12 @@ def get_transcription_text(md_path: Path) -> str:
             line = line.strip()
             if not line:
                 continue
+            if line.startswith(">"):
+                # 听悟 lab 板块的议程引用行（"> 00:00 - 03:13"）与幻灯片
+                # 时间戳行（"> *01:17*"）不是发言内容，整行跳过，避免被
+                # 计入 prompt 的说话人归属（曾把 current_speaker 设为
+                # "> 00:00 -"，污染摘要 prompt）
+                continue
             speaker_match = OLD_SPEAKER_LINE_RE.match(line)
             if speaker_match:
                 current_speaker = f"发言人{int(speaker_match.group(1)) + 1}"
@@ -263,7 +284,7 @@ def get_transcription_text(md_path: Path) -> str:
                 lines.append(f"{current_speaker}：{line}")
                 continue
             line_match = SPEAKER_LINE_RE.match(line)
-            if line_match and not TIMESTAMP_ONLY_RE.fullmatch(line_match.group("label")):
+            if line_match and _is_speaker_label(line_match.group("label")):
                 current_speaker = line_match.group("label").strip()
                 continue
             if TIMESTAMP_ONLY_RE.fullmatch(stripped):
