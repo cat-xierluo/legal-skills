@@ -38,7 +38,7 @@ metadata:
    python3 "SKILL_DIR/scripts/disk_probe.py" scan --root "$HOME/.codex" --depth 2 --seconds 45 --max-entries 200000 --output "/私有输出目录/codex.json"
    ```
 
-   JSON 同时给出 allocated/logical bytes、大文件、近期修改线索、截断与错误。`partial`、`unavailable` 或被排除挂载点须随结果披露，只称“已检查范围”。需要长期比较时保留小 JSON，再以相同根、深度与排除参数采集：
+   JSON 同时给出 allocated/logical bytes、大文件、近期修改线索、截断与错误。`partial`、`unavailable` 或被排除挂载点须随结果披露，只称“已检查范围”。硬链接只在同一个扫描根内去重，分两次扫描不同根再比较时，同一 inode 会在两边各计一次，不能当作可释放量。需要长期比较时保留小 JSON，再以相同根、深度与排除参数采集：
 
    ```bash
    python3 "SKILL_DIR/scripts/disk_probe.py" compare --before "/私有输出目录/旧.json" --after "/私有输出目录/新.json" --output "/私有输出目录/diff.json"

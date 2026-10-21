@@ -1,0 +1,29 @@
+name: Disk Insight Regression
+
+on:
+  pull_request:
+    paths:
+      - "skills/disk-insight/**"
+      - ".github/workflows/disk-insight-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/disk-insight/**"
+      - ".github/workflows/disk-insight-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and run synthetic disk probe regressions
+        run: |
+          python -m py_compile skills/disk-insight/scripts/disk_probe.py skills/disk-insight/scripts/check_probe.py
+          python -B skills/disk-insight/scripts/check_probe.py

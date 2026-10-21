@@ -249,6 +249,46 @@ class ProbeChecks(unittest.TestCase):
         self.assertEqual(data["status"], "no_history")
         self.assertEqual(data["discovered_dbs"], [])
 
+    def make_corrupt_history_db(self, name):
+        """A database whose snapshot timestamps are all unparsable."""
+        db = self.base / name
+        conn = sqlite3.connect(db)
+        conn.executescript("""
+          PRAGMA user_version=9;
+          CREATE TABLE snapshots(id INTEGER PRIMARY KEY, created_at TEXT, root TEXT,
+            min_kb INTEGER, exclude_names TEXT, metric_version INTEGER, plan_id TEXT,
+            collection_status TEXT, denied_count INTEGER, vanished_count INTEGER);
+          CREATE TABLE entries(snapshot_id INTEGER, path TEXT, size_kb INTEGER);
+        """)
+        for i, stamp in ((1, "not-a-timestamp"), (2, "2026-13-45T99:99:99")):
+            conn.execute("INSERT INTO snapshots VALUES(?,?,?,?,?,?,?,?,?,?)",
+                         (i, stamp, "/sample", 10, "", 1, "plan", "partial", 1, 0))
+        conn.executemany("INSERT INTO entries VALUES(?,?,?)", [
+            (1, "/sample", 100), (2, "/sample", 150)])
+        conn.commit()
+        conn.close()
+        return db
+
+    def test_history_rejects_fully_corrupt_timestamps_instead_of_no_history(self):
+        db = self.make_corrupt_history_db("corrupt-fathom.db")
+        # Damaged history must fail closed, not degrade into "no history" with exit 0.
+        self.run_cli("history", "--db", db, "--focus", "/sample", code=2)
+        # The same library through the explicit diff path must also refuse.
+        self.run_cli("fathom-diff", "--db", db, "--before", 1, "--after", 2,
+                     "--focus", "/sample", code=2)
+
+    def test_history_reports_corrupt_database_beside_usable_one(self):
+        good = self.make_history_db("good-fathom.db")
+        bad = self.make_corrupt_history_db("bad-fathom.db")
+        data, _ = self.run_cli("history", "--db", good, "--db", bad,
+                               "--focus", "/sample", "--days", 4)
+        self.assertEqual(data["status"], "history_found")
+        self.assertEqual(data["db"], str(good))
+        reports = {r["path"]: r for r in data["discovered_dbs"]}
+        self.assertEqual(reports[str(good)]["status"], "usable")
+        self.assertEqual(reports[str(bad)]["status"], "corrupt_history")
+        self.assertTrue(any("corrupt_history" in note for note in data["notes"]))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

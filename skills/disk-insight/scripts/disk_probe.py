@@ -186,7 +186,9 @@ def scan(args):
             "recent_modified_days": args.days, "results": results,
             "notes": ["rows are cumulative; do not sum parents and children",
                       "mtime is a clue, not growth; bytes are not reclaimable space",
-                      "live metadata is not an atomic filesystem snapshot; clones not deduplicated"]}
+                      "live metadata is not an atomic filesystem snapshot; clones not deduplicated",
+                      "hardlinks are deduplicated within each scanned root only; the same "
+                      "inode counted under two separate roots appears in both"]}
 
 
 def compare(args):
@@ -314,6 +316,14 @@ def dataset_key(row):
     return tuple(row[k] for k in ("root", "min_kb", "exclude_names", "metric_version", "plan_id"))
 
 
+def snapshot_time(row):
+    """Return the snapshot timestamp, or None when the stored value is unusable."""
+    try:
+        return datetime.fromisoformat(row["created_at"]).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
 def choose_history_pair(db, focus, days):
     eligible = [r for r in db["snapshots"] if inside(focus, r["root"])]
     groups = {}
@@ -322,23 +332,29 @@ def choose_history_pair(db, focus, days):
             continue
         groups.setdefault(dataset_key(row), []).append(row)
     choices = []
+    corrupt_groups = []
     for rows in groups.values():
         rows.sort(key=lambda r: (r["created_at"], r["id"]))
         if len(rows) < 2:
             continue
-        after = rows[-1]
-        try:
-            target = datetime.fromisoformat(after["created_at"]).timestamp() - days * 86400
-            prior = [r for r in rows[:-1]
-                     if datetime.fromisoformat(r["created_at"]).timestamp() <= target]
-            before = prior[-1] if prior else rows[0]
-        except (TypeError, ValueError):
+        timed = [(r, snapshot_time(r)) for r in rows]
+        usable = [(r, t) for r, t in timed if t is not None]
+        if not usable:
+            # Every timestamp in this dataset is unparsable: the history is damaged,
+            # not absent. Never let that degrade into a silent "no history".
+            corrupt_groups.append({"dataset": list(dataset_key(rows[0])),
+                                   "snapshot_count": len(rows),
+                                   "invalid_timestamps": len(rows)})
             continue
+        after, after_at = usable[-1]
+        target = after_at - days * 86400
+        prior = [(r, t) for r, t in usable[:-1] if t <= target]
+        before = prior[-1][0] if prior else usable[0][0]
         choices.append((after["created_at"], len(rows), before, after))
-    if not choices:
-        return None
-    _, _, before, after = max(choices, key=lambda item: (item[0], item[1]))
-    return before, after
+    if choices:
+        _, _, before, after = max(choices, key=lambda item: (item[0], item[1]))
+        return {"before": before, "after": after, "corrupt_datasets": corrupt_groups}
+    return {"before": None, "after": None, "corrupt_datasets": corrupt_groups}
 
 
 def capacity_deltas(samples, before_time, after_time):
@@ -373,6 +389,7 @@ def discover_fathom(explicit, focus, days):
         candidates = default_fathom_dbs()
     reports = []
     usable = []
+    corrupt = []
     seen = set()
     for candidate in candidates:
         candidate = candidate.resolve(strict=False)
@@ -385,15 +402,28 @@ def discover_fathom(explicit, focus, days):
             reports.append({"path": str(candidate), "status": "unavailable", "reason": str(exc)})
             continue
         pair = choose_history_pair(db, focus, days)
-        reports.append({"path": db["path"], "status": "usable" if pair else "no_comparable_focus_pair",
-                        "snapshot_count": len(db["snapshots"])})
-        if pair:
+        corrupt_datasets = pair["corrupt_datasets"]
+        if pair["before"] is not None:
+            reports.append({"path": db["path"], "status": "usable",
+                            "snapshot_count": len(db["snapshots"])})
             usable.append((db, pair))
+            continue
+        if corrupt_datasets:
+            # A damaged dataset is not the same as an absent one; keep it visible
+            # and fail closed instead of silently degrading to "no history".
+            reports.append({"path": db["path"], "status": "corrupt_history",
+                            "snapshot_count": len(db["snapshots"]),
+                            "corrupt_datasets": corrupt_datasets})
+            corrupt.append((db, corrupt_datasets))
+            continue
+        reports.append({"path": db["path"], "status": "no_comparable_focus_pair",
+                        "snapshot_count": len(db["snapshots"])})
     if not usable:
-        return {"selected": None, "discovered_dbs": reports}
+        return {"selected": None, "discovered_dbs": reports, "corrupt": corrupt}
     # Prefer the newest usable after snapshot; explicit databases are still ranked by evidence.
-    db, (before, after) = max(usable, key=lambda item: item[1][1]["created_at"])
-    return {"selected": {"db": db, "before": before, "after": after}, "discovered_dbs": reports}
+    db, pair = max(usable, key=lambda item: item[1]["after"]["created_at"])
+    return {"selected": {"db": db, "before": pair["before"], "after": pair["after"]},
+            "discovered_dbs": reports, "corrupt": corrupt}
 
 
 def history(args):
@@ -407,7 +437,15 @@ def history(args):
                                      kind="file"))
     discovery = discover_fathom(explicit, focus, args.days)
     selected = discovery["selected"]
+    corrupt = discovery["corrupt"]
     if selected is None:
+        if corrupt:
+            # Damaged history must not pass as "no history"; fail closed and name the
+            # damaged datasets so the caller can fall back to an explicit scan.
+            detail = [{"path": db["path"], "corrupt_datasets": datasets}
+                       for db, datasets in corrupt]
+            raise ValueError("corrupt history: unusable snapshot timestamps in "
+                             + "; ".join(item["path"] for item in detail))
         return {"schema": SCHEMA, "kind": "history-summary", "status": "no_history",
                 "focus": focus, "requested_days": args.days,
                 "discovered_dbs": discovery["discovered_dbs"],
@@ -443,6 +481,12 @@ def history(args):
     finally:
         conn.close()
     stats = {r["snapshot_id"]: r for r in db["volume_stats"]}
+    notes = ["directory rows and physical capacity deltas are separate metrics",
+             "APFS clone/shared blocks prevent converting directory bytes to reclaimable space",
+             "use the actual interval shown here when no snapshot covers the requested window"]
+    if corrupt:
+        notes.append("other candidate databases contain unusable snapshot timestamps "
+                     "and were reported as corrupt_history")
     return {"schema": SCHEMA, "kind": "history-summary", "status": "history_found",
             "db": db["path"], "db_schema": db["schema_version"], "focus": focus,
             "requested_days": args.days, "actual_days": (
@@ -454,9 +498,7 @@ def history(args):
                                                after["created_at"]),
             "rows": diff_rows(*maps),
             "discovered_dbs": discovery["discovered_dbs"],
-            "notes": ["directory rows and physical capacity deltas are separate metrics",
-                      "APFS clone/shared blocks prevent converting directory bytes to reclaimable space",
-                      "use the actual interval shown here when no snapshot covers the requested window"]}
+            "notes": notes}
 
 
 def fathom(args):
