@@ -40,18 +40,5 @@
     "qcc-ipr",
     "qcc-operation"
   ],
-  "alwaysThinkingEnabled": true,
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|Shell|Terminal|Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash '/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills/.claude/skills/multi-agent-orca/scripts/dependency-install-guard-hook.sh'"
-          }
-        ]
-      }
-    ]
-  }
+  "alwaysThinkingEnabled": true
 }
