@@ -9,6 +9,7 @@
   `read_thread` 分层读取与分页、`wait_threads` 批量等待语义（`timedOut` 不等于失败、`afterCursor` 抑重、commentary 不唤醒）、
   跨会话动作边界（`send_message_to_thread` 需用户授权、prompt 必须自包含）、
   **全局配置文件并发写入纪律**（具名单写者、写前段/键清单快照、受控写入、写后逐项 diff 回读）、写域冲突裁决、派发形态选择、回报与静默纪律。
+- 发送侧实测（2026-10-21，一次性 scratch 会话，验证后归档）：`create_thread` 可创建独立 thread；授权后的 `send_message_to_thread` 送达目标侧并以工具输出条目出现，条目含发送方 source thread id 与完整消息文本，随后在目标侧触发新回合并可被 `wait_threads` 观察到完成。目标忙碌/`notLoaded`/已归档、超长或非文本消息、并发多目标顺序、跨 host 仍为 `NOT_VERIFIED`。
 - 重复任务识别矩阵：按实际 cwd/worktree、写域、任务卡、分支/PR 与产物身份交叉比对，不以标题或摘要判重；
   只有路径/产物身份相同，或任务卡加 PR/分支/产物 SHA 至少两类实证指向同一交付物，才标 `DUPLICATE_CONFIRMED` 并指定 canonical owner；
   其余主题相似只能标 `SAME_TOPIC_UNCONFIRMED` 并保留双方。非 canonical owner 保留原身份与现场，不擅停、关闭、覆盖或删除在途会话；证据不足或 owner/授权不明时升级用户。

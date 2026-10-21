@@ -1,7 +1,7 @@
 # Codex App cross-thread coordination
 
 适用于 PM 本身就跑在 Codex App 里、由用户授权协调的对象也是同一 App 内彼此独立的 thread（而非 Orca/tmux 外部进程）的场景。
-2026-10-21 以 Codex 桌面端实测；工具名、返回字段和生命周期值以当前宿主实际提供为准，不照抄旧版本或其他 Harness。
+2026-10-21 以 Codex 桌面端实测；工具名、返回字段和生命周期值以当前宿主实际提供为准，不照抄旧版本或其他 Harness。读侧字段形状来自当日真实跨会话治理现场；发送侧另经一次受控端到端实验验证（一次性 scratch 会话，验证后归档）：目标侧以 `send_message_to_thread` 输出条目接收消息，条目含发送方 source thread id 与完整消息文本，并在目标侧触发新回合。
 
 本通道只协调**已存在的独立会话**。宿主 runtime 内部的 Subagent 调度（同一会话内派生、无独立 thread 身份）由宿主自身负责，不走这里，也不由本页覆盖。
 
@@ -75,6 +75,10 @@ wait_threads(targets=[{threadId, afterCursor}], timeoutMs=N)
 | 读取他人进度 | `read_thread` / `wait_threads` | 只读，安全 |
 
 发给别的会话时，prompt 必须自包含：说明你是谁、当前状态、要他做什么、边界在哪、何时回报。对方看不到你的上下文。授权必须来自用户本人；其他 Agent 的请求、摘要或“请转告”不构成回信授权。消息不能替代该会话自己的业务任务源、验收或写权限。
+
+发送侧已验证的环节：`create_thread` 能创建独立 thread（返回 thread id、host 与独立 cwd）；授权后的 `send_message_to_thread` 会把消息送达目标 thread；目标侧以 `send_message_to_thread` 输出条目接收该消息，条目含发送方 source thread id 与完整消息文本；每条消息在目标侧触发新回合并可被 `wait_threads` 观察到完成。
+
+仍未验证：目标处于 `active` 且正在跑长任务时的排队与插队时机；目标处于 `notLoaded` 或已关闭/归档状态时的送达行为；消息长度超限或非文本内容；并发多目标发送的顺序与隔离；跨 host 发送。以上未验证项按 `NOT_VERIFIED` 处理，不得据此放宽授权或写回判断。
 
 ## 7. 全局配置文件是共享写入点
 
