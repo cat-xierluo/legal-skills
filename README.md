@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-21 | 新上传 | [disk-insight](skills/disk-insight/) | v1.0.0 | 参考 Fathom 做磁盘增长与 Agent 产物研判；只读历史、定向采集，保护必要可视化材料。源码待发布。 |
 | 2026-10-21 | 更新 | [dsh-plugin-dev](skills/dsh-plugin-dev/) | v0.6.5 | locale 嵌套展开、重复键和浅覆盖冲突转 NOT_VERIFIED；保留不相交顶层展开，完整自测 47 项。源码待发布。 |
 | 2026-10-21 | 更新 | [git-workflow](skills/git-workflow/) | v1.24.2 | 补充仓库自带 `.githooks/` 的手动启用说明：`core.hooksPath` 相对路径按 worktree 根解析，稀疏检出未落盘时 Git 静默跳过。 |
 | 2026-10-21 | 更新 | [git-workflow](skills/git-workflow/) | v1.24.1 | 草稿使用官方 `gh pr ready` 入口保留原 PR 编号与审查记录，转换前后核 head/base，失败先回查；保留独立授权与 CI 门禁。 |
@@ -767,6 +768,15 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.3.2</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/dsh-plugin-dev-0.3.2.zip">下载</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/disk-insight/"><strong>disk-insight</strong></a></td>
+<td>工具·空间研判</td>
+<td style="word-break:break-word">分析近期磁盘增长及模型、Agent 会话、工作树与可视化产物，复用 Fathom 历史并提供有预算的只读采集，给出保留和调整建议</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">源码待发布</td>
 <td></td>
 </tr>
 <tr>

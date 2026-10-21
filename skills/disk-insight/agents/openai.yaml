@@ -1,0 +1,4 @@
+interface:
+  display_name: "磁盘空间研判"
+  short_description: "分析近期磁盘增长与 Agent 产物，区分缓存和需要保留的可视化材料"
+  default_prompt: "请用 $disk-insight 分析最近的磁盘增长，重点看 AI 产物并保留必要的可视化成果。"
