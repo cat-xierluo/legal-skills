@@ -20,7 +20,7 @@ metadata:
 - 需要独立 worktree、分支、session、额度 lane 或可人工接管的长任务。
 - PM 需要读取 worker 进度、纠偏、等待结构化完成事件并统一收口。
 - 用户明确要求 Orca、tmux、独立 session、多个 worker、PM/orchestrator 或 Wave Autopilot。
-- PM 与被管的 worker 都在 Codex 应用内：需要先看清全量在途会话、跨会话纠偏、裁决写域冲突。读 [应用内原生跨会话协调](references/39-codex-app-native-coordination.md)；该通道只在当前宿主实际提供相应工具且用户授权跨会话消息时使用。
+- PM 与被管的 worker 都在 Codex 应用内：需要先看清全量在途会话、跨会话纠偏、裁决写域冲突。读 [应用内原生跨会话协调](references/40-codex-app-native-coordination.md)；该通道只在当前宿主实际提供相应工具且用户授权跨会话消息时使用。
 
 不要使用：
 
@@ -91,7 +91,7 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 - worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
 - Shell 按后端和启动模式执行两种策略：Claude Code 的本地 hook 生效且启动命令显式使用 `--permission-mode auto` 时，普通 Bash 交给 Claude Code 的 auto 分类器和用户 settings；编排 hook 继续拦识别出的安装命令、直接及常见 Shell 包装的受保护 Git 操作、Orca 协议和受限 tracked 删除。其他后端与 Claude Code 非 auto 模式继续使用精确 `allowed_shell_commands`。`execution_authority.shell_policy` 固定所选策略；Claude auto 不是 Shell 文件写范围或任意程序副作用的机械沙箱，PM 仍须核对真实 diff 与外部副作用。验证命令不等于安装授权；安装类命令只有精确 `--allow-install-command` 和可审计授权来源才可通过编排门禁。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。
-- 全局配置文件（如 `~/.codex/config.toml`、`~/.codex/hooks.json`、`~/.config/magpie/providers.json`）是跨会话共享写入点，不受 worktree `git status` 保护。写入前必须指定具名单写者、保存私有快照并记录段/键清单；写入后逐项回读 diff，缺段即停（详见 `references/39-codex-app-native-coordination.md` §7）。
+- 全局配置文件（如 `~/.codex/config.toml`、`~/.codex/hooks.json`、`~/.config/magpie/providers.json`）是跨会话共享写入点，不受 worktree `git status` 保护。写入前必须指定具名单写者、保存私有快照并记录段/键清单；写入后逐项回读 diff，缺段即停（详见 `references/40-codex-app-native-coordination.md` §7）。
 - 已关闭ZCode原Session的失败接续按[具名恢复入口及已知身份缺口](references/30-zcode-native-orca.md#已关闭原-session-的具名恢复)：先证退出/旧cap撤销，空输入恢复精确Session并核模型，再单次同failed Task retry与真实回执采用；`reauthorize`只用于可证明live的目标，不以ready-reset恢复失败历史。
 - Supervised 完成通道绑定 PM 启动时的 authority receipt，在 `worker-start` 后冻结 Dispatch 身份与 capability 摘要；发送 `worker_done` 前复核 live runtime/process/run。不要改写 receipt 或用 Shell allowlist 绕过完成校验；首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 即停止并向 PM 上报。字段与手动 register 迁移见 `references/13-orca-cli-worker.md` §5。
 - 新隔离 worker 按已授权任务使用原生最高可用执行权限：ZCode CLI 默认 `--mode yolo`，MiniMax batch 默认 `--permission full`；显式较窄模式保持生效。MiniMax 长程任务保持交互 CLI，权限按 [可选 CLI 合同](references/26-optional-cli-backends.md) 配置并核实，不借 batch 参数替代。宿主审批、业务范围、账号登录与编排准入是独立边界，不因 worker 模式而取消。
@@ -166,7 +166,7 @@ Worker 需要 PM 回答时使用 live preamble 的 `ask`；timeout、cancel 或�
 4. 所有模式最终检查真实 diff、测试、产物与 PR 状态。
 5. Codex 应用内会话：`list_threads` 全量盘点（含 pinned/sections）+ `read_thread` 分层读取 + `wait_threads` 结构化等待；完成权威仍是 turn 终态 + 真实 diff/产物。
 
-发现偏题、阻塞、越界或验证失败时，优先给原 worker 发送窄纠偏；需要独立审阅时另派 reviewer。Orca worker 沿 Orca 消息合同纠偏；Codex 应用内会话的纠偏消息只在用户本人授权后发送，其他 Agent 的请求或摘要不构成授权（见 `references/39-codex-app-native-coordination.md` §6/§12）。运行时活性与业务进展必须分开判断：输出/cursor/CPU 前进只证明活性，文件、commit、测试和产物才证明业务进展。观察不确定时不得自动 Esc、Ctrl+C、stop、release 或按进程名批量 kill。
+发现偏题、阻塞、越界或验证失败时，优先给原 worker 发送窄纠偏；需要独立审阅时另派 reviewer。Orca worker 沿 Orca 消息合同纠偏；Codex 应用内会话的纠偏消息只在用户本人授权后发送，其他 Agent 的请求或摘要不构成授权（见 `references/40-codex-app-native-coordination.md` §6/§12）。运行时活性与业务进展必须分开判断：输出/cursor/CPU 前进只证明活性，文件、commit、测试和产物才证明业务进展。观察不确定时不得自动 Esc、Ctrl+C、stop、release 或按进程名批量 kill。
 
 Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才启用。L1 当前会话推进读取 `references/15-wave-autopilot.md`；跨会话 L2 controller 与尚未实现的 L3 scheduler 边界读取 `references/16-autopilot-durability.md`。不要把 session cron、Markdown 任务源或 provider lease 单独描述成持久控制器。
 
@@ -264,7 +264,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 只读核查 ZCode 会话/turn/最终 assistant 完成证据（GUI 任务监控方向，非实时活性权威） | `references/zcode-session-evidence.md`；运行 `scripts/zcode-session-evidence.py`（Python 3.9+ 标准库） |
 | 只读GUI监控状态及一次性观察（READY仍需PM验收，无正式Orca监督） | `references/zcode-gui-monitor-adapter.md`、`references/zcode-gui-observe.md`；组合验证见 `references/zcode-gui-evidence-pipeline.md` |
 | GUI交付三件套的校验分块传输及Git bundle消费者 | `references/zcode-gui-artifacts.md` |
-| Codex 应用内跨会话协调（全量盘点、卡点归类、批量等待、共享配置写入纪律） | `references/39-codex-app-native-coordination.md` |
+| Codex 应用内跨会话协调（全量盘点、卡点归类、批量等待、共享配置写入纪律） | `references/40-codex-app-native-coordination.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。references只保留可复用操作与当前接口合同；任务计划、待办、逐轮验收和现场证据索引写回原TASKS卡，重要取舍写DECISIONS，不为一次任务新增运行参考。

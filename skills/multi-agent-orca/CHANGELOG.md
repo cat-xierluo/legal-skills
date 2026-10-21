@@ -3,7 +3,7 @@
 ## [3.1.0] - 2026-10-21
 
 ### 新增
-- 应用内原生跨会话协调参考（`references/39-codex-app-native-coordination.md`）：面向 PM 与被管 worker 同处 Codex 应用且宿主实际提供相应能力的场景。
+- 应用内原生跨会话协调参考（`references/40-codex-app-native-coordination.md`）：面向 PM 与被管 worker 同处 Codex 应用且宿主实际提供相应能力的场景。
   覆盖全量盘点（`list_threads` 需同时读取 pinnedThreads 与 threads）、生命周期状态与 `notLoaded`/明确加载错误/额度失败/长任务运行中的区分、
   `read_thread` 分层读取与分页、`wait_threads` 批量等待语义（`timedOut` 不等于失败、`afterCursor` 抑重、commentary 不唤醒）、
   跨会话动作边界（`send_message_to_thread` 需用户授权、prompt 必须自包含）、
