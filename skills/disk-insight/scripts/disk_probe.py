@@ -219,11 +219,57 @@ def diff_rows(a, b):
     return sorted(rows, key=lambda x: -(x["delta_bytes"] or 0))
 
 
-def fathom(args):
-    path = Path(args.db).expanduser().resolve(strict=True)
+def default_fathom_dbs():
+    # Standard macOS application support location plus the documented env override.
+    # A bounded search for "fathom" directories also finds project-local copies
+    # (for example <vendor>/fathom/data/fathom.db) without assuming a machine layout.
+    candidates = []
+    env_db = os.environ.get("FATHOM_DB")
+    if env_db:
+        candidates.append(Path(env_db).expanduser())
+    home = os.environ.get("HOME") or str(Path.home())
+    home_path = Path(os.path.realpath(home))
+    support = home_path / "Library/Application Support"
+    if support.is_dir():
+        standard = support / "Fathom/data/fathom.db"
+        if standard.is_file():
+            candidates.append(standard)
+        for directory in bounded_find(support, "fathom", max_depth=4, max_entries=20000):
+            candidates.append(directory / "data/fathom.db")
+    else:
+        candidates.extend(bounded_find(home_path, "fathom.db", max_depth=6, max_entries=20000,
+                                       kind="file"))
+    return candidates
+
+
+def bounded_find(root, name, max_depth, max_entries, kind="directory"):
+    found = []
+    seen = 0
+    stack = [(root, 0)]
+    while stack and seen < max_entries:
+        current, depth = stack.pop()
+        try:
+            entries = list(os.scandir(current))
+        except OSError:
+            continue
+        for entry in entries:
+            seen += 1
+            if seen > max_entries:
+                break
+            matches = (entry.is_dir(follow_symlinks=False) if kind == "directory"
+                       else entry.is_file(follow_symlinks=False))
+            if entry.name == name and matches:
+                found.append(Path(entry.path))
+            elif depth < max_depth and entry.is_dir(follow_symlinks=False):
+                stack.append((Path(entry.path), depth + 1))
+    return found
+
+
+def open_fathom(path):
+    # No application connection: Fathom's connect() can perform schema/index writes.
+    path = Path(path).expanduser().resolve(strict=True)
     if not path.is_file():
         raise ValueError("database must be an existing file")
-    # No application connection: Fathom's connect() can perform schema/index writes.
     conn = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2)
     conn.row_factory = sqlite3.Row
     try:
@@ -237,26 +283,206 @@ def fathom(args):
                   "plan_id", "collection_status", "denied_count", "vanished_count"}
         if not needed <= cols:
             raise ValueError("unsupported Fathom snapshot columns")
+        tables = {r["name"] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
         snapshots = [dict(r) for r in conn.execute("SELECT * FROM snapshots ORDER BY created_at,id")]
-        if args.command == "fathom-list":
-            return {"schema": SCHEMA, "kind": "fathom-list", "db": str(path),
-                    "db_schema": version, "snapshots": snapshots}
-        by_id = {r["id"]: r for r in snapshots}
-        if args.before not in by_id or args.after not in by_id:
-            raise ValueError("snapshot ID not found; run fathom-list")
-        a, b = by_id[args.before], by_id[args.after]
-        keys = ("root", "min_kb", "exclude_names", "metric_version", "plan_id")
-        if any(a[k] is None or b[k] is None or a[k] != b[k] for k in keys):
-            raise ValueError("incomparable or unknown Fathom dataset metadata")
-        if datetime.fromisoformat(a["created_at"]) >= datetime.fromisoformat(b["created_at"]):
+        volume_stats = []
+        if "volume_stats" in tables and {"snapshot_id", "total_bytes", "free_bytes"} <= {
+                r["name"] for r in conn.execute("PRAGMA table_info(volume_stats)")}:
+            volume_stats = [dict(r) for r in conn.execute(
+                "SELECT * FROM volume_stats ORDER BY snapshot_id")]
+        capacity = []
+        if "container_capacity_samples" in tables and {
+                "container_id", "total_bytes", "free_bytes", "sampled_at"} <= {
+                r["name"] for r in conn.execute("PRAGMA table_info(container_capacity_samples)")}:
+            capacity = [dict(r) for r in conn.execute(
+                "SELECT * FROM container_capacity_samples ORDER BY sampled_at,id")]
+        return {"path": str(path), "schema_version": version, "snapshots": snapshots,
+                "volume_stats": volume_stats, "capacity_samples": capacity}
+    except Exception:
+        conn.close()
+        raise
+
+
+def fathom_payload(db):
+    return {"schema": SCHEMA, "kind": "fathom-list", "db": db["path"],
+            "db_schema": db["schema_version"], "snapshots": db["snapshots"],
+            "volume_stats": db["volume_stats"], "capacity_samples": db["capacity_samples"]}
+
+
+def dataset_key(row):
+    return tuple(row[k] for k in ("root", "min_kb", "exclude_names", "metric_version", "plan_id"))
+
+
+def choose_history_pair(db, focus, days):
+    eligible = [r for r in db["snapshots"] if inside(focus, r["root"])]
+    groups = {}
+    for row in eligible:
+        if any(row[k] is None for k in ("root", "min_kb", "exclude_names", "metric_version", "plan_id")):
+            continue
+        groups.setdefault(dataset_key(row), []).append(row)
+    choices = []
+    for rows in groups.values():
+        rows.sort(key=lambda r: (r["created_at"], r["id"]))
+        if len(rows) < 2:
+            continue
+        after = rows[-1]
+        try:
+            target = datetime.fromisoformat(after["created_at"]).timestamp() - days * 86400
+            prior = [r for r in rows[:-1]
+                     if datetime.fromisoformat(r["created_at"]).timestamp() <= target]
+            before = prior[-1] if prior else rows[0]
+        except (TypeError, ValueError):
+            continue
+        choices.append((after["created_at"], len(rows), before, after))
+    if not choices:
+        return None
+    _, _, before, after = max(choices, key=lambda item: (item[0], item[1]))
+    return before, after
+
+
+def capacity_deltas(samples, before_time, after_time):
+    rows = []
+    before_at = datetime.fromisoformat(before_time).timestamp()
+    after_at = datetime.fromisoformat(after_time).timestamp()
+    ids = sorted({r["container_id"] for r in samples if r.get("container_id")})
+    for container_id in ids:
+        series = sorted((r for r in samples if r.get("container_id") == container_id),
+                        key=lambda r: (r["sampled_at"], r.get("id", 0)))
+        if not series:
+            continue
+        # Fathom records capacity after the directory scan in the same round.
+        # Pick the nearest sample on each side, then disclose its time distance.
+        a = min(series, key=lambda r: abs(datetime.fromisoformat(r["sampled_at"]).timestamp() - before_at))
+        b = min(series, key=lambda r: abs(datetime.fromisoformat(r["sampled_at"]).timestamp() - after_at))
+        row = {"container_id": container_id, "before": a, "after": b,
+               "before_distance_seconds": round(
+                   datetime.fromisoformat(a["sampled_at"]).timestamp() - before_at, 3),
+               "after_distance_seconds": round(
+                   datetime.fromisoformat(b["sampled_at"]).timestamp() - after_at, 3),
+               "total_bytes_delta": b["total_bytes"] - a["total_bytes"]}
+        if a.get("free_bytes") is not None and b.get("free_bytes") is not None:
+            row["free_bytes_delta"] = b["free_bytes"] - a["free_bytes"]
+        rows.append(row)
+    return rows
+
+
+def discover_fathom(explicit, focus, days):
+    candidates = list(explicit or [])
+    if not candidates:
+        candidates = default_fathom_dbs()
+    reports = []
+    usable = []
+    seen = set()
+    for candidate in candidates:
+        candidate = candidate.resolve(strict=False)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            db = open_fathom(candidate)
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            reports.append({"path": str(candidate), "status": "unavailable", "reason": str(exc)})
+            continue
+        pair = choose_history_pair(db, focus, days)
+        reports.append({"path": db["path"], "status": "usable" if pair else "no_comparable_focus_pair",
+                        "snapshot_count": len(db["snapshots"])})
+        if pair:
+            usable.append((db, pair))
+    if not usable:
+        return {"selected": None, "discovered_dbs": reports}
+    # Prefer the newest usable after snapshot; explicit databases are still ranked by evidence.
+    db, (before, after) = max(usable, key=lambda item: item[1][1]["created_at"])
+    return {"selected": {"db": db, "before": before, "after": after}, "discovered_dbs": reports}
+
+
+def history(args):
+    focus = absolute(args.focus)
+    explicit = [Path(p).expanduser() for p in (args.db or [])]
+    if args.db_dir:
+        root = Path(args.db_dir).expanduser().resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError("--db-dir must be an existing directory")
+        explicit.extend(bounded_find(root, "fathom.db", max_depth=6, max_entries=20000,
+                                     kind="file"))
+    discovery = discover_fathom(explicit, focus, args.days)
+    selected = discovery["selected"]
+    if selected is None:
+        return {"schema": SCHEMA, "kind": "history-summary", "status": "no_history",
+                "focus": focus, "requested_days": args.days,
+                "discovered_dbs": discovery["discovered_dbs"],
+                "notes": ["no comparable read-only history; perform bounded independent scans"]}
+    db = selected["db"]
+    before, after = selected["before"], selected["after"]
+    if args.before is not None or args.after is not None:
+        by_id = {r["id"]: r for r in db["snapshots"]}
+        try:
+            before = by_id[args.before] if args.before is not None else before
+            after = by_id[args.after] if args.after is not None else after
+        except KeyError as exc:
+            raise ValueError("snapshot ID not found in selected database") from exc
+        if dataset_key(before) != dataset_key(after):
+            raise ValueError("selected snapshots use incomparable datasets")
+        if datetime.fromisoformat(before["created_at"]) >= datetime.fromisoformat(after["created_at"]):
             raise ValueError("before must precede after")
-        focus = absolute(args.focus)
-        if not inside(focus, a["root"]):
-            raise ValueError("focus outside snapshot root")
-        maps = []
+    maps = []
+    conn = sqlite3.connect(Path(db["path"]).as_uri() + "?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA query_only=ON")
+        conn.execute("BEGIN")
+        prefix = focus.rstrip("/") + "/"
+        for snapshot in (before, after):
+            found = {}
+            for row in conn.execute("SELECT path,size_kb FROM entries WHERE snapshot_id=? AND "
+                                    "(path=? OR substr(path,1,?)=?)",
+                                    (snapshot["id"], focus, len(prefix), prefix)):
+                if len(Path(row["path"]).relative_to(focus).parts) <= args.depth:
+                    found[row["path"]] = row["size_kb"] * 1024
+            maps.append(found)
+    finally:
+        conn.close()
+    stats = {r["snapshot_id"]: r for r in db["volume_stats"]}
+    return {"schema": SCHEMA, "kind": "history-summary", "status": "history_found",
+            "db": db["path"], "db_schema": db["schema_version"], "focus": focus,
+            "requested_days": args.days, "actual_days": (
+                datetime.fromisoformat(after["created_at"]).timestamp()
+                - datetime.fromisoformat(before["created_at"]).timestamp()) / 86400,
+            "before": before, "after": after,
+            "volume_stats": {"before": stats.get(before["id"]), "after": stats.get(after["id"])},
+            "capacity_deltas": capacity_deltas(db["capacity_samples"], before["created_at"],
+                                               after["created_at"]),
+            "rows": diff_rows(*maps),
+            "discovered_dbs": discovery["discovered_dbs"],
+            "notes": ["directory rows and physical capacity deltas are separate metrics",
+                      "APFS clone/shared blocks prevent converting directory bytes to reclaimable space",
+                      "use the actual interval shown here when no snapshot covers the requested window"]}
+
+
+def fathom(args):
+    db = open_fathom(args.db)
+    if args.command == "fathom-list":
+        return fathom_payload(db)
+    by_id = {r["id"]: r for r in db["snapshots"]}
+    if args.before not in by_id or args.after not in by_id:
+        raise ValueError("snapshot ID not found; run fathom-list")
+    a, b = by_id[args.before], by_id[args.after]
+    if dataset_key(a) != dataset_key(b) or any(v is None for v in dataset_key(a)):
+        raise ValueError("incomparable or unknown Fathom dataset metadata")
+    if datetime.fromisoformat(a["created_at"]) >= datetime.fromisoformat(b["created_at"]):
+        raise ValueError("before must precede after")
+    focus = absolute(args.focus)
+    if not inside(focus, a["root"]):
+        raise ValueError("focus outside snapshot root")
+    maps = []
+    conn = sqlite3.connect(Path(db["path"]).as_uri() + "?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA query_only=ON")
+        conn.execute("BEGIN")
+        prefix = focus.rstrip("/") + "/"
         for snapshot in (a, b):
             found = {}
-            prefix = focus.rstrip("/") + "/"
             # Literal prefix; no LIKE wildcards from directory names.
             for row in conn.execute("SELECT path,size_kb FROM entries WHERE snapshot_id=? AND "
                                     "(path=? OR substr(path,1,?)=?)",
@@ -264,13 +490,13 @@ def fathom(args):
                 if len(Path(row["path"]).relative_to(focus).parts) <= args.depth:
                     found[row["path"]] = row["size_kb"] * 1024
             maps.append(found)
-        return {"schema": SCHEMA, "kind": "fathom-diff", "db": str(path), "db_schema": version,
-                "before": a, "after": b, "focus": focus, "depth": args.depth,
-                "rows": diff_rows(*maps), "notes": ["partial quality applies to recorded deltas",
-                "cumulative rows overlap; do not sum; missing does not mean deletion",
-                "historical allocated bytes are not reclaimable bytes"]}
     finally:
         conn.close()
+    return {"schema": SCHEMA, "kind": "fathom-diff", "db": db["path"], "db_schema": db["schema_version"],
+            "before": a, "after": b, "focus": focus, "depth": args.depth,
+            "rows": diff_rows(*maps), "notes": ["partial quality applies to recorded deltas",
+            "cumulative rows overlap; do not sum; missing does not mean deletion",
+            "historical allocated bytes are not reclaimable bytes"]}
 
 
 def main():
@@ -285,6 +511,14 @@ def main():
     s.add_argument("--min-file-mib", type=positive, default=100)
     s.add_argument("--top", type=positive, default=30)
     s.add_argument("--exclude-name", action="append", help="exact entry name, applies recursively")
+    h = sub.add_parser("history", help="discover and summarize comparable local history first")
+    h.add_argument("--db", action="append", help="explicit candidate; omit to auto-discover Fathom DBs")
+    h.add_argument("--db-dir", help="also discover fathom.db files under this existing directory")
+    h.add_argument("--before", type=positive)
+    h.add_argument("--after", type=positive)
+    h.add_argument("--focus", default="~")
+    h.add_argument("--depth", type=positive, default=2)
+    h.add_argument("--days", type=positive, default=7)
     c = sub.add_parser("compare", help="compare complete scans of identical policy")
     c.add_argument("--before", required=True)
     c.add_argument("--after", required=True)
@@ -296,7 +530,7 @@ def main():
             f.add_argument("--after", required=True, type=positive)
             f.add_argument("--focus", required=True)
             f.add_argument("--depth", type=positive, default=1)
-    for parser in (s, c, *[sub.choices[k] for k in ("fathom-list", "fathom-diff")]):
+    for parser in (s, c, h, *[sub.choices[k] for k in ("fathom-list", "fathom-diff")]):
         parser.add_argument("--output", required=True, help="new JSON file, parent must exist")
     args = p.parse_args()
     try:
@@ -305,7 +539,8 @@ def main():
             raise ValueError("output exists; refusing overwrite")
         if args.command == "scan" and any(inside(absolute(args.output), absolute(r)) for r in args.root):
             raise ValueError("output must be outside all scanned roots")
-        result = scan(args) if args.command == "scan" else compare(args) if args.command == "compare" else fathom(args)
+        result = (scan(args) if args.command == "scan" else compare(args) if args.command == "compare"
+                  else history(args) if args.command == "history" else fathom(args))
         emit(result, args.output)
     except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
         print("disk-insight: " + str(exc), file=sys.stderr)

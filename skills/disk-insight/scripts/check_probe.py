@@ -112,6 +112,35 @@ class ProbeChecks(unittest.TestCase):
         conn.close()
         return db
 
+    def make_history_db(self, name):
+        db = self.base / name
+        conn = sqlite3.connect(db)
+        conn.executescript("""
+          PRAGMA user_version=9;
+          CREATE TABLE snapshots(id INTEGER PRIMARY KEY, created_at TEXT, root TEXT,
+            min_kb INTEGER, exclude_names TEXT, metric_version INTEGER, plan_id TEXT,
+            collection_status TEXT, denied_count INTEGER, vanished_count INTEGER);
+          CREATE TABLE entries(snapshot_id INTEGER, path TEXT, size_kb INTEGER);
+          CREATE TABLE volume_stats(snapshot_id INTEGER PRIMARY KEY, total_bytes INTEGER,
+            free_bytes INTEGER);
+          CREATE TABLE container_capacity_samples(id INTEGER PRIMARY KEY, container_id TEXT,
+            total_bytes INTEGER, free_bytes INTEGER, source TEXT, sampled_at TEXT);
+        """)
+        for i, day, root in ((1, "01", "/sample"), (2, "04", "/sample"), (3, "08", "/sample")):
+            conn.execute("INSERT INTO snapshots VALUES(?,?,?,?,?,?,?,?,?,?)",
+                         (i, f"2026-10-{day}T12:00:00", root, 10, "", 1, "plan", "partial", 1, 0))
+            conn.execute("INSERT INTO volume_stats VALUES(?,?,?)", (i, 1000, 100 - i))
+        conn.executemany("INSERT INTO entries VALUES(?,?,?)", [
+            (1, "/sample", 100), (2, "/sample", 110), (3, "/sample", 150),
+            (1, "/sample/agent", 40), (2, "/sample/agent", 45), (3, "/sample/agent", 80)])
+        conn.executemany("INSERT INTO container_capacity_samples VALUES(?,?,?,?,?,?)", [
+            (1, "container", 1000, 100, "test", "2026-10-01T12:00:00"),
+            (2, "container", 1000, 90, "test", "2026-10-04T12:00:00"),
+            (3, "container", 1000, 40, "test", "2026-10-08T12:00:00")])
+        conn.commit()
+        conn.close()
+        return db
+
     def test_fathom_literal_scope_units_missing_and_readonly(self):
         db = self.make_db()
         before = hashlib.sha256(db.read_bytes()).hexdigest()
@@ -139,6 +168,86 @@ class ProbeChecks(unittest.TestCase):
         self.run_cli("fathom-list", "--db", db, code=2)
         self.run_cli("fathom-list", "--db", self.base / "missing.db", code=2)
         self.assertFalse((self.base / "missing.db").exists())
+
+    def test_history_auto_prefers_matching_window_and_reports_capacity(self):
+        db = self.make_history_db("primary-fathom.db")
+        # A second DB without a comparable pair must remain visible but not become selected.
+        empty = self.base / "empty-fathom.db"
+        conn = sqlite3.connect(empty)
+        conn.executescript("""
+          PRAGMA user_version=9;
+          CREATE TABLE snapshots(id INTEGER PRIMARY KEY, created_at TEXT, root TEXT,
+            min_kb INTEGER, exclude_names TEXT, metric_version INTEGER, plan_id TEXT,
+            collection_status TEXT, denied_count INTEGER, vanished_count INTEGER);
+          CREATE TABLE entries(snapshot_id INTEGER, path TEXT, size_kb INTEGER);
+        """)
+        conn.commit()
+        conn.close()
+        data, _ = self.run_cli("history", "--db", db, "--db", empty,
+                               "--focus", "/sample", "--days", 4)
+        self.assertEqual(data["status"], "history_found")
+        self.assertEqual((data["before"]["id"], data["after"]["id"]), (2, 3))
+        self.assertAlmostEqual(data["actual_days"], 4.0)
+        rows = {r["path"]: r for r in data["rows"]}
+        self.assertEqual(rows["/sample/agent"]["delta_bytes"], 35 * 1024)
+        self.assertEqual(data["volume_stats"]["before"]["free_bytes"], 98)
+        capacity = {r["container_id"]: r for r in data["capacity_deltas"]}["container"]
+        self.assertEqual(capacity["free_bytes_delta"], -50)
+        self.assertEqual(capacity["before_distance_seconds"], 0.0)
+        self.assertEqual(capacity["after_distance_seconds"], 0.0)
+        reports = {r["path"]: r for r in data["discovered_dbs"]}
+        self.assertEqual(reports[str(db)]["status"], "usable")
+        self.assertEqual(reports[str(empty)]["status"], "no_comparable_focus_pair")
+
+    def test_history_db_dir_no_history_and_id_override_validation(self):
+        search = self.base / "search"
+        search.mkdir()
+        db = self.make_history_db("search/fathom.db")
+        data, _ = self.run_cli("history", "--db-dir", search, "--focus", "/sample", "--days", 3)
+        self.assertEqual((data["before"]["id"], data["after"]["id"]), (2, 3))
+        data, _ = self.run_cli("history", "--db", db, "--before", 1, "--after", 3,
+                               "--focus", "/sample")
+        self.assertEqual(data["rows"][0]["delta_bytes"], 50 * 1024)
+        self.run_cli("history", "--db", db, "--before", 3, "--after", 1,
+                     "--focus", "/sample", code=2)
+        no_history, _ = self.run_cli("history", "--db", self.base / "missing.db",
+                                     "--focus", "/sample")
+        self.assertEqual(no_history["status"], "no_history")
+        self.assertEqual(no_history["discovered_dbs"][0]["status"], "unavailable")
+
+    def test_default_discovery_is_bounded_and_uses_fathom_db_env(self):
+        support = self.base / "Application Support"
+        project_db = support / "vendor" / "fathom" / "data" / "fathom.db"
+        project_db.parent.mkdir(parents=True)
+        source = self.make_history_db("source.db")
+        project_db.write_bytes(source.read_bytes())
+        env = dict(os.environ, HOME=str(self.base),
+                   FATHOM_DB=str(self.base / "missing-env-fathom.db"))
+        out = self.base / "history-default.json"
+        command = [sys.executable, str(SCRIPT), "history", "--focus", "/sample",
+                   "--days", "4", "--output", str(out)]
+        proc = subprocess.run(command, capture_output=True, text=True, timeout=20, env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        data = json.loads(out.read_text())
+        reports = data["discovered_dbs"]
+        self.assertIn({"path": str(self.base / "missing-env-fathom.db"),
+                       "status": "unavailable", "reason": "[Errno 2] No such file or directory: '" +
+                       str(self.base / "missing-env-fathom.db") + "'"}, reports)
+        self.assertEqual(data["status"], "history_found")
+        self.assertEqual(data["db"], str(project_db))
+
+    def test_default_discovery_reports_missing_standard_db(self):
+        home = self.base / "empty-home"
+        home.mkdir()
+        out = self.base / "history-standard-missing.json"
+        env = dict(os.environ, HOME=str(home))
+        proc = subprocess.run([sys.executable, str(SCRIPT), "history", "--focus", "/sample",
+                               "--days", "4", "--output", str(out)], capture_output=True,
+                              text=True, timeout=20, env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        data = json.loads(out.read_text())
+        self.assertEqual(data["status"], "no_history")
+        self.assertEqual(data["discovered_dbs"], [])
 
 
 if __name__ == "__main__":
