@@ -1,377 +1,451 @@
 #!/usr/bin/env python3
-"""Daily opportunity discovery for local skills and starred repositories.
-
-The command is deliberately deterministic and offline: it reads the local
-snapshot, local skill documents and recorded feedback, then emits candidates
-for an Agent/proactive scheduler to investigate. It never mutates target
-skills or executes upstream code.
-"""
+"""Prepare current evidence for a scheduled Agent's opportunity review."""
 
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
 
-sys.path.insert(0, str(Path(__file__).parent))
-from opportunity import existing_decisions  # noqa: E402
-from star_query import emit, envelope, parse_dt  # noqa: E402
-from star_tracker import StarTracker  # noqa: E402
+from lockutil import write_lock
+from project_context import default_roots, digest, discover, match_terms, terms_for
+from star_query import emit, envelope, parse_dt
+from star_tracker import StarTracker
+
+REPO_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
-def utcnow() -> datetime:
+def now_utc():
     return datetime.now(timezone.utc)
 
 
-def sha256_file(path: Path) -> Optional[str]:
+def read_json(path, default=None):
+    if not path.exists():
+        return default
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"Expected object: {path.name}")
+    return value
+
+
+def atomic_json(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError:
-        return None
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+        os.replace(name, path)
+    except BaseException:
+        # Only the private temp file created above may be removed; the target is
+        # replaced atomically and is never deleted by this failure cleanup.
+        Path(name).unlink(missing_ok=True)
+        raise
 
 
-def parse_frontmatter(text: str) -> Tuple[str, Optional[dict]]:
-    if not text.startswith("---"):
-        return "", None
-    lines = text.splitlines()
-    try:
-        end = next(i for i in range(2, len(lines)) if lines[i].strip() == "---")
-    except StopIteration:
-        return "", None
-
-    # Avoid requiring PyYAML for this read-only path. The fields used here are
-    # scalar frontmatter values emitted by this repository.
-    metadata: Dict[str, str] = {}
-    for line in lines[1:end]:
-        if ":" not in line or line.startswith((" ", "\t")):
-            continue
-        key, value = line.split(":", 1)
-        metadata[key.strip()] = value.strip().strip('"').strip("'")
-    return "\n".join(lines[end + 1:]), metadata
+def github_get(endpoint, paginate=False, accept="application/vnd.github+json"):
+    command = ["gh", "api", "--method", "GET", "-H", f"Accept: {accept}", endpoint]
+    if paginate:
+        command += ["--paginate", "--slurp"]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=90, check=False)
+    if result.returncode:
+        # Do not echo credential/proxy diagnostics into an analysis package.
+        raise RuntimeError(f"GitHub GET failed: {endpoint} (exit {result.returncode})")
+    if len(result.stdout) > 32_000_000:
+        raise ValueError("GitHub response exceeds 32 MB budget")
+    return json.loads(result.stdout)
 
 
-def task_lines(text: str) -> List[str]:
-    # Task queues contain routine instructions as well as real goals. Use only
-    # explicit goal/gap lines here; richer extraction remains an Agent decision.
-    wanted = ("ready", "in_progress", "缺口", "目标")
-    return [line.strip(" -#[]\t") for line in text.splitlines()
-            if line.strip().startswith(("-", "#")) and any(w in line.lower() for w in wanted)][:20]
-
-
-def git_activity(skill_dir: Path) -> dict:
-    env = dict(os.environ, GIT_OPTIONAL_LOCKS="0")
-    def run(*args: str) -> List[str]:
-        try:
-            proc = subprocess.run(
-                ("git", "-C", str(skill_dir), *args), capture_output=True,
-                text=True, timeout=3, env=env, check=False)
-            return proc.stdout.splitlines() if proc.returncode == 0 else []
-        except (OSError, subprocess.TimeoutExpired):
-            return []
-
-    subjects = run("log", "--since=30.days.ago", "--pretty=%s")
-    files = run("log", "--since=30.days.ago", "--name-only", "--pretty=")
-    return {
-        "recent_commits": len(subjects),
-        "recent_subjects": subjects[:10],
-        "recent_paths": sorted({x for x in files if x})[:30],
-    }
-
-
-@dataclass
-class ProjectTarget:
-    project_id: str
-    skill_path: Path
-    skill_file: Path
-    task_file: Optional[Path]
-    description: str
-    tasks: List[str]
-    source_hashes: Dict[str, str]
-    recent_commits: int
-    recent_subjects: List[str]
-    recent_paths: List[str]
-    discovery_source: str
-
-    def as_profile(self) -> dict:
-        return {
-            "project_id": self.project_id,
-            "origin": "dynamic-skill-scan/1",
-            "description": self.description,
-            "needs": [self.description] + self.tasks[:5],
-            "constraints": [
-                "候选只是待研判信号；必须先核对目标 Skill 当前实现与上游证据",
-                "允许结论为已有等价能力或不适用",
-            ],
-            "tasks": self.tasks,
-            "source_ref": [str(self.skill_file), *([str(self.task_file)] if self.task_file else [])],
-            "hashes": self.source_hashes,
-            "activity": {
-                "recent_commits": self.recent_commits,
-                "recent_subjects": self.recent_subjects,
-                "recent_paths": self.recent_paths,
-            },
-        }
-
-
-def discover_projects(repo_root: Optional[Path] = None, project_id: Optional[str] = None) -> List[ProjectTarget]:
-    root = (repo_root or Path(__file__).resolve().parents[3]).resolve()
-    out: List[ProjectTarget] = []
-    for skill_file in sorted((root / "skills").glob("*/SKILL.md")):
-        ident = skill_file.parent.name
-        if project_id and ident != project_id:
-            continue
-        try:
-            text = skill_file.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        _body, meta = parse_frontmatter(text)
-        if not meta or not meta.get("name") or not meta.get("description"):
-            continue
-
-        task_file = skill_file.parent / "TASKS.md"
-        tasks: List[str] = []
-        hashes: Dict[str, str] = {}
-        if task_file.exists():
-            try:
-                task_text = task_file.read_text(encoding="utf-8")
-                tasks = task_lines(task_text)
-                digest = sha256_file(task_file)
-                if digest:
-                    hashes[str(task_file)] = digest
-            except OSError:
-                task_file = None
-        digest = sha256_file(skill_file)
-        if digest:
-            hashes[str(skill_file)] = digest
-        activity = git_activity(skill_file.parent)
-        out.append(ProjectTarget(
-            project_id=ident,
-            skill_path=skill_file.parent,
-            skill_file=skill_file,
-            task_file=task_file if task_file and task_file.exists() else None,
-            description=meta.get("description", ""),
-            tasks=tasks,
-            source_hashes=hashes,
-            recent_commits=activity["recent_commits"],
-            recent_subjects=activity["recent_subjects"],
-            recent_paths=activity["recent_paths"],
-            discovery_source="skills/*/SKILL.md + TASKS.md + git activity",
-        ))
-    return out
-
-
-def query_terms(target: ProjectTarget) -> List[str]:
-    stop = {"and", "for", "the", "with", "使用", "支持", "以及", "用于", "需要", "用户"}
-    words = re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}", target.description)
-    return list(dict.fromkeys(w.lower() for w in words if w.lower() not in stop))[:12]
-
-
-def match_repo(repo: dict, terms: Iterable[str]) -> List[str]:
-    haystack = " ".join(filter(None, [
-        repo.get("description") or "", repo.get("language") or "",
-        " ".join(repo.get("topics") or []), repo.get("full_name") or "",
-    ])).lower()
-    return [term for term in terms if term and term in haystack]
-
-
-def feedback_state(project_id: str, repo: str) -> dict:
-    prior = existing_decisions(project_id, repo)
-    decisions = [((x.get("decision") or {}).get("status"), x.get("_recorded_at")) for x in prior]
-    rejected = [x for x in decisions if x[0] == "rejected"]
-    open_proposed = [x for x in decisions if x[0] in ("researched", "experiment_proposed")]
-    return {
-        "records": len(prior),
-        "last_decision": decisions[-1][0] if decisions else None,
-        "last_recorded_at": decisions[-1][1] if decisions else None,
-        "suppressed": bool(rejected or open_proposed),
-        "suppression_reason": (
-            "rejected" if rejected else
-            "already-proposed" if open_proposed else
-            None
-        ),
-    }
-
-
-def target_changed(target: ProjectTarget) -> bool:
-    return target.recent_commits > 0
-
-
-def candidate_repo(repo: dict, target: ProjectTarget, reason: str, matched: List[str]) -> dict:
-    return {
-        "project_id": target.project_id,
-        "repo": repo.get("full_name"),
-        "signal": reason,
-        "matched_terms": matched,
-        "starred_at": repo.get("starred_at"),
-        "pushed_at": repo.get("pushed_at"),
-        "updated_at": repo.get("updated_at"),
-        "snapshot_revision": {
-            str(target.skill_file): target.source_hashes.get(str(target.skill_file)),
-            **({str(target.task_file): target.source_hashes[str(target.task_file)]}
-               if target.task_file and str(target.task_file) in target.source_hashes else {}),
-        },
-        "target_recent_commits": target.recent_commits,
-        "target_recent_subjects": target.recent_subjects,
-        "target_needs_sample": target.as_profile()["needs"][:6],
-        "next_action": "核对目标 Skill 当前实现与仓库 README/代码证据，产出 opportunity.py 机会卡",
-    }
-
-
-def load_snapshot() -> Optional[dict]:
+def refresh_snapshot(data_dir, old):
+    login = github_get("user").get("login")
+    if not isinstance(login, str) or not re.fullmatch(r"[A-Za-z0-9-]+", login):
+        raise ValueError("Cannot identify authenticated GitHub account")
+    old_account = (old or {}).get("snapshot_meta", {}).get("account_id")
+    if old_account and old_account.lower() != login.lower():
+        raise ValueError("Snapshot belongs to another account; use a separate --data-dir")
+    pages = github_get("user/starred?per_page=100&sort=created&direction=desc", True,
+                       "application/vnd.github.star+json")
+    if not isinstance(pages, list) or not pages or not all(isinstance(p, list) for p in pages):
+        raise ValueError("Invalid starred pagination response; previous snapshot retained")
+    repos, ids = [], set()
+    for page in pages:
+        for entry in page:
+            repo = entry.get("repo") if isinstance(entry, dict) else None
+            if not isinstance(repo, dict) or not isinstance(repo.get("id"), int) or not REPO_PATTERN.fullmatch(repo.get("full_name", "")):
+                raise ValueError("Malformed starred row; previous snapshot retained")
+            if repo["id"] in ids:
+                raise ValueError("Duplicate repository across pages; retry stable pagination")
+            ids.add(repo["id"])
+            repos.append({**repo, "starred_at": entry.get("starred_at")})
     tracker = StarTracker.__new__(StarTracker)
-    tracker.CACHE_DIR = StarTracker.CACHE_DIR
-    return StarTracker.load_latest(tracker)
+    tracker.CACHE_DIR = data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    tracker.save_latest(repos, fetch_meta={
+        "account_id": login, "complete": True, "failed_pages": [],
+        "fetched_at": now_utc().isoformat(), "starred_at_available": True,
+        "limit_truncated": False,
+    }, base_timestamp=(old or {}).get("timestamp"))
+    return read_json(data_dir / "original_latest.json")
 
 
-def cmd_projects(args) -> int:
-    targets = discover_projects(args.repo_root, args.project)
-    items = [target.as_profile() for target in targets]
-    return emit(envelope(items, coverage={
-        "projects": len(items),
-        "repo_root": str((args.repo_root or Path(__file__).resolve().parents[3]).resolve()),
-    }))
+def repo_revision(repo):
+    return digest({"id": repo.get("id") or repo.get("full_name"),
+                   "pushed_at": repo.get("pushed_at"),
+                   "description": repo.get("description"), "topics": repo.get("topics")})
 
 
-def cmd_auto(args) -> int:
-    snap = load_snapshot()
-    if not snap:
-        return emit(envelope([], errors=["无本地快照，请先运行 --init"]), 1)
+def feedback_index(data_dir):
+    result, warnings = {}, []
+    for path in sorted((data_dir / "feedback").glob("*.json")):
+        try:
+            card = read_json(path)
+            key = (card.get("target", {}).get("project_id"), card.get("signal", {}).get("repo"))
+            if all(key):
+                result.setdefault(key, []).append(card)
+                repo_id = card.get("signal", {}).get("repo_id")
+                if repo_id is not None:
+                    result.setdefault((key[0], f"id:{repo_id}"), []).append(card)
+        except (OSError, ValueError, AttributeError):
+            warnings.append(f"Unreadable feedback: {path.name}")
+    return result, warnings
 
-    targets = discover_projects(args.repo_root, args.project)
-    if args.project and not targets:
-        return emit(envelope([], errors=[f"未发现项目 {args.project} 的 SKILL.md"]), 1)
 
-    now = utcnow()
-    recent_cutoff = now - timedelta(days=args.recent_days)
-    update_cutoff = now - timedelta(days=args.update_days)
-    warnings: List[str] = []
-    if snap.get("snapshot_meta", {}).get("complete") is not True:
-        warnings.append("快照不完整，自动机会可能遗漏")
+def suppression(profile, repo, prior, now):
+    if not prior:
+        return None
+    card = max(prior, key=lambda c: c.get("_recorded_at", ""))
+    decision = card.get("decision") or {}
+    status = decision.get("status")
+    if status not in {"rejected", "deferred", "researched", "experiment_proposed", "tested", "adopted"}:
+        return None
+    recorded = parse_dt(card.get("_recorded_at"))
+    due = parse_dt(decision.get("review_after"))
+    if status == "deferred":
+        due = due or (recorded + timedelta(days=1) if recorded else now)
+        if due <= now:
+            return None
+    target = card.get("target") or {}
+    signal = card.get("signal") or {}
+    old_target = target.get("target_revision")
+    old_repo = signal.get("repo_revision")
+    old_evidence = signal.get("evidence_revision")
+    current_evidence = repo.get("_evidence_revision")
+    if old_evidence and current_evidence and old_evidence != current_evidence:
+        return None
+    changed_at = parse_dt(repo.get("_evidence_changed_at"))
+    if not old_evidence and changed_at and recorded and changed_at > recorded:
+        return None
+    if old_target and old_target != profile["target_revision"]:
+        return None
+    if old_repo and old_repo != repo_revision(repo):
+        return None
+    if recorded and not old_target:
+        changed = parse_dt(profile["activity"].get("latest_at"))
+        if changed and changed > recorded:
+            return None
+    if recorded and not old_repo:
+        pushed = parse_dt(repo.get("pushed_at"))
+        if pushed and pushed > recorded:
+            return None
+    return {"decision": status, "recorded_at": card.get("_recorded_at"),
+            "review_after": due.isoformat() if due else None,
+            "binding": "revision" if old_target and old_repo else "legacy-time-fallback"}
 
-    candidates = []
-    seen = set()
-    suppressed = []
-    for target in targets:
-        terms = query_terms(target)
-        for repo in snap.get("repos", []):
-            matched = match_repo(repo, terms)
-            starred = parse_dt(repo.get("starred_at"))
-            pushed = parse_dt(repo.get("pushed_at"))
+
+def valid_recent(date, cutoff, now):
+    parsed = parse_dt(date)
+    return parsed is not None and cutoff <= parsed <= now
+
+
+def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
+            recent_days=14, update_days=7, show_suppressed=False):
+    candidates, suppressed = [], []
+    indexed_repos = [{**repo, "_search_terms": terms_for(" ".join([
+        repo.get("full_name") or "", repo.get("description") or "",
+        repo.get("description_zh") or "", " ".join(repo.get("topics") or []),
+    ]))} for repo in snapshot.get("repos", [])]
+    for profile in profiles:
+        for repo in indexed_repos:
+            name = repo.get("full_name", "")
+            if not REPO_PATTERN.fullmatch(name):
+                continue
+            hits = match_terms(profile, repo)
+            if not hits:
+                continue
+            primary = match_terms({"search_terms": profile.get("primary_terms", profile["search_terms"])}, repo)
+            if not primary:
+                continue
             reasons = []
-            if starred and starred >= recent_cutoff and matched:
+            if valid_recent(repo.get("starred_at"), now - timedelta(days=recent_days), now):
                 reasons.append("recent_star")
-            if pushed and pushed >= update_cutoff and matched:
-                reasons.append("recent_upstream_update")
-            # A single generic word (e.g. "video") causes many false positives.
-            # Ordinary project matches require two distinct target terms.
-            if not matched or (not reasons and len(matched) < 2):
+            if valid_recent(repo.get("pushed_at"), now - timedelta(days=update_days), now):
+                reasons.append("upstream_activity")
+            prior = feedback.get((profile["project_id"], name), [])
+            if repo.get("id") is not None:
+                prior = prior + feedback.get((profile["project_id"], f"id:{repo['id']}"), [])
+            state = suppression(profile, repo, prior, now)
+            if state and not show_suppressed:
+                suppressed.append({"project_id": profile["project_id"], "repo": name, **state})
                 continue
-            key = (target.project_id, repo.get("full_name"))
-            if key in seen:
-                continue
-            state = feedback_state(target.project_id, repo.get("full_name"))
-            # Suppress an unchanged proposal unless the target changed materially.
-            if state["suppressed"] and not (target_changed(target) or args.show_suppressed):
-                suppressed.append({"project_id": target.project_id, "repo": repo.get("full_name"), **state})
-                continue
-            seen.add(key)
-            candidates.append(candidate_repo(
-                repo, target, "+".join(reasons) if reasons else "project_match",
-                matched,
-            ))
+            fingerprint = digest([profile["target_revision"], repo_revision(repo), profile["project_id"]])
+            candidates.append({
+                "candidate_id": fingerprint[:24], "project_id": profile["project_id"],
+                "repo": name, "repo_id": repo.get("id"), "description": repo.get("description"),
+                "matched_terms": hits, "signals": reasons or ["existing_collection_match"],
+                "primary_matches": primary,
+                "starred_at": repo.get("starred_at"), "pushed_at": repo.get("pushed_at"),
+                "repo_revision": repo_revision(repo), "target_revision": profile["target_revision"],
+                "evidence_revision": repo.get("_evidence_revision"),
+                "target_activity": profile["activity"], "suppression": state,
+                "evidence_status": "not_fetched", "archived": bool(repo.get("is_archived")),
+            })
+    candidates.sort(key=lambda c: (
+        -min(c["target_activity"]["commits"], 10),
+        -len(c["primary_matches"]), -len(c["matched_terms"]),
+        -(int("recent_star" in c["signals"]) + int("upstream_activity" in c["signals"])),
+        c["project_id"], c["repo"]))
+    eligible = len(candidates)
+    selected, counts = [], {}
+    for candidate in candidates:
+        project = candidate["project_id"]
+        if counts.get(project, 0) >= per_project:
+            continue
+        selected.append(candidate)
+        counts[project] = counts.get(project, 0) + 1
+        if len(selected) == limit:
+            break
+    return selected, suppressed, eligible
 
-    candidates.sort(key=lambda x: (
-        0 if "recent_star" in x["signal"] else 1,
-        0 if "recent_upstream_update" in x["signal"] else 1,
-        -len(x["matched_terms"]),
-        -(parse_dt(x.get("starred_at")) or datetime.min.replace(tzinfo=timezone.utc)).timestamp(),
-    ))
-    truncated = len(candidates) > args.limit
-    candidates = candidates[:args.limit]
 
-    generated_at = now.isoformat()
-    run = {
-        "schema_version": "auto-opportunity-run/1",
-        "generated_at": generated_at,
-        "snapshot_id": snap.get("timestamp"),
-        "snapshot_complete": snap.get("snapshot_meta", {}).get("complete"),
-        "projects": [
-            {"project_id": t.project_id, "source_ref": t.as_profile()["source_ref"],
-             "hashes": t.source_hashes, "recent_commits": t.recent_commits}
-            for t in targets
-        ],
-        "candidates": candidates,
-        "suppressed": suppressed,
-        "coverage": {
-            "repos": len(snap.get("repos", [])),
-            "projects": len(targets),
-            "recent_days": args.recent_days,
-            "update_days": args.update_days,
-            "matched": len(candidates) + len(suppressed),
-            "returned": len(candidates),
-            "suppressed": len(suppressed),
-            "truncated": truncated,
-        },
+def fetch_evidence(candidate, data_dir, prior=None):
+    name = candidate["repo"]
+    if not REPO_PATTERN.fullmatch(name):
+        raise ValueError("Invalid owner/repo")
+    record = {"repo": name, "repo_id": candidate.get("repo_id"),
+              "repo_revision": candidate["repo_revision"], "fetched_at": now_utc().isoformat(),
+              "status": "complete", "errors": [], "previous": {
+                  "head_sha": (prior or {}).get("head_sha"),
+                  "release": (prior or {}).get("release"),
+                  "readme": (prior or {}).get("readme"),
+              }}
+    for kind, endpoint in (("readme", f"repos/{name}/readme"),
+                           ("releases", f"repos/{name}/releases?per_page=1"),
+                           ("commits", f"repos/{name}/commits?per_page=5")):
+        try:
+            value = github_get(endpoint)
+            if kind == "readme":
+                content = base64.b64decode(value.get("content", ""), validate=False).decode("utf-8", "replace")
+                record["readme"] = {"blob_sha": value.get("sha"), "url": value.get("html_url"),
+                                     "text": content[:6000], "truncated": len(content) > 6000}
+            elif kind == "releases":
+                release = value[0] if value else None
+                record["release"] = ({"tag": release.get("tag_name"), "url": release.get("html_url"),
+                    "published_at": release.get("published_at"), "body": (release.get("body") or "")[:8000]} if release else None)
+            else:
+                record["commits"] = [{"sha": row.get("sha"), "url": row.get("html_url"),
+                                      "message": row.get("commit", {}).get("message", "")[:1500]}
+                                     for row in value[:5]]
+                record["head_sha"] = value[0].get("sha") if value else None
+        except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired, TypeError, KeyError) as exc:
+            record["status"] = "partial"
+            record["errors"].append(f"{kind}: {type(exc).__name__}")
+    record["change_summary"] = {
+        "baseline_available": bool(prior),
+        "head_changed": (record.get("head_sha") != prior.get("head_sha")) if prior else None,
+        "release_changed": (record.get("release") != prior.get("release")) if prior else None,
+        "readme_changed": ((record.get("readme") or {}).get("blob_sha")
+                           != (prior.get("readme") or {}).get("blob_sha")) if prior else None,
+        "scope": "Latest release and five commit messages; not a complete source diff or proof of value",
     }
-    if args.write:
-        out_dir = StarTracker.CACHE_DIR / "auto-opportunities"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        stamp = now.strftime("%Y%m%d_%H%M%S")
-        out_path = out_dir / f"{stamp}.json"
-        seq = 0
-        while out_path.exists():
-            seq += 1
-            out_path = out_dir / f"{stamp}_{seq}.json"
-        out_path.write_text(json.dumps(run, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    else:
-        out_path = None
+    if record["status"] == "complete":
+        record["content_revision"] = evidence_revision(record)
+        before = evidence_revision(prior) if prior else None
+        record["changed_at"] = (record["fetched_at"] if before != record["content_revision"]
+                                else (prior or {}).get("changed_at", record["fetched_at"]))
+    path = data_dir / "auto-opportunities" / "evidence" / (name.replace("/", "__") + ".json")
+    if record["status"] == "complete":
+        atomic_json(path, record)
+    # A partial refresh never destroys the last complete evidence.
+    return record
 
-    result = envelope(candidates, snapshot=snap, coverage=run["coverage"], warnings=warnings, extra={
-        "projects": run["projects"],
-        "suppressed": suppressed,
-        "run_path": str(out_path) if out_path else None,
-        "usage_note": "结果是待研判候选，不是适用性结论；须核对目标实现与上游证据后用 opportunity.py record。",
+
+def evidence_revision(record):
+    record = record or {}
+    return digest({"head": record.get("head_sha"), "release": record.get("release"),
+                   "readme": (record.get("readme") or {}).get("blob_sha")})
+
+
+def evidence_cache(data_dir, name):
+    return data_dir / "auto-opportunities/evidence" / (name.replace("/", "__") + ".json")
+
+
+def attach_cached_revisions(snapshot, data_dir):
+    rows = []
+    for repo in snapshot.get("repos", []):
+        name = repo.get("full_name", "")
+        cached = read_json(evidence_cache(data_dir, name)) if REPO_PATTERN.fullmatch(name) else None
+        if cached and cached.get("status") == "complete":
+            repo = {**repo, "_evidence_revision": evidence_revision(cached),
+                    "_evidence_changed_at": cached.get("changed_at")}
+        rows.append(repo)
+    return {**snapshot, "repos": rows}
+
+
+def probe_watched(snapshot, suppressed, data_dir, budget):
+    """Rotate a bounded evidence watch before applying feedback suppression."""
+    names = {s["repo"] for s in suppressed}
+    directory = data_dir / "auto-opportunities"
+    state = read_json(directory / "watch.json", {}) or {}
+    rows = {r.get("full_name"): r for r in snapshot.get("repos", [])}
+    selected = sorted(names, key=lambda n: (state.get(n, {}).get("checked_at", ""), n))[:budget]
+    results, updates = {}, {}
+    for name in selected:
+        row = rows[name]
+        candidate = {"repo": name, "repo_id": row.get("id"), "repo_revision": repo_revision(row)}
+        value = fetch_evidence(candidate, data_dir, read_json(evidence_cache(data_dir, name)))
+        results[name] = value
+        updates[name] = {"checked_at": now_utc().isoformat(), "status": value["status"]}
+    if updates:
+        with write_lock(directory):
+            current = read_json(directory / "watch.json", {}) or {}
+            for name, value in updates.items():
+                if value["checked_at"] >= current.get(name, {}).get("checked_at", ""):
+                    current[name] = value
+            atomic_json(directory / "watch.json", current)
+    return results
+
+
+def roots_for(args):
+    if args.skills_root:
+        return args.skills_root
+    if args.repo_root:
+        return [args.repo_root / "skills"]
+    return default_roots()
+
+
+def cmd_projects(args):
+    profiles, warnings = discover(roots_for(args), args.project)
+    return emit(envelope(profiles, coverage={"projects": len(profiles), "roots": [str(p) for p in roots_for(args)]},
+                         warnings=warnings, extra={"status": "partial" if warnings else "ok"}))
+
+
+def cmd_auto(args):
+    data_dir = args.data_dir.expanduser().resolve() if args.data_dir else StarTracker.CACHE_DIR
+    snapshot = read_json(data_dir / "original_latest.json")
+    if args.refresh:
+        snapshot = refresh_snapshot(data_dir, snapshot)
+    if not snapshot:
+        return emit(envelope([], errors=["No snapshot; use auto-discover --refresh with authenticated gh"]), 1)
+    profiles, warnings = discover(roots_for(args), args.project)
+    if not profiles:
+        return emit(envelope([], snapshot=snapshot, errors=["No readable target skills"], warnings=warnings), 1)
+    feedback, feedback_warnings = feedback_index(data_dir)
+    warnings += feedback_warnings
+    current = now_utc()
+    timestamp = parse_dt(snapshot.get("snapshot_meta", {}).get("fetched_at") or snapshot.get("timestamp"))
+    if not timestamp or (current - timestamp).total_seconds() > 36 * 3600:
+        warnings.append("Snapshot older than 36 hours or unknown; refresh before judging recent upstream changes")
+    snapshot = attach_cached_revisions(snapshot, data_dir)
+    candidates, suppressed, eligible = prepare(snapshot, profiles, feedback, current,
+        args.limit, args.per_project, args.recent_days, args.update_days, args.show_suppressed)
+    unique = {}
+    if args.fetch_evidence and suppressed:
+        # Reserve some capacity for new candidates while rotating prior decisions.
+        watch_budget = args.evidence_limit if not candidates else max(1, args.evidence_limit // 2)
+        unique.update(probe_watched(snapshot, suppressed, data_dir, watch_budget))
+        snapshot = attach_cached_revisions(snapshot, data_dir)
+        candidates, suppressed, eligible = prepare(snapshot, profiles, feedback, current,
+            args.limit, args.per_project, args.recent_days, args.update_days, args.show_suppressed)
+        for name, value in unique.items():
+            if value["status"] != "complete":
+                warnings.append(f"Watched evidence incomplete: {name}; previous complete evidence retained")
+    for candidate in candidates:
+        name = candidate["repo"]
+        if name in unique:
+            candidate["upstream_evidence"] = unique[name]
+            candidate["evidence_status"] = unique[name]["status"]
+            if unique[name]["status"] == "complete":
+                candidate["evidence_revision"] = evidence_revision(unique[name])
+            continue
+        cached = read_json(data_dir / "auto-opportunities/evidence" / (name.replace("/", "__") + ".json"))
+        if args.fetch_evidence and len(unique) < args.evidence_limit:
+            value = fetch_evidence(candidate, data_dir, cached)
+            unique[name] = value
+            candidate["upstream_evidence"] = value
+            candidate["evidence_status"] = value["status"]
+            if value["status"] == "complete":
+                candidate["evidence_revision"] = evidence_revision(value)
+        elif cached:
+            candidate["upstream_evidence"] = cached
+            same = cached.get("repo_revision") == candidate["repo_revision"]
+            candidate["evidence_status"] = "cached" if same else "stale"
+    selected_ids = {c["project_id"] for c in candidates}
+    result = envelope(candidates, snapshot=snapshot, coverage={
+        "projects": len(profiles), "repos": len(snapshot.get("repos", [])),
+        "eligible": eligible, "returned": len(candidates), "suppressed": len(suppressed),
+        "truncated": eligible > len(candidates), "evidence_fetched_repos": len(unique),
+        "snapshot_age_hours": round((current-timestamp).total_seconds()/3600, 1) if timestamp else None,
+    }, warnings=warnings, extra={
+        "projects": [p for p in profiles if p["project_id"] in selected_ids],
+        "suppressed": suppressed, "run_path": None,
+        "review_required": True,
+        "usage_note": "Read current target implementation and upstream evidence; keep at most three valuable opportunities. Record real decisions with target_revision, repo_revision and evidence_revision via opportunity.py. No change can legitimately yield no recommendation.",
     })
+    if warnings or any(c["evidence_status"] in ("partial", "stale") for c in candidates):
+        result["status"] = "partial"
+    if args.write:
+        directory = data_dir / "auto-opportunities/runs"
+        directory.mkdir(parents=True, exist_ok=True)
+        with write_lock(directory):
+            path = directory / (current.strftime("%Y%m%dT%H%M%S.%fZ") + ".json")
+            result["run_path"] = str(path)
+            atomic_json(path, result)
     return emit(result)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="自动发现本地 Skill 与 GitHub Star 的潜在机会（只读；--write 才落盘运行包）")
+def positive(value):
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be positive")
+    return n
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Dynamic local targets and evidence for scheduled opportunity review")
     sub = parser.add_subparsers(dest="command", required=True)
-
-    p = sub.add_parser("projects", help="动态发现本地 Skill 项目目标")
-    p.add_argument("--project", help="只返回指定项目")
-    p.add_argument("--repo-root", type=Path, help="monorepo 根（默认按脚本位置推导）")
-    p.set_defaults(func=cmd_projects)
-
-    p = sub.add_parser("auto-discover", help="产出每日机会候选队列")
-    p.add_argument("--project", help="只分析指定项目")
-    p.add_argument("--recent-days", type=int, default=14, help="新 Star 窗口（默认 14 天）")
-    p.add_argument("--update-days", type=int, default=7, help="上游 pushed_at 窗口（默认 7 天）")
-    p.add_argument("--limit", type=int, default=50, help="返回候选上限（默认 50）")
-    p.add_argument("--show-suppressed", action="store_true", help="包含已拒绝/已提议候选")
-    p.add_argument("--repo-root", type=Path, help="monorepo 根（默认按脚本位置推导）")
-    p.add_argument("--write", action="store_true", help="写入 output/auto-opportunities/（唯一本地写）")
-    p.set_defaults(func=cmd_auto)
-
+    for command, function in (("projects", cmd_projects), ("auto-discover", cmd_auto)):
+        p = sub.add_parser(command)
+        p.add_argument("--project")
+        p.add_argument("--repo-root", type=Path)
+        p.add_argument("--skills-root", action="append", type=Path, help="Repeat for additional installed suites; no per-project registration")
+        p.add_argument("--data-dir", type=Path, help="Private runtime state directory")
+        p.set_defaults(func=function)
+        if command == "auto-discover":
+            p.add_argument("--recent-days", type=positive, default=14)
+            p.add_argument("--update-days", type=positive, default=7)
+            p.add_argument("--limit", type=positive, default=12)
+            p.add_argument("--per-project", type=positive, default=2)
+            p.add_argument("--show-suppressed", action="store_true")
+            p.add_argument("--refresh", action="store_true", help="Explicit GET via gh; atomically commit only a full same-account snapshot")
+            p.add_argument("--fetch-evidence", action="store_true", help="Explicit bounded README/release/commit GETs")
+            p.add_argument("--evidence-limit", type=positive, default=4)
+            p.add_argument("--write", action="store_true")
     args = parser.parse_args()
     try:
         return args.func(args)
     except BrokenPipeError:
         return 0
-    except Exception as exc:
-        print(f"自动发现失败: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return emit(envelope([], errors=[f"{type(exc).__name__}: {exc}"]), 1)
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        return emit(envelope([], errors=[str(exc)]), 1)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

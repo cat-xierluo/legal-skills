@@ -423,11 +423,31 @@ def cmd_match(args) -> int:
 def _load_project_profile(project_id: Optional[str]) -> Optional[Dict]:
     if not project_id:
         return None
+    from project_context import discover, terms_for
+    discovered, _warnings = discover(project=project_id)
+    if len(discovered) > 1:
+        raise ValueError(f"项目名 {project_id} 对应多个安装源，请使用目标目录绝对路径")
+    dynamic = discovered[0] if discovered else None
     path = StarTracker.CACHE_DIR / "projects" / f"{project_id}.json"
-    if not path.exists():
-        return None
+    # An absolute target path is not a profile-file name.
+    if Path(project_id).name != project_id or not path.exists():
+        return dynamic
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        override = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(override, dict):
+            raise ValueError("profile must be an object")
+        if dynamic:
+            # Live evidence remains fresh. Explicit user constraints supplement
+            # it; stale explicit references still go through the existing gate.
+            merged = {**dynamic, **override}
+            merged["dynamic_source"] = {
+                "source_ref": dynamic["source_ref"], "hashes": dynamic["hashes"],
+                "target_revision": dynamic["target_revision"],
+            }
+            merged["search_terms"] = sorted(terms_for(" ".join(
+                merged.get("needs", []) + merged.get("capabilities", []))))
+            return merged
+        return override
     except Exception as e:
         warn(f"项目配置读取失败 {path}: {e}")
         return None
@@ -579,8 +599,9 @@ def cmd_research(args) -> int:
     profile = _load_project_profile(args.project)
     if profile is None:
         return emit(envelope([], snapshot=snap,
-                             errors=[f"项目 {args.project} 未登记：请先在 output/projects/{args.project}.json "
-                                     f"登记目标需求（capabilities/needs/constraints）"]), 1)
+                             errors=[f"未在已安装 Skill 或同仓目录发现项目 {args.project}；"
+                                     f"也可在 output/projects/{args.project}.json "
+                                     f"登记仓库外目标需求（capabilities/needs/constraints）"]), 1)
 
     # R5/J2：profile 若声明了源引用（source_ref/paths）+ 哈希，必须仍有效——
     # 上游反例：引用 /definitely/missing 且哈希为零，research 仍返回 status=ok。
@@ -592,7 +613,8 @@ def cmd_research(args) -> int:
 
     # 用项目需求做召回（复用 match 逻辑）
     needs = profile.get("needs", [])
-    query = " ".join(needs) if needs else " ".join(profile.get("capabilities", []))
+    query = (" ".join(profile["search_terms"]) if profile.get("search_terms")
+             else " ".join(needs) if needs else " ".join(profile.get("capabilities", [])))
     if not query:
         return emit(envelope([], snapshot=snap,
                              errors=["项目配置缺 needs/capabilities，无法召回"]), 1)
@@ -688,11 +710,17 @@ def main() -> int:
     p.set_defaults(func=cmd_evidence_fetch)
 
     p = sub.add_parser("research", help="组装供 Agent 分析的最小候选+证据包")
-    p.add_argument("--project", required=True, help="项目 ID（必须已登记）")
+    p.add_argument("--project", required=True, help="已安装 Skill 名称/目录，或可选项目 profile ID")
     p.add_argument("--limit", type=int, default=5, help="候选上限（默认 5）")
     p.set_defaults(func=cmd_research)
 
+    for command in sub.choices.values():
+        command.add_argument("--data-dir", type=Path, help="私有运行目录（默认兼容 output/）")
     args = parser.parse_args()
+    if args.data_dir:
+        StarTracker.CACHE_DIR = args.data_dir.expanduser().resolve()
+        StarTracker.CONFIG_DIR = StarTracker.CACHE_DIR
+        StarTracker.CATEGORIES_FILE = StarTracker.CACHE_DIR / "categories.yaml"
     try:
         return args.func(args)
     except BrokenPipeError:

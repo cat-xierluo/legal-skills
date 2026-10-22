@@ -493,7 +493,11 @@ def main() -> int:
     p.add_argument("--project", required=True, help="项目 ID")
     p.set_defaults(func=cmd_suppress)
 
+    for command in sub.choices.values():
+        command.add_argument("--data-dir", type=Path, help="私有运行目录（与自动发现使用同一个目录）")
     args = parser.parse_args()
+    if args.data_dir:
+        StarTracker.CACHE_DIR = args.data_dir.expanduser().resolve()
     try:
         return args.func(args)
     except BrokenPipeError:
