@@ -4,6 +4,19 @@
 
 ---
 
+## [0.10.0] - 2026-10-22
+
+### 新增
+
+- **自动项目发现与每日机会队列**：新增 `scripts/auto_discover.py`。`projects` 动态扫描同仓 `skills/*/SKILL.md`、本地 `TASKS.md` 与近 30 天提交，无需为每个 Skill 手工维护 `output/projects/*.json`；`auto-discover --write` 合并“新 Star + 仓库近期 pushed_at + 项目语义匹配”三类信号，产出待研判候选队列和源文件哈希，供定时任务或 `proactive-review` 消费。候选复用 `output/feedback/`：同项目同仓库已拒绝/已提议且目标无新提交时默认抑制，目标需求或活跃状态变化后重新出现
+- **自动化边界**：自动发现默认只读，`--write` 仅落盘 `output/auto-opportunities/`；不调用模型、不修改目标 Skill、不自动执行上游代码。上游证据仍需显式 `evidence-fetch`，结论仍需 `opportunity.py record` 状态机
+
+### 技术优化
+
+- 新增离线回归 `tests/test_auto_discover.py`：覆盖动态项目发现、部分快照警示、未知 Star 时间、近期更新、语义匹配防误召回、反馈抑制与目标变化重开、显式落盘、缺快照失败、截断排序；14 用例通过，既有批次 A/B 共 190 用例无回归
+
+---
+
 ## [0.9.0] - 2026-10-16
 
 ### 新增（B 单权威写入口协议：R9 收敛后的架构收口，双仓同步 Hermes star-board 0.8.0）

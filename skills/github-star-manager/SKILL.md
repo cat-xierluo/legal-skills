@@ -2,9 +2,9 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.9.0"
+version: "0.10.0"
 license: MIT
-description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
+description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star 和 Dashboard。不要用于单个未知仓库的一次性深度研究。
 ---
 
 # GitHub Star 管理器 (GitHub Star Manager)
@@ -254,6 +254,23 @@ python scripts/star_query.py evidence-fetch --repo owner/name
 python scripts/star_query.py research --project myproj --limit 5
 ```
 
+### 自动项目发现与每日机会队列（无需手工登记项目）
+
+`scripts/auto_discover.py` 动态读取同仓 `skills/*/SKILL.md`、本地 `TASKS.md` 和近 30 天提交，把活跃 Skill 作为目标项目；再用项目描述、目标/缺口行与收藏仓库描述、topics、语言做召回。`auto-discover` 会合并三类信号：新收藏、仓库近期 `pushed_at`、项目语义匹配，并按 `output/feedback/` 中已拒绝/已提议的机会抑制重复推荐。目标 Skill 有新提交时允许重新评估。
+
+```bash
+# 查看动态发现的项目目标（只读）
+python scripts/auto_discover.py projects
+
+# 每日候选队列：只读输出 JSON；不加 --write 不落盘
+python scripts/auto_discover.py auto-discover --recent-days 14 --update-days 7 --limit 50
+
+# 定时任务建议显式落盘运行包，交给 Agent/proactive-review 逐项研判
+python scripts/auto_discover.py auto-discover --write --limit 50
+```
+
+产物语义：`signal` 是待核查线索，不是适用性结论；`matched_terms` 只代表召回命中；`target_recent_*` 和源文件哈希用于解释“为什么现在重新出现”。上游 README/代码仍需用 `evidence-fetch` 取证并核对目标实现，最后经 `opportunity.py record` 写入 researched/rejected/deferred 等反馈。定时器只负责触发本命令和后续 Agent 研判，本命令不自动调用模型、不修改目标 Skill、不执行上游仓库代码。
+
 **evidence 证据缓存**：`evidence-fetch` 显式联网取证（与只读查询分离，审计 §3「取证与查询分离」），写入 `output/evidence/<owner>__<repo>/`（meta.json + readme.md），README 记录 blob sha 作为证据锚点、原文权威不翻译；`evidence` 只读缓存导出，含 README 摘录、repo 元数据、最新 Release、抓取时间与新鲜度（`--max-age-days` 过期阈值，过期标 stale 并建议重新取证）。
 
 **分类匹配统一**：`common.match_categories` 是唯一评分实现（关键词命中×3 + 语言精确 +2 + topic 精确 +2）——在线导出（单分类=多标签首个）与 quick_export（多标签）共用（收敛审计「分类/导出分叉」）。
@@ -338,4 +355,4 @@ python scripts/opportunity.py suppress --repo owner/name --project myproj  # 查
 ## 参考文档
 
 - [skill-lint 技能开发规范](../skill-lint/references/skill-dev-guide.md) - 技能开发指南（唯一维护源）
-- [AGENTS.md](../../../AGENTS.md) - 项目协作规范
+- [AGENTS.md](../../AGENTS.md) - 项目协作规范
