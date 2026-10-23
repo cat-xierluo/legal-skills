@@ -4,6 +4,18 @@
 
 ---
 
+## [0.11.0] - 2026-10-23
+
+### 新增
+
+- **重点项目画像**：新增 `repository_profile.py profile`，用 GitHub API 有界读取元数据、递归树、README、Skill 单元和依赖声明，识别仓库形态、能力线索、媒体/代码比例、许可证风险，并按领域概念匹配本地 Skill。API 失败保留上一次完整画像，树截断和取样边界显式可见。
+- **重点仓库 focus**：支持 add/list/remove 少量重点仓库，记录关注原因；不把用户套件退回逐项目手工登记。
+- **有界源码包**：显式 create/status/update 固定 commit 的 depth-1 blob-filtered sparse checkout。create 先按 Git tree 估算所选 blob 大小并拒绝超预算，status 只读报告远端差异，update 拒绝脏现场并保留 previous_commit。不安装依赖、不执行上游 setup、不复制资产进公开仓库。
+
+### 验证边界
+
+- 真实 `lemomo-ai/lemo-opuscar` API 画像确认其为 Skill-backed runtime/repository，包含 2 个 Skill 启动文档、966 个代码/文档文件、402 个媒体资产；本地优先匹配 legal-video、code-video、voice-craft、code-livephoto 等。真实稀疏包按实现路径取样约 0.5MB Git blob、本地约 2.4MB，未执行其代码。直接生产采用仍是 `needs_review`，需一个有界样例与资产许可核查。
+
 ## [0.10.0] - 2026-10-22
 
 ### 新增

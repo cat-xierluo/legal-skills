@@ -50,6 +50,10 @@ python scripts/opportunity.py record --input /private/path/card.json \
 
 机会卡是候选与判断记录，不替代目标 Skill 的 TASKS。需要正式实施时按原授权交给既有规划流程；不因发现器运行而自动修改所有目标项目。
 
+## 重点项目升级路径
+
+每日候选或用户点名的仓库需要更深判断时，先转用 [重点项目画像](repository-profiles.md) 的 API 画像，而不是放宽每日取证预算。画像确认其为 Skill-backed runtime、多个本地 Skill 存在概念交集、或需要核源码/许可细节时，才登记 focus 并创建有界源码包。无变化的重点项目仍按反馈抑制；`pushed_at` 只触发画像更新，源代码未检查前不能宣称新价值。
+
 ## 宿主调度提示
 
 本 Skill 不启动常驻线程。以下是可给已有定时 Agent 的提示模板；安装或生成模板不代表已启用：
