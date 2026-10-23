@@ -71,7 +71,7 @@ class RepositoryProfileTests(unittest.TestCase):
         dependency = {"path": "package.json", "sha": "dep-sha", "encoding": "base64",
                       "content": "eyJkZXBlbmRlbmNpZXMiOnsibW92aWQiOiIxIn19"}
         with patch.object(rp, "github_get", side_effect=[
-                meta(), branch(), tree(paths), readme, skill, dependency]), patch.object(rp, "now_utc", return_value=__import__("datetime").datetime(2026,10,23,tzinfo=__import__("datetime").timezone.utc)):
+                meta(), branch(), tree(paths), readme, skill, dependency, []]), patch.object(rp, "now_utc", return_value=__import__("datetime").datetime(2026,10,23,tzinfo=__import__("datetime").timezone.utc)):
             profile, warnings = rp.build_profile("owner/repo", self.data, [self.skills])
         self.assertEqual(profile["status"], "complete")
         self.assertEqual(profile["repository_kind_inferred"], "skill-backed runtime/repository")
@@ -114,7 +114,7 @@ class RepositoryProfileTests(unittest.TestCase):
         skill = {"path": "plugin/skills/demo/SKILL.md", "sha": "skill", "encoding": "none",
                  "text": "---\nname: demo\ndescription: code video styles\n---\n"}
         dependency = {"path": "package.json", "sha": "dep", "encoding": "none", "text": "{}"}
-        with patch.object(rp, "github_get", side_effect=[meta(), branch(), tree(paths), readme, skill, dependency]):
+        with patch.object(rp, "github_get", side_effect=[meta(), branch(), tree(paths), readme, skill, dependency, []]):
             profile, _ = rp.build_profile("owner/repo", self.data, [self.skills])
         self.assertEqual(profile["source_package"]["recommended_strategy"].split(";")[0], "existing-local-snapshot")
         self.assertEqual(profile["local_snapshots"][0]["catalog_commit"], "bbbbbbb")
@@ -146,7 +146,7 @@ class RepositoryProfileTests(unittest.TestCase):
         paths = ["README.md"] + [f"plugin/skills/{i}/SKILL.md" for i in range(5)]
         row = {"sha": "sha", "encoding": "none", "text": "---\nname: demo\ndescription: demo\n---\n"}
         with patch.object(rp, "github_get", side_effect=[meta(), branch(), {"truncated": True, "tree": [
-                {"path": path, "type": "blob"} for path in paths]}, row, row] + [row] * 4):
+                {"path": path, "type": "blob"} for path in paths]}, row] + [row] * 4 + [[]]):
             profile, warnings = rp.build_profile("owner/repo", self.data, [self.skills])
         self.assertEqual(profile["status"], "partial")
         self.assertEqual(len(profile["skill_units"]), 4)
@@ -165,7 +165,7 @@ class RepositoryProfileTests(unittest.TestCase):
         skill = {"path": "plugin/skills/demo/SKILL.md", "sha": "skill", "encoding": "none",
                  "text": "---\nname: demo\ndescription: short film production\n---\n"}
         dependency = {"path": "package.json", "sha": "dep", "encoding": "none", "text": "{}"}
-        with patch.object(rp, "github_get", side_effect=[meta(), branch(), tree(paths), readme, skill, dependency]):
+        with patch.object(rp, "github_get", side_effect=[meta(), branch(), tree(paths), readme, skill, dependency, []]):
             profile, _ = rp.build_profile("owner/repo", self.data, [self.skills])
         row = profile["local_matches"][0]
         self.assertTrue(row["exclusions"], profile["local_matches"])
@@ -181,6 +181,42 @@ class RepositoryProfileTests(unittest.TestCase):
         self.assertEqual(listed["coverage"]["repositories"], 1)
         _, removed = capture(rp.cmd_focus, SimpleNamespace(action="remove", repo="owner/repo", reason=None, data_dir=self.data))
         self.assertEqual(removed["coverage"]["repositories"], 0)
+
+    def test_profile_and_daily_bind_same_release_content_revision(self):
+        readme = {"path": "README.md", "sha": "readme-sha",
+                  "encoding": "none", "text": "video timeline"}
+        release = [{"tag_name": "v2", "body": "New caption feature",
+                    "published_at": "2026-10-23T00:00:00Z", "html_url": "https://example.test/v2"}]
+        with patch.object(rp, "github_get", side_effect=[
+                meta(), branch(), tree(["README.md"]), readme, release]):
+            profile, _ = rp.build_profile("owner/repo", self.data, [self.skills])
+        import auto_discover as ad
+        daily = {"head_sha": branch()["commit"]["sha"], "readme": {"blob_sha": "readme-sha"},
+                 "release": ad.release_record(release)}
+        self.assertEqual(profile["evidence_revision"], ad.evidence_revision(daily))
+        self.assertTrue(profile["evidence_revision_complete"])
+        self.assertEqual(profile["repo_revision"], ad.repo_revision(meta()))
+
+    def test_scope_warning_uses_actual_upstream_and_same_commit_is_current(self):
+        directory = self.skills / "video-skill"
+        (directory / "SKILL.md").write_text(
+            "---\nname: video-skill\ndescription: 视频制作。不要用于法律检索。\n---\n", encoding="utf-8")
+        matches, _ = rp.local_matches("owner/repo", "video timeline", [], [self.skills])
+        self.assertEqual(matches[0]["scope_conflicts"], [])
+        self.assertEqual(rp.compare_snapshot_commit("a" * 40, "a" * 40), "same")
+
+    def test_reference_manifest_precedes_catalog_without_git_metadata(self):
+        library = self.skills / "video-skill" / "reference-library"
+        (library / "sources" / "owner--repo").mkdir(parents=True)
+        (library / "manifests").mkdir()
+        (library / "README.md").write_text("| [source](sources/owner--repo/) | `bbbbbbb` |\n")
+        manifest = library / "manifests" / "owner--repo.json"
+        manifest.write_text(json.dumps({"repo": "owner/repo", "commit": "a" * 40}))
+        rows = rp.local_reference_snapshots("owner/repo", [self.skills])
+        self.assertEqual(rows[0]["commit"], "a" * 40)
+        self.assertEqual(rows[0]["manifest_path"], str(manifest))
+        self.assertEqual(rows[0]["manifest_status"], "read")
+        self.assertIsNone(rows[0]["git_commit"])
 
     def test_non_snapshot_envelope_and_error_envelope_are_explicit(self):
         _, value = capture(rp.cmd_focus, SimpleNamespace(action="list", repo=None, reason=None,
@@ -206,7 +242,7 @@ class RepositoryProfileTests(unittest.TestCase):
         readme = {"path": "README.md", "sha": "sha", "encoding": "none", "text": "video"}
         with patch.object(rp, "github_get", side_effect=[meta_value, branch_value,
                 {"truncated": False, "tree": [{"path": path, "type": "blob"} for path in paths]},
-                readme]):
+                readme, []]):
             profile = rp.build_profile("owner/repo", self.data, [self.skills])[0]
         self.assertEqual(len(profile["license_assessment"]["license_paths"]), 20)
         self.assertTrue(profile["license_assessment"]["license_paths_truncated"])

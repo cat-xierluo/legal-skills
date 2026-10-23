@@ -10,7 +10,7 @@ python scripts/repository_profile.py profile owner/name \
   --skills-root ~/.codex/skills
 ```
 
-画像只做 GitHub GET：仓库元数据、递归树、README、最多 4 个 `SKILL.md` 和最多 5 个依赖声明。它输出 Skill 单元、运行时代码/媒体/资产比例、能力线索、许可证风险、本地 Skill 概念匹配、本地已有快照和源码包建议。树截断、读取失败、超过取样上限都会显式保留；API 失败不覆盖上一次完整画像。
+画像只做 GitHub GET：仓库元数据、递归树、README、最新 Release、最多 4 个 `SKILL.md` 和最多 5 个依赖声明。它输出 Skill 单元、运行时代码/媒体/资产比例、能力线索、许可证风险、本地 Skill 概念匹配、本地已有快照和源码包建议。树截断、读取失败、超过取样上限都会显式保留；API 失败不覆盖上一次完整画像。与每日链使用相同 Release 格式；`evidence_revision_complete=false` 的部分画像不能当作完整证据修订。
 
 能力标签来自 README、描述、topics、依赖与 Skill 描述，目录名不单独当作能力证据。画像不包含任何仓库专属的预设结论；四类候选结论必须由 Agent 在读完上游契约和本地等价物后给出。本地匹配按既有领域概念过滤，只用于决定优先阅读顺序，不是适用性结论。画像会给出四类候选结论：上游能力包、生产后端/风格库、只吸收部分方法、不适用或有风险；真正落结论前必须核本地 Skill 的输出契约、上游样例、资产许可和依赖体量。
 
@@ -24,11 +24,11 @@ python scripts/repository_profile.py focus remove owner/name --data-dir ...
 
 focus 是少量重点仓库的人工清单，不是目标 Skill 登记表，也不会替代动态扫描。添加原因只说明为什么值得反复看。
 
-登记后该仓库进入每日固定通道：`auto-discover` 每轮都会检查它，即使描述与本地目标毫无关键词重合；它优先获得取证预算，并在 `focus_deltas` 中报告"这次到底变了什么"（HEAD、Release、README、提交摘要）。`affected_targets` 列出可能受影响的本地组件，组件自己声明的排除条款若与上游能力概念冲突，会标为 `conflicts_with_stated_scope`——用于提前预警，不代表已经构成结论。
+登记后该仓库在每日 `focus_deltas` 中保留检查汇总，即使没有组件匹配；取证仍按总预算和轮巡分配，未轮到明确显示。focus 只影响优先级，普通收藏同样自动轮巡。具体机会始终绑定组件而非 `"*"`；组件声明的排除条款与该上游实际相关能力冲突时才标 `conflicts_with_stated_scope`，用于阅读预警。字段与覆盖边界见[每日流程](daily-opportunities.md)。
 
 ## 本地已有快照
 
-画像会扫描已装套件的 `reference-library/sources/<owner>--<repo>/`，命中时把 `source_package.recommended_strategy` 改为 `existing-local-snapshot`，并给出快照路径、固定 commit 与它和上游 head 的比较结果。此时先判断"更新既有快照"还是"只读比对"，不要重复克隆同一份源码。`recommended_paths` 在已有快照时为空。
+画像会扫描已装套件的 `reference-library/sources/<owner>--<repo>/`，优先读相邻 `manifests/` 的仓库身份和固定 commit，辅以 Git/README 目录表。命中时把 `source_package.recommended_strategy` 改为 `existing-local-snapshot`，并给出快照路径、固定 commit 与上游 head 的比较。参照库由所属组件管理逐文件哈希、省略清单和研究结论，GSM 不用通用 `source-package update` 操作它，也不因版本落后反复推荐。`recommended_paths` 在已有快照时为空。
 
 ## 显式源码包
 

@@ -18,10 +18,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from auto_discover import REPO_PATTERN, atomic_json, github_get, read_json  # noqa: E402
+from auto_discover import REPO_PATTERN, atomic_json, github_get, read_json, release_record  # noqa: E402
 from lockutil import write_lock  # noqa: E402
 from project_context import (CONCEPTS, discover, frontmatter, match_terms, terms_for,  # noqa: E402
-                           scope_conflicts, shared_evidence_revision,
+                           compare_snapshot_commit, scope_conflicts, shared_evidence_revision,
                            shared_repo_revision)
 from star_query import emit, envelope  # noqa: E402
 
@@ -249,17 +249,32 @@ def suggested_sparse_paths(facts):
 def local_reference_snapshots(repo, roots):
     """Find immutable snapshots already curated by an installed Skill."""
     slug = repo.replace("/", "--")
-    result = []
+    result, seen = [], set()
     for root in roots:
         root_path = Path(root)
         libraries = []
         if root_path.is_dir():
             libraries.append(root_path / "reference-library")
             libraries.extend(path / "reference-library" for path in root_path.glob("*") if path.is_dir())
-        for library in libraries:
+        for library in sorted(libraries):
             source = library / "sources" / slug
-            if not source.is_dir():
+            if not source.is_dir() or source.resolve() in seen:
                 continue
+            seen.add(source.resolve())
+            manifest = library / "manifests" / (slug + ".json")
+            manifest_commit, manifest_status = None, "absent"
+            if manifest.is_file():
+                try:
+                    if manifest.stat().st_size > 2_000_000:
+                        raise ValueError("Manifest exceeds read budget")
+                    value = read_json(manifest)
+                    if value.get("repo", "").lower() != repo.lower():
+                        raise ValueError("Manifest belongs to a different repository")
+                    if not re.fullmatch(r"[0-9a-f]{7,40}", value.get("commit", "")):
+                        raise ValueError("Invalid pinned commit")
+                    manifest_commit, manifest_status = value["commit"], "read"
+                except (OSError, ValueError, TypeError):
+                    manifest_status = "unreadable"
             commit = None
             if (source / ".git").exists():
                 try:
@@ -280,18 +295,20 @@ def local_reference_snapshots(repo, roots):
                             catalog_entry = match.group(1)
                 except OSError:
                     pass
-            pinned = commit or catalog_entry
+            pinned = manifest_commit or commit or catalog_entry
             result.append({
                 "path": str(source), "commit": pinned,
+                "skill_path": str(library.parent.resolve()),
                 "git_commit": commit, "catalog_commit": catalog_entry,
+                "manifest_commit": manifest_commit,
+                "manifest_path": str(manifest) if manifest.is_file() else None,
+                "manifest_status": manifest_status,
+                "revision_conflict": bool(manifest_commit and commit
+                                          and not commit.startswith(manifest_commit)),
                 "status": "existing-local-snapshot",
                 "upstream_commit_comparison": "local pinned commit compared with profile head by the Agent",
             })
     return result
-
-CONCEPT_VOCABULARY = sorted({alias for aliases in CONCEPTS for alias in aliases},
-                           key=len, reverse=True)
-
 
 def local_matches(repo, text, skills, roots, project=None):
     profiles, warnings = discover(roots, project)
@@ -308,7 +325,7 @@ def local_matches(repo, text, skills, roots, project=None):
         concepts = sorted(set(primary) & concept_terms)
         if not concepts:
             continue
-        conflicts = scope_conflicts(profile, CONCEPT_VOCABULARY)
+        conflicts = scope_conflicts(profile, upstream)
         rows.append({
             "project_id": profile["project_id"], "skill_path": profile["skill_path"],
             "matched_terms": hits, "primary_matches": primary,
@@ -353,6 +370,8 @@ def build_profile(repo, data_dir, roots, project=None):
     skill_docs = fetch_limited(facts["skills"], commit, repo, "skill", SKILL_LIMIT, errors)
     skills = [parse_skill(row["text"], row["path"]) for row in skill_docs]
     dependency_docs = fetch_limited(facts["dependencies"], commit, repo, "dependency", MANIFEST_LIMIT, errors)
+    release_response = fetch_optional(f"repos/{repo}/releases?per_page=1", errors, "latest release")
+    release = release_record(release_response) if isinstance(release_response, list) else None
     combined_text = [repo, meta.get("description") or "", " ".join(meta.get("topics") or []),
                      (readme or {}).get("text", "")]
     capabilities = infer_capabilities(combined_text, dependency_docs)
@@ -369,6 +388,7 @@ def build_profile(repo, data_dir, roots, project=None):
             "pushed_at", "archived", "html_url")},
         "tree": facts,
         "readme": readme,
+        "release": release,
         "skill_units": skills,
         "dependency_documents": dependency_docs,
         "capabilities_inferred": capabilities,
@@ -409,14 +429,8 @@ def build_profile(repo, data_dir, roots, project=None):
     if profile["source_package"]["recommended_strategy"].startswith("bounded source package"):
         profile["source_package"]["recommended_paths"] = suggested_sparse_paths(facts)
     for snapshot in snapshots:
-        if snapshot.get("commit") and snapshot["commit"] != commit:
-            if len(snapshot["commit"]) < 40:
-                prefix = snapshot["commit"]
-                snapshot["upstream_commit_comparison"] = "different-prefix" if not commit.startswith(prefix) else "same-prefix"
-            else:
-                snapshot["upstream_commit_comparison"] = "different" if snapshot["commit"] != commit else "same"
-        else:
-            snapshot["upstream_commit_comparison"] = "unknown"
+        snapshot["upstream_commit_comparison"] = compare_snapshot_commit(snapshot.get("commit"), commit)
+        snapshot["upstream_head"] = commit
     profile["profile_revision"] = digest({
         "repo_id": profile["repo_id"], "pushed_at": profile["identity"]["pushed_at"],
         "readme": profile["readme"] and profile["readme"]["blob_sha"],
@@ -429,11 +443,11 @@ def build_profile(repo, data_dir, roots, project=None):
     })
     profile["evidence_revision"] = shared_evidence_revision({
         "head_sha": commit,
-        "release": None,
+        "release": release,
         "readme": {"blob_sha": profile["readme"] and profile["readme"]["blob_sha"]},
     })
-    profile["evidence_revision_scope"] = ("head commit plus README blob only; "
-                                          "release body is covered by the evidence channel")
+    profile["evidence_revision_scope"] = "HEAD commit, README blob, latest Release normalized as in daily evidence"
+    profile["evidence_revision_complete"] = profile["status"] == "complete"
     path = cache_path(data_dir, repo)
     if profile["status"] == "complete":
         atomic_json(path, profile)

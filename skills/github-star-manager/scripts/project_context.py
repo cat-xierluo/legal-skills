@@ -205,12 +205,22 @@ def concept_hits(text: str, concepts) -> list[str]:
 
 def scope_conflicts(profile: dict, upstream_concepts) -> list[dict]:
     """Match a local skill's stated exclusions against the upstream domain concepts."""
+    vocabulary = {alias for aliases in CONCEPTS for alias in aliases}
+    relevant = set(upstream_concepts) & vocabulary
     conflicts = []
     for fragment in profile.get("exclusions") or []:
-        hits = concept_hits(fragment, upstream_concepts)
+        hits = concept_hits(fragment, relevant)
         if hits:
             conflicts.append({"exclusion": fragment[:300], "conflicting_concepts": hits})
     return conflicts
+
+
+def compare_snapshot_commit(pinned, head):
+    if not pinned or not head:
+        return "unknown"
+    if len(pinned) < 40:
+        return "same-prefix" if head.startswith(pinned) else "different-prefix"
+    return "same" if pinned == head else "different"
 
 
 def shared_repo_revision(repo: dict) -> str:

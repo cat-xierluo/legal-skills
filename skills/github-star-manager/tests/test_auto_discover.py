@@ -76,6 +76,19 @@ class DiscoveryTests(unittest.TestCase):
             limit=12, per_project=2, recent_days=14, update_days=7, write=False,
             show_suppressed=False, focus_limit=8), **overrides))
 
+    def focus(self, names):
+        ad.atomic_json(self.data / ad.FOCUS_FILE, {"repositories": {
+            name: {"repo": name, "reason": "watched"} for name in names}})
+
+    def github_evidence(self, endpoint, **kwargs):
+        if "/readme" in endpoint:
+            return {"content": "ZGVtbyByZWFkbWU=", "sha": "readme-stable"}
+        if "/releases?" in endpoint:
+            return []
+        if "/commits?" in endpoint:
+            return [{"sha": "head", "commit": {"message": "Stable title"}}]
+        raise AssertionError(endpoint)
+
     def test_installed_links_deduplicate_without_recursing_archive(self):
         installed = self.root / "installed"
         installed.mkdir()
@@ -335,12 +348,16 @@ class DiscoveryTests(unittest.TestCase):
             encoding="utf-8")
         rc, result = capture(ad.cmd_auto, self.args())
         self.assertEqual(rc, 0)
-        watched = [row for row in result["items"] if row.get("watch_scope") == "focus"]
-        self.assertTrue(watched, result["items"])
+        self.assertEqual(result["items"], [], "No component match must not invent a wildcard target")
+        watched = result["focus_deltas"]
         self.assertEqual(watched[0]["repo"], "other/toolbox")
-        self.assertEqual(watched[0]["signals"], ["focused_watch"])
+        self.assertEqual(watched[0]["affected_targets"], [])
         self.assertEqual(result["coverage"]["focused_repositories"], 1)
-        self.assertEqual(result["coverage"]["focus_candidates"], 1)
+        self.assertEqual(result["coverage"]["focus_not_fetched"], ["other/toolbox"])
+        with patch.object(ad, "github_get", side_effect=self.github_evidence):
+            _, fetched = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        self.assertEqual(fetched["focus_deltas"][0]["evidence_status"], "complete")
+        self.assertEqual(fetched["coverage"]["focus_not_fetched"], [])
 
     def test_focus_delta_reports_actual_upstream_change(self):
         row = repo()
@@ -383,6 +400,294 @@ class DiscoveryTests(unittest.TestCase):
         unmatched = result["coverage"]["focus_unmatched"]
         self.assertEqual(unmatched[0]["repo"], "gone/repo")
         self.assertEqual(unmatched[0]["reason"], "not_in_star_collection")
+
+    def test_focus_row_suppresses_ordinary_candidate_for_same_repo(self):
+        row = repo("sample/subtitle")
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        (self.data / "repository-profiles").mkdir(parents=True, exist_ok=True)
+        (self.data / "repository-profiles" / "focus.json").write_text(
+            json.dumps({"schema_version": "focus/1.0",
+                        "repositories": {row["full_name"]: {"repo": row["full_name"],
+                                                            "reason": "watched"}}}),
+            encoding="utf-8")
+        rc, result = capture(ad.cmd_auto, self.args(limit=40, per_project=4))
+        self.assertEqual(rc, 0)
+        matching = [item for item in result["items"] if item["repo"] == row["full_name"]]
+        self.assertEqual(len(matching), 1, matching)
+        self.assertEqual(matching[0].get("watch_scope"), "focus")
+
+    def test_judged_focus_repository_is_suppressed_until_it_changes(self):
+        row = repo("sample/subtitle")
+        profile = self.profiles()[0]
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        (self.data / "repository-profiles").mkdir(parents=True, exist_ok=True)
+        (self.data / "repository-profiles" / "focus.json").write_text(
+            json.dumps({"schema_version": "focus/1.0",
+                        "repositories": {row["full_name"]: {"repo": row["full_name"],
+                                                            "reason": "watched"}}}),
+            encoding="utf-8")
+        card = {"target": {"project_id": profile["project_id"], "target_revision": profile["target_revision"]},
+                "signal": {"repo": row["full_name"], "repo_revision": ad.repo_revision(row)},
+                "decision": {"status": "rejected", "reason": "no new value"},
+                "_recorded_at": NOW.isoformat()}
+        ad.atomic_json(self.data / "feedback" / "actual-component.json", card)
+        rc, result = capture(ad.cmd_auto, self.args())
+        self.assertEqual(rc, 0)
+        watched = [item for item in result["items"] if item.get("watch_scope") == "focus"]
+        self.assertFalse(watched, result["items"])
+        self.assertEqual(result["coverage"]["focus_candidates"], 0)
+        self.assertEqual(result["coverage"]["focus_suppressed"], 1)
+        (self.directory / "TASKS.md").write_text("- 目标：新增声音时间轴\n", encoding="utf-8")
+        _, changed = capture(ad.cmd_auto, self.args())
+        self.assertEqual(changed["items"][0]["project_id"], profile["project_id"])
+
+    def test_focus_preserves_distinct_component_decisions(self):
+        write_skill(self.skills, "second-video")
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        self.focus([row["full_name"]])
+        profile = self.profiles()[0]
+        ad.atomic_json(self.data / "feedback" / "decision.json", {
+            "target": {"project_id": profile["project_id"], "target_revision": profile["target_revision"]},
+            "signal": {"repo": row["full_name"], "repo_id": row["id"],
+                       "repo_revision": ad.repo_revision(row)},
+            "decision": {"status": "rejected"}, "_recorded_at": NOW.isoformat()})
+        _, result = capture(ad.cmd_auto, self.args())
+        self.assertEqual(len(result["items"]), 1)
+        self.assertNotEqual(result["items"][0]["project_id"], profile["project_id"])
+        self.assertTrue(result["items"][0]["target_revision"])
+        self.assertEqual(len(result["suppressed"]), 1)
+
+    def test_one_repository_cannot_fill_whole_review_queue(self):
+        for index in range(5):
+            write_skill(self.skills, f"video-{index}")
+        rows = [repo(), {**repo("other/subtitle"), "id": 2}]
+        ad.atomic_json(self.data / "original_latest.json", snapshot(rows))
+        self.focus([rows[0]["full_name"]])
+        _, result = capture(ad.cmd_auto, self.args(limit=12, per_project=2))
+        from collections import Counter
+        counts = Counter(item["repo"] for item in result["items"])
+        self.assertEqual(set(counts), {row["full_name"] for row in rows})
+        self.assertTrue(all(count <= 3 for count in counts.values()))
+        self.assertTrue(result["coverage"]["truncated"])
+        self.assertEqual(len(result["focus_deltas"][0]["affected_targets"]), 6)
+
+    def test_focused_release_only_change_reopens_and_keeps_original_baseline(self):
+        row = repo()
+        self.focus([row["full_name"]])
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        with patch.object(ad, "github_get", side_effect=self.github_evidence):
+            _, first = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        item = first["items"][0]
+        ad.atomic_json(self.data / "feedback" / "decision.json", {
+            "target": {"project_id": item["project_id"], "target_revision": item["target_revision"]},
+            "signal": {"repo": row["full_name"], "repo_id": row["id"],
+                       "repo_revision": item["repo_revision"], "evidence_revision": item["evidence_revision"]},
+            "decision": {"status": "rejected"}, "_recorded_at": NOW.isoformat()})
+        with patch.object(ad, "github_get", side_effect=self.github_evidence):
+            _, same = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        self.assertFalse(same["items"])
+        self.assertEqual(same["focus_deltas"][0]["new_commits"], [])
+        def changed(endpoint, **kwargs):
+            return ([{"tag_name": "v2", "body": "new value"}] if "/releases?" in endpoint
+                    else self.github_evidence(endpoint, **kwargs))
+        with patch.object(ad, "github_get", side_effect=changed):
+            _, update = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        self.assertEqual(len(update["items"]), 1)
+        self.assertTrue(update["focus_deltas"][0]["changed"]["release_changed"])
+        self.assertFalse(update["focus_deltas"][0]["changed"]["head_changed"])
+        _, unconsumed = capture(ad.cmd_auto, self.args())
+        self.assertEqual(len(unconsumed["items"]), 1)
+
+    def test_old_commit_messages_are_not_reported_as_new(self):
+        prior = {"status": "complete", "head_sha": "h",
+                 "commits": [{"sha": "h"}, {"sha": "old"}]}
+        self.assertEqual(ad.evidence_delta("a/b", prior, prior)["new_commits"], [])
+        current = {**prior, "head_sha": "new", "commits": [
+            {"sha": "new"}, {"sha": "h"}, {"sha": "old"}]}
+        self.assertEqual([row["sha"] for row in ad.evidence_delta("a/b", current, prior)["new_commits"]],
+                         ["new"])
+
+    def test_all_stars_and_focus_rotate_beyond_candidate_and_evidence_limits(self):
+        rows = [{**repo(f"sample/subtitle{i}"), "id": i} for i in range(6)]
+        rows[-1] = {**rows[-1], "description": "unrelated", "topics": []}
+        ad.atomic_json(self.data / "original_latest.json", snapshot(rows))
+        self.focus([row["full_name"] for row in rows[:4]])
+        seen = set()
+        for day in range(6):
+            with patch.object(ad, "now_utc", return_value=NOW + timedelta(days=day)), \
+                 patch.object(ad, "github_get", side_effect=self.github_evidence):
+                _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True, evidence_limit=2,
+                                                           focus_limit=1, limit=1, per_project=1))
+            coverage = result["coverage"]["watch_coverage"]
+            self.assertLessEqual(coverage["checked"], 2)
+            self.assertEqual(coverage["not_checked"], 6 - coverage["checked"])
+            checked = coverage["checked_repos"]
+            self.assertLessEqual(sum(name in {row["full_name"] for row in rows[:4]} for name in checked), 1)
+            seen.update(checked)
+        self.assertEqual(seen, {row["full_name"] for row in rows})
+
+    def test_corrupt_focus_and_evidence_do_not_hide_ordinary_discovery(self):
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        path = self.data / ad.FOCUS_FILE
+        path.parent.mkdir(parents=True)
+        path.write_text("{broken", encoding="utf-8")
+        cache = ad.evidence_cache(self.data, row["full_name"])
+        cache.parent.mkdir(parents=True)
+        cache.write_text("{broken", encoding="utf-8")
+        _, result = capture(ad.cmd_auto, self.args())
+        self.assertEqual(len(result["items"]), 1)
+        self.assertTrue(any("focus" in warning for warning in result["warnings"]))
+        self.assertTrue(any("evidence cache" in warning for warning in result["warnings"]))
+        self.assertEqual(result["status"], "partial")
+
+    def test_missing_or_failed_evidence_cannot_suppress_bound_decision(self):
+        row = repo()
+        profile = self.profiles()[0]
+        card = {"signal": {"repo": row["full_name"], "repo_revision": ad.repo_revision(row),
+                           "evidence_revision": "known-before"},
+                "target": {"project_id": profile["project_id"], "target_revision": profile["target_revision"]},
+                "decision": {"status": "rejected"}, "_recorded_at": NOW.isoformat()}
+        self.assertIsNone(ad.suppression(profile, row, [card], NOW))
+        self.assertIsNone(ad.suppression(profile, {**row, "_evidence_revision": "known-before",
+                                                 "_evidence_unavailable": True}, [card], NOW))
+
+    def test_failed_refresh_remains_pending_on_next_offline_run(self):
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        with patch.object(ad, "github_get", side_effect=self.github_evidence):
+            _, first = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        item = first["items"][0]
+        ad.atomic_json(self.data / "feedback" / "decision.json", {
+            "target": {"project_id": item["project_id"], "target_revision": item["target_revision"]},
+            "signal": {"repo": row["full_name"], "repo_revision": item["repo_revision"],
+                       "evidence_revision": item["evidence_revision"]},
+            "decision": {"status": "rejected"}, "_recorded_at": NOW.isoformat()})
+        with patch.object(ad, "github_get", side_effect=RuntimeError("temporary failure")):
+            _, failed = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        self.assertEqual(len(failed["items"]), 1)
+        _, offline = capture(ad.cmd_auto, self.args())
+        self.assertEqual(len(offline["items"]), 1)
+        self.assertEqual(offline["coverage"]["watch_coverage"]["unresolved_previous_failures"],
+                         [row["full_name"]])
+        with patch.object(ad, "github_get", side_effect=self.github_evidence):
+            _, recovered = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        self.assertFalse(recovered["items"])
+
+    def test_unrelated_scope_exclusions_do_not_create_components_or_conflicts(self):
+        write_skill(self.skills, "browser-shell", "浏览器操作。不要用于法律检索。")
+        row = {**repo("ui/react-kit"), "description": "React UI components", "topics": []}
+        selected, _, _ = ad.prepare(snapshot([row]), self.profiles(), {}, NOW)
+        self.assertEqual(selected, [])
+        video = next(profile for profile in self.profiles() if profile["project_id"] == "sample-video")
+        video["exclusions"] = ["法律检索"]
+        relevant, _, _ = ad.prepare(snapshot([repo()]), [video], {}, NOW)
+        self.assertTrue(relevant)
+        self.assertEqual(relevant[0]["scope_conflicts"], [])
+
+    def test_daily_reports_existing_snapshot_and_bounded_source_comparison(self):
+        row = repo()
+        library = self.directory / "reference-library"
+        (library / "sources" / "sample--subtitle").mkdir(parents=True)
+        pinned, head = "a" * 40, "b" * 40
+        (library / "README.md").write_text(f"| [source](sources/sample--subtitle/) | `{pinned}` |\n")
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        def github(endpoint, **kwargs):
+            if "/commits?" in endpoint:
+                return [{"sha": head, "commit": {"message": "New engine"}}]
+            if "/compare/" in endpoint:
+                return {"status": "ahead", "ahead_by": 2, "total_commits": 2,
+                        "files": [{"filename": f"core/{i}.py", "patch": "x" * 1400} for i in range(35)]}
+            return self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=github):
+            _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        item = result["items"][0]
+        self.assertEqual(item["local_snapshots"][0]["commit"], pinned)
+        self.assertEqual(item["local_snapshots"][0]["upstream_head"], head)
+        compare = item["source_comparison"]
+        self.assertEqual((compare["base"], compare["head"]), (pinned, head))
+        self.assertEqual(len(compare["files"]), 30)
+        self.assertTrue(compare["files_truncated"])
+        self.assertTrue(compare["files"][0]["patch_truncated"])
+
+    def test_observation_delta_and_pinned_source_delta_keep_separate_bases(self):
+        row = repo()
+        pinned, observed, head = "a" * 40, "b" * 40, "c" * 40
+        library = self.directory / "reference-library"
+        (library / "sources" / "sample--subtitle").mkdir(parents=True)
+        (library / "manifests").mkdir()
+        ad.atomic_json(library / "manifests" / "sample--subtitle.json",
+                       {"repo": row["full_name"], "commit": pinned})
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), {
+            "status": "complete", "head_sha": observed, "repo_revision": ad.repo_revision(row)})
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        def github(endpoint, **kwargs):
+            if "/commits?" in endpoint:
+                return [{"sha": head, "commit": {"message": "Updated engine"}}]
+            if "/compare/" in endpoint:
+                return {"status": "ahead", "files": []}
+            return self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=github):
+            _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        item = result["items"][0]
+        self.assertEqual(item["source_comparison"]["base"], pinned)
+        self.assertEqual(item["upstream_change"]["observation_comparison"]["base"], observed)
+        self.assertEqual(item["local_snapshots"][0]["upstream_head"], head)
+
+    def test_each_component_uses_its_own_pinned_version_or_explicit_unknown(self):
+        other = write_skill(self.skills, "second-video")
+        pinned, second, head = "a" * 40, "b" * 40, "c" * 40
+        for directory, commit in ((self.directory, pinned), (other, second)):
+            library = directory / "reference-library"
+            (library / "sources" / "sample--subtitle").mkdir(parents=True)
+            ad.atomic_json(library / "manifests/sample--subtitle.json",
+                           {"repo": "sample/subtitle", "commit": commit})
+        ad.atomic_json(self.data / "original_latest.json", snapshot([repo()]))
+        def github(endpoint, **kwargs):
+            if "/commits?" in endpoint:
+                return [{"sha": head, "commit": {"message": "New engine"}}]
+            if "/compare/" in endpoint:
+                return {"status": "ahead", "files": []}
+            return self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=github) as api:
+            _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        rows = {item["project_id"]: item for item in result["items"]}
+        self.assertEqual(rows["sample-video"]["source_comparison"]["base"], pinned)
+        self.assertEqual(rows["second-video"]["source_comparison"]["base"], second)
+        self.assertEqual(len(rows["second-video"]["target_snapshots"]), 1)
+        self.assertEqual(len([call for call in api.call_args_list if "/compare/" in call.args[0]]), 2)
+        # A new observed head uses one compare slot, leaving one pinned base
+        # unexamined. It must not receive the other component's patch.
+        with patch.object(ad, "github_get", side_effect=lambda endpoint, **kwargs:
+                          [{"sha": "d" * 40, "commit": {"message": "Another update"}}]
+                          if "/commits?" in endpoint else github(endpoint, **kwargs)):
+            _, next_run = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        comparisons = [item["source_comparison"] for item in next_run["items"]]
+        self.assertEqual({item["base"] for item in comparisons}, {pinned, second})
+        self.assertEqual(sum(item["status"] == "not_fetched" for item in comparisons), 1)
+
+    def test_component_already_at_head_has_no_other_components_diff(self):
+        other = write_skill(self.skills, "second-video")
+        head = "c" * 40
+        for directory, commit in ((self.directory, "a" * 40), (other, head)):
+            library = directory / "reference-library"
+            (library / "sources/sample--subtitle").mkdir(parents=True)
+            ad.atomic_json(library / "manifests/sample--subtitle.json",
+                           {"repo": "sample/subtitle", "commit": commit})
+        ad.atomic_json(self.data / "original_latest.json", snapshot([repo()]))
+        def github(endpoint, **kwargs):
+            if "/commits?" in endpoint:
+                return [{"sha": head, "commit": {"message": "New engine"}}]
+            if "/compare/" in endpoint:
+                return {"status": "ahead", "files": []}
+            return self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=github):
+            _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        current = next(item for item in result["items"] if item["project_id"] == "second-video")
+        self.assertEqual(current["source_comparison"]["status"], "identical")
+        self.assertEqual(current["source_comparison"]["base"], head)
+        self.assertEqual(current["source_comparison"]["files"], [])
 
     def test_cli_error_exit_is_not_hidden_by_json_pipeline(self):
         run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
