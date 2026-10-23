@@ -178,6 +178,63 @@ def positive_scope(text: str) -> str:
     return re.split(r"不要用于|不承担|不用于|do not use|not for", text, maxsplit=1, flags=re.I)[0]
 
 
+EXCLUSION_MARKERS = ("不要用于", "不承担", "不用于", "do not use", "not for")
+
+
+def exclusion_fragments(text: str) -> list[str]:
+    """Return the stated negative scope of a skill, kept verbatim for review."""
+    parts = re.split("|".join(re.escape(marker) for marker in EXCLUSION_MARKERS),
+                     text, flags=re.I)
+    return [part.strip() for part in parts[1:] if part.strip()]
+
+
+def concept_hits(text: str, concepts) -> list[str]:
+    """Which concept aliases appear in a fragment."""
+    hits = []
+    for concept in concepts:
+        if not isinstance(concept, str) or not concept:
+            continue
+        if re.search(r"[\u4e00-\u9fff]", concept):
+            if concept.lower() in text.lower():
+                hits.append(concept)
+        elif re.search(r"(?<![a-z0-9])" + re.escape(concept.lower()) + r"(?![a-z0-9])",
+                       text.lower()):
+            hits.append(concept)
+    return sorted(set(hits))
+
+
+def scope_conflicts(profile: dict, upstream_concepts) -> list[dict]:
+    """Match a local skill's stated exclusions against the upstream domain concepts."""
+    conflicts = []
+    for fragment in profile.get("exclusions") or []:
+        hits = concept_hits(fragment, upstream_concepts)
+        if hits:
+            conflicts.append({"exclusion": fragment[:300], "conflicting_concepts": hits})
+    return conflicts
+
+
+def shared_repo_revision(repo: dict) -> str:
+    """Metadata-level revision shared by every discovery and watch channel."""
+    raw = json.dumps({
+        "id": repo.get("id") or repo.get("full_name"),
+        "pushed_at": repo.get("pushed_at"),
+        "description": repo.get("description"),
+        "topics": repo.get("topics"),
+    }, sort_keys=True, ensure_ascii=False).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
+def shared_evidence_revision(record: dict) -> str:
+    """Upstream content-level revision shared by every discovery and watch channel."""
+    record = record or {}
+    raw = json.dumps({
+        "head": record.get("head_sha"),
+        "release": record.get("release"),
+        "readme": (record.get("readme") or {}).get("blob_sha"),
+    }, sort_keys=True, ensure_ascii=False).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
 def discover(roots=None, project=None) -> tuple[list[dict], list[str]]:
     roots = [Path(r).expanduser().resolve() for r in (roots or default_roots())]
     profiles, warnings, seen = [], [], set()
@@ -210,11 +267,14 @@ def discover(roots=None, project=None) -> tuple[list[dict], list[str]]:
                         refs[str(real / "TASKS.md")] = task_sha
                     if limited:
                         local_warnings.append("TASKS.md exceeds read budget; target incomplete")
+                exclusions = exclusion_fragments(meta["description"])
+                exclusions += exclusion_fragments("\n".join(t["text"] for t in tasks))
                 profile = {
                     "project_id": meta["name"], "name": meta["name"],
                     "skill_path": str(real), "origin": "dynamic-skill-scan/2",
                     "description": meta["description"], "needs": [t["text"] for t in tasks],
                     "capabilities": [meta["description"]], "tasks": tasks,
+                    "exclusions": exclusions,
                     "source_ref": list(refs), "hashes": refs, "warnings": local_warnings,
                     "activity": {"status": "not_git", "commits": 0, "latest_at": None,
                                  "latest_commit": None},

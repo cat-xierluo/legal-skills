@@ -52,7 +52,11 @@ python scripts/opportunity.py record --input /private/path/card.json \
 
 ## 重点项目升级路径
 
-每日候选或用户点名的仓库需要更深判断时，先转用 [重点项目画像](repository-profiles.md) 的 API 画像，而不是放宽每日取证预算。画像确认其为 Skill-backed runtime、多个本地 Skill 存在概念交集、或需要核源码/许可细节时，才登记 focus 并创建有界源码包。focus 是人工优先级清单，不会改变每日召回或反馈抑制；`pushed_at` 只触发画像更新，源代码未检查前不能宣称新价值。
+每日候选或用户点名的仓库需要更深判断时，先转用 [重点项目画像](repository-profiles.md) 的 API 画像，而不是放宽每日取证预算。画像确认其为 Skill-backed runtime、多个本地 Skill 存在概念交集、或需要核源码/许可细节时，才登记 focus 并创建有界源码包。
+
+登记 focus 后该仓库进入每日固定通道：无论关键词是否命中都会检查，优先取证，`focus_deltas` 报告实际变化，`affected_targets` 列出受影响的本地组件并标出范围冲突。画像与每日发现共用同一套 `repo_revision`/`evidence_revision` 口径，因此同一个仓库在两条链里是同一个对象，画像结论可以被每日抑制链识别。`pushed_at` 只触发检查，源代码未检查前不能宣称新价值。
+
+同一仓库既在 focus 清单又是普通候选时只出一行，避免每日队列被同一个仓库的多个组件切分淹没。
 
 ## 宿主调度提示
 

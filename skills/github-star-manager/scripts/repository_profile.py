@@ -20,7 +20,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from auto_discover import REPO_PATTERN, atomic_json, github_get, read_json  # noqa: E402
 from lockutil import write_lock  # noqa: E402
-from project_context import CONCEPTS, discover, frontmatter, match_terms, terms_for  # noqa: E402
+from project_context import (CONCEPTS, discover, frontmatter, match_terms, terms_for,  # noqa: E402
+                           scope_conflicts, shared_evidence_revision,
+                           shared_repo_revision)
 from star_query import emit, envelope  # noqa: E402
 
 
@@ -287,6 +289,10 @@ def local_reference_snapshots(repo, roots):
             })
     return result
 
+CONCEPT_VOCABULARY = sorted({alias for aliases in CONCEPTS for alias in aliases},
+                           key=len, reverse=True)
+
+
 def local_matches(repo, text, skills, roots, project=None):
     profiles, warnings = discover(roots, project)
     source = " ".join([repo, text, " ".join(s.get("description") or "" for s in skills if s.get("valid"))])
@@ -302,10 +308,14 @@ def local_matches(repo, text, skills, roots, project=None):
         concepts = sorted(set(primary) & concept_terms)
         if not concepts:
             continue
+        conflicts = scope_conflicts(profile, CONCEPT_VOCABULARY)
         rows.append({
             "project_id": profile["project_id"], "skill_path": profile["skill_path"],
             "matched_terms": hits, "primary_matches": primary,
             "domain_concepts": concepts,
+            "exclusions": profile.get("exclusions") or [],
+            "scope_conflicts": conflicts,
+            "scope_status": "conflicts_with_stated_scope" if conflicts else "no_stated_scope_conflict",
             "target_activity": profile["activity"], "target_revision": profile["target_revision"],
         })
     rows.sort(key=lambda row: (-len(set(row["domain_concepts"]) & priority_concepts),
@@ -413,6 +423,17 @@ def build_profile(repo, data_dir, roots, project=None):
         "skills": [(s["path"], s.get("name"), s.get("description")) for s in skills],
         "tree": {key: facts[key] for key in ("entries", "truncated", "skills", "dependencies", "media", "code")},
     })
+    profile["repo_revision"] = shared_repo_revision({
+        "id": profile["repo_id"], "pushed_at": profile["identity"]["pushed_at"],
+        "description": profile["identity"]["description"], "topics": profile["identity"]["topics"],
+    })
+    profile["evidence_revision"] = shared_evidence_revision({
+        "head_sha": commit,
+        "release": None,
+        "readme": {"blob_sha": profile["readme"] and profile["readme"]["blob_sha"]},
+    })
+    profile["evidence_revision_scope"] = ("head commit plus README blob only; "
+                                          "release body is covered by the evidence channel")
     path = cache_path(data_dir, repo)
     if profile["status"] == "complete":
         atomic_json(path, profile)

@@ -16,7 +16,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from lockutil import write_lock
-from project_context import default_roots, digest, discover, match_terms, terms_for
+from project_context import (CONCEPTS, default_roots, digest, discover, match_terms, terms_for,
+                           scope_conflicts, shared_evidence_revision, shared_repo_revision)
+
+CONCEPT_VOCABULARY = sorted({alias for aliases in CONCEPTS for alias in aliases},
+                           key=len, reverse=True)
 from star_query import emit, envelope, parse_dt
 from star_tracker import StarTracker
 
@@ -97,9 +101,7 @@ def refresh_snapshot(data_dir, old):
 
 
 def repo_revision(repo):
-    return digest({"id": repo.get("id") or repo.get("full_name"),
-                   "pushed_at": repo.get("pushed_at"),
-                   "description": repo.get("description"), "topics": repo.get("topics")})
+    return shared_repo_revision(repo)
 
 
 def feedback_index(data_dir):
@@ -163,6 +165,121 @@ def suppression(profile, repo, prior, now):
 def valid_recent(date, cutoff, now):
     parsed = parse_dt(date)
     return parsed is not None and cutoff <= parsed <= now
+
+
+FOCUS_FILE = "repository-profiles/focus.json"
+
+
+def focus_repositories(data_dir):
+    """Read the focused-repository list shared with the profile command."""
+    value = read_json(data_dir / FOCUS_FILE, {"repositories": {}})
+    if not isinstance(value, dict) or not isinstance(value.get("repositories"), dict):
+        return {}
+    return value["repositories"]
+
+
+def focus_deltas(focus_rows, evidence_by_repo, prior_evidence):
+    """Describe what actually changed for each focused repository.
+
+    The baseline must be captured before evidence fetching overwrites the cache,
+    otherwise every change looks identical to the freshly written record.
+    """
+    deltas = []
+    for row in focus_rows:
+        name = row["repo"]
+        cached = prior_evidence.get(name)
+        current = evidence_by_repo.get(name)
+        delta = {
+            "repo": name, "project_id": row["project_id"],
+            "watch_scope": "focus", "reason": row.get("focus_reason", ""),
+            "repo_revision": row.get("repo_revision"),
+            "evidence_revision": row.get("evidence_revision"),
+            "baseline_available": bool(cached),
+            "evidence_status": row.get("evidence_status", "not_fetched"),
+            "suppression": row.get("suppression"),
+        }
+        if current and cached:
+            delta["changed"] = {
+                "head_changed": current.get("head_sha") != cached.get("head_sha"),
+                "release_changed": current.get("release") != cached.get("release"),
+                "readme_changed": ((current.get("readme") or {}).get("blob_sha")
+                                   != (cached.get("readme") or {}).get("blob_sha")),
+            }
+            delta["new_commits"] = [
+                {"sha": item.get("sha"), "message": item.get("message")}
+                for item in (current.get("commits") or [])
+                if item.get("sha") and item.get("sha") != (cached.get("head_sha"))
+            ][:5]
+            delta["release"] = current.get("release")
+        else:
+            delta["changed"] = None
+        deltas.append(delta)
+    return deltas
+
+
+def focus_candidates(snapshot, profiles, feedback, data_dir, now, limit=12):
+    """One row per focused repository, with the local targets it could affect.
+
+    A focus entry means the user explicitly watches this project, so the
+    keyword filter that gates ordinary candidates must not apply to it. The
+    affected local targets are listed inside the row instead of being emitted
+    as one candidate per target, which would multiply the queue.
+    """
+    watched = focus_repositories(data_dir)
+    if not watched:
+        return [], []
+    rows = {repo.get("full_name"): repo for repo in snapshot.get("repos", [])}
+    candidates, unmatched = [], []
+    for name in sorted(watched):
+        repo = rows.get(name)
+        if not repo:
+            unmatched.append({"repo": name, "reason": "not_in_star_collection"})
+            continue
+        upstream = terms_for(" ".join([
+            repo.get("full_name") or "", repo.get("description") or "",
+            " ".join(repo.get("topics") or [])]))
+        affected = []
+        for profile in profiles:
+            hits = match_terms(profile, {"_search_terms": upstream})
+            concepts = sorted(set(profile.get("primary_terms", [])) & set(upstream))
+            conflicts = scope_conflicts(profile, CONCEPT_VOCABULARY)
+            if not hits and not concepts and not conflicts:
+                continue
+            affected.append({
+                "project_id": profile["project_id"],
+                "matched_terms": hits, "domain_concepts": concepts,
+                "scope_status": ("conflicts_with_stated_scope" if conflicts
+                                 else "no_stated_scope_conflict"),
+                "scope_conflicts": conflicts,
+                "target_revision": profile["target_revision"],
+                "target_activity": profile["activity"],
+            })
+        affected.sort(key=lambda row: (-len(row["domain_concepts"]), row["project_id"]))
+        affected = affected[:12]
+        prior = feedback.get(("*", name), [])
+        if repo.get("id") is not None:
+            prior = prior + feedback.get(("*", f"id:{repo['id']}"), [])
+        candidates.append({
+            "candidate_id": digest([name, "focus"])[:24],
+            "project_id": "*", "repo": name, "repo_id": repo.get("id"),
+            "description": repo.get("description"),
+            "matched_terms": sorted({term for row in affected for term in row["matched_terms"]}),
+            "primary_matches": sorted({concept for row in affected for concept in row["domain_concepts"]}),
+            "signals": ["focused_watch"],
+            "focus_reason": (watched.get(name) or {}).get("reason", ""),
+            "affected_targets": affected,
+            "starred_at": repo.get("starred_at"), "pushed_at": repo.get("pushed_at"),
+            "repo_revision": repo_revision(repo),
+            "target_revision": digest([row["target_revision"] for row in affected]),
+            "evidence_revision": repo.get("_evidence_revision"),
+            "target_activity": {"status": "focus_watch", "commits": 0, "latest_at": None,
+                                 "latest_commit": None},
+            "suppression": None, "evidence_status": "not_fetched",
+            "archived": bool(repo.get("is_archived")),
+            "watch_scope": "focus",
+        })
+    candidates.sort(key=lambda row: row["repo"])
+    return candidates[:limit], unmatched
 
 
 def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
@@ -278,9 +395,7 @@ def fetch_evidence(candidate, data_dir, prior=None):
 
 
 def evidence_revision(record):
-    record = record or {}
-    return digest({"head": record.get("head_sha"), "release": record.get("release"),
-                   "readme": (record.get("readme") or {}).get("blob_sha")})
+    return shared_evidence_revision(record)
 
 
 def evidence_cache(data_dir, name):
@@ -356,6 +471,10 @@ def cmd_auto(args):
     snapshot = attach_cached_revisions(snapshot, data_dir)
     candidates, suppressed, eligible = prepare(snapshot, profiles, feedback, current,
         args.limit, args.per_project, args.recent_days, args.update_days, args.show_suppressed)
+    focus_limit = getattr(args, "focus_limit", 8)
+    focus_rows, focus_unmatched = focus_candidates(snapshot, profiles, feedback, data_dir,
+                                                    current, focus_limit)
+    eligible += len(focus_rows)
     unique = {}
     if args.fetch_evidence and suppressed:
         # Reserve some capacity for new candidates while rotating prior decisions.
@@ -364,10 +483,25 @@ def cmd_auto(args):
         snapshot = attach_cached_revisions(snapshot, data_dir)
         candidates, suppressed, eligible = prepare(snapshot, profiles, feedback, current,
             args.limit, args.per_project, args.recent_days, args.update_days, args.show_suppressed)
+        focus_rows, focus_unmatched = focus_candidates(snapshot, profiles, feedback, data_dir,
+                                                        current, focus_limit)
+        eligible += len(focus_rows)
         for name, value in unique.items():
             if value["status"] != "complete":
                 warnings.append(f"Watched evidence incomplete: {name}; previous complete evidence retained")
-    for candidate in candidates:
+    focus_prior = {row["repo"]: read_json(evidence_cache(data_dir, row["repo"]))
+                   for row in focus_rows}
+    focus_ids = {(row["project_id"], row["repo"]) for row in focus_rows}
+    merged_candidates = candidates + [row for row in focus_rows
+                                      if (row["project_id"], row["repo"]) not in
+                                      {(c["project_id"], c["repo"]) for c in candidates}]
+    candidates = merged_candidates
+    # Focused repositories are watched on purpose, so they get evidence budget
+    # first; ordinary candidates use whatever budget is left.
+    focus_names = {row["repo"] for row in focus_rows}
+    ordered = ([row for row in candidates if row["repo"] in focus_names]
+               + [row for row in candidates if row["repo"] not in focus_names])
+    for candidate in ordered:
         name = candidate["repo"]
         if name in unique:
             candidate["upstream_evidence"] = unique[name]
@@ -387,15 +521,20 @@ def cmd_auto(args):
             candidate["upstream_evidence"] = cached
             same = cached.get("repo_revision") == candidate["repo_revision"]
             candidate["evidence_status"] = "cached" if same else "stale"
+    focus_deltas_rows = focus_deltas(focus_rows, unique, focus_prior)
     selected_ids = {c["project_id"] for c in candidates}
     result = envelope(candidates, snapshot=snapshot, coverage={
         "projects": len(profiles), "repos": len(snapshot.get("repos", [])),
         "eligible": eligible, "returned": len(candidates), "suppressed": len(suppressed),
         "truncated": eligible > len(candidates), "evidence_fetched_repos": len(unique),
+        "focused_repositories": len(focus_repositories(data_dir)),
+        "focus_candidates": len(focus_rows),
+        "focus_unmatched": focus_unmatched,
         "snapshot_age_hours": round((current-timestamp).total_seconds()/3600, 1) if timestamp else None,
     }, warnings=warnings, extra={
         "projects": [p for p in profiles if p["project_id"] in selected_ids],
         "suppressed": suppressed, "run_path": None,
+        "focus_deltas": focus_deltas_rows,
         "review_required": True,
         "usage_note": "Read current target implementation and upstream evidence; keep at most three valuable opportunities. Record real decisions with target_revision, repo_revision and evidence_revision via opportunity.py. No change can legitimately yield no recommendation.",
     })
@@ -437,6 +576,8 @@ def main():
             p.add_argument("--refresh", action="store_true", help="Explicit GET via gh; atomically commit only a full same-account snapshot")
             p.add_argument("--fetch-evidence", action="store_true", help="Explicit bounded README/release/commit GETs")
             p.add_argument("--evidence-limit", type=positive, default=4)
+            p.add_argument("--focus-limit", type=positive, default=8,
+                           help="Maximum focused-repository rows per run")
             p.add_argument("--write", action="store_true")
     args = parser.parse_args()
     try:

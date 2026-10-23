@@ -153,6 +153,25 @@ class RepositoryProfileTests(unittest.TestCase):
         self.assertTrue(any("Only first 4" in warning for warning in warnings))
         self.assertTrue(any("truncated" in warning for warning in warnings))
 
+    def test_local_scope_exclusions_surface_as_conflicts(self):
+        # A static-image skill must be flagged when the upstream offers short films.
+        directory = self.skills / "video-skill"
+        (directory / "SKILL.md").write_text(
+            "---\nname: video-skill\ndescription: 维护角色静帧素材。不承担配音或视频短片生产。\n---\n",
+            encoding="utf-8")
+        paths = ["README.md", "plugin/skills/demo/SKILL.md", "core/renderer.py", "package.json"]
+        readme = {"path": "README.md", "sha": "sha", "encoding": "none",
+                  "text": "code driven short film with timeline and subtitles"}
+        skill = {"path": "plugin/skills/demo/SKILL.md", "sha": "skill", "encoding": "none",
+                 "text": "---\nname: demo\ndescription: short film production\n---\n"}
+        dependency = {"path": "package.json", "sha": "dep", "encoding": "none", "text": "{}"}
+        with patch.object(rp, "github_get", side_effect=[meta(), branch(), tree(paths), readme, skill, dependency]):
+            profile, _ = rp.build_profile("owner/repo", self.data, [self.skills])
+        row = profile["local_matches"][0]
+        self.assertTrue(row["exclusions"], profile["local_matches"])
+        self.assertEqual(row["scope_status"], "conflicts_with_stated_scope")
+        self.assertTrue(any("视频" in conflict["exclusion"] for conflict in row["scope_conflicts"]))
+
     def test_focus_add_list_remove_persists(self):
         args = SimpleNamespace(action="add", repo="owner/repo", reason="video backend",
                                data_dir=self.data)

@@ -74,7 +74,7 @@ class DiscoveryTests(unittest.TestCase):
         return SimpleNamespace(**dict(dict(project=None, skills_root=[self.skills], repo_root=None,
             data_dir=self.data, refresh=False, fetch_evidence=False, evidence_limit=2,
             limit=12, per_project=2, recent_days=14, update_days=7, write=False,
-            show_suppressed=False), **overrides))
+            show_suppressed=False, focus_limit=8), **overrides))
 
     def test_installed_links_deduplicate_without_recursing_archive(self):
         installed = self.root / "installed"
@@ -317,6 +317,72 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(profile["origin"], "dynamic-skill-scan/2")
         self.assertTrue(profile["source_ref"])
         self.assertIn("subtitle", profile["search_terms"])
+
+    def test_focus_repositories_are_checked_without_keyword_overlap(self):
+        # A watched repository whose description shares no concept with the local
+        # skill must still be reported, otherwise the watch channel is decorative.
+        profile = self.profiles()[0]
+        unrelated = {"id": 77, "full_name": "other/toolbox",
+                     "description": "PDF invoice parsing utilities",
+                     "topics": ["invoices"], "pushed_at": "2026-10-22T00:00:00Z",
+                     "starred_at": "2026-10-01T00:00:00Z"}
+        ad.atomic_json(self.data / "original_latest.json", snapshot([unrelated]))
+        (self.data / "repository-profiles").mkdir(parents=True, exist_ok=True)
+        (self.data / "repository-profiles" / "focus.json").write_text(
+            json.dumps({"schema_version": "focus/1.0",
+                        "repositories": {"other/toolbox": {"repo": "other/toolbox",
+                                                          "reason": "watched by user"}}}),
+            encoding="utf-8")
+        rc, result = capture(ad.cmd_auto, self.args())
+        self.assertEqual(rc, 0)
+        watched = [row for row in result["items"] if row.get("watch_scope") == "focus"]
+        self.assertTrue(watched, result["items"])
+        self.assertEqual(watched[0]["repo"], "other/toolbox")
+        self.assertEqual(watched[0]["signals"], ["focused_watch"])
+        self.assertEqual(result["coverage"]["focused_repositories"], 1)
+        self.assertEqual(result["coverage"]["focus_candidates"], 1)
+
+    def test_focus_delta_reports_actual_upstream_change(self):
+        row = repo()
+        profile = self.profiles()[0]
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        (self.data / "repository-profiles").mkdir(parents=True, exist_ok=True)
+        (self.data / "repository-profiles" / "focus.json").write_text(
+            json.dumps({"schema_version": "focus/1.0",
+                        "repositories": {row["full_name"]: {"repo": row["full_name"],
+                                                            "reason": "watched"}}}),
+            encoding="utf-8")
+        cached = {"repo": row["full_name"], "status": "complete", "head_sha": "old-head",
+                  "release": {"tag": "v1"}, "readme": {"blob_sha": "old-readme"},
+                  "fetched_at": "2026-10-20T00:00:00Z"}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        readme = {"content": "ZGVtbyByZWFkbWU=", "sha": "new-readme",
+                  "html_url": "https://example.test/readme"}
+        releases = [{"tag_name": "v2", "body": "new", "html_url": "https://example.test/v2"}]
+        commits = [{"sha": "new-head", "html_url": "https://example.test/c",
+                    "commit": {"message": "Fix captions"}}]
+        with patch.object(ad, "github_get", side_effect=[readme, releases, commits]):
+            rc, result = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        self.assertEqual(rc, 0)
+        deltas = result["focus_deltas"]
+        self.assertEqual(len(deltas), 1)
+        self.assertTrue(deltas[0]["baseline_available"])
+        self.assertTrue(deltas[0]["changed"]["head_changed"])
+        self.assertTrue(deltas[0]["changed"]["release_changed"])
+        self.assertTrue(deltas[0]["changed"]["readme_changed"])
+
+    def test_focus_repository_absent_from_collection_is_reported(self):
+        ad.atomic_json(self.data / "original_latest.json", snapshot([repo()]))
+        (self.data / "repository-profiles").mkdir(parents=True, exist_ok=True)
+        (self.data / "repository-profiles" / "focus.json").write_text(
+            json.dumps({"schema_version": "focus/1.0",
+                        "repositories": {"gone/repo": {"repo": "gone/repo", "reason": "watched"}}}),
+            encoding="utf-8")
+        rc, result = capture(ad.cmd_auto, self.args())
+        self.assertEqual(rc, 0)
+        unmatched = result["coverage"]["focus_unmatched"]
+        self.assertEqual(unmatched[0]["repo"], "gone/repo")
+        self.assertEqual(unmatched[0]["reason"], "not_in_star_collection")
 
     def test_cli_error_exit_is_not_hidden_by_json_pipeline(self):
         run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),

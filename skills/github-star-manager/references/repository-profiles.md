@@ -22,7 +22,9 @@ python scripts/repository_profile.py focus list --data-dir ...
 python scripts/repository_profile.py focus remove owner/name --data-dir ...
 ```
 
-focus 是少量重点仓库的人工清单，不是目标 Skill 登记表，也不会替代动态扫描。添加原因只说明为什么值得反复看；它本身不参与每日召回、抑制或巡检，普通收藏仍由每日机会流程处理。
+focus 是少量重点仓库的人工清单，不是目标 Skill 登记表，也不会替代动态扫描。添加原因只说明为什么值得反复看。
+
+登记后该仓库进入每日固定通道：`auto-discover` 每轮都会检查它，即使描述与本地目标毫无关键词重合；它优先获得取证预算，并在 `focus_deltas` 中报告"这次到底变了什么"（HEAD、Release、README、提交摘要）。`affected_targets` 列出可能受影响的本地组件，组件自己声明的排除条款若与上游能力概念冲突，会标为 `conflicts_with_stated_scope`——用于提前预警，不代表已经构成结论。
 
 ## 本地已有快照
 
