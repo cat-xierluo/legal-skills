@@ -56,12 +56,12 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
 2. **仓库发现与智能匹配**
    - **模糊口述线索推理（内容里**没有** GitHub URL、只有用户口述的零散线索时）**：当用户以自然语言描述项目（如"ascll simulation art console"、"8 月 24 号左右更新的"、"ID 可能含 skent"），GitHub 站内搜索通常 0 命中（关键词含 OCR 噪声、用户名被拼写截断、无完整 owner/repo）。走三步推理锚定唯一候选：
      1. **拆解线索为可枚举字段**：① 主题关键词（项目做什么——本例"ascii simulation art console"，可拆 ascii + simulation + art + console）；② 创建/更新时间窗口（"8 月 24 号左右"→ `created:2026-08-20..2026-08-28`）；③ 用户名/owner 片段（"skent"→ 搜索 `skent` 找到候选 owner `skent`、`Skentir`、`skent259` 等）；④ 其它旁证（"近期更新"、"MIT 协议"等可加 `--sort=updated`、license filter）
-     2. **GitHub Search API 多条件缩范围**：用 `gh api search/repositories?q=<关键词>+created:<date-range>` 拿到 ≤30 条候选。若零命中放宽日期±3 天再试；若仍零命中改用关键词子集（先只搜 `simulation + art`）让噪声筛过滤掉，再逐步加严。**单字段多关键词 OR / 多字段 AND 的组合顺序决定召回：先粗后细**（先 OR 让候选宽一点，再用 AND 紧），避免一开始就用 `ascii+simulation+art+console` 拼长串触发 0 命中
+     2. **GitHub Search API 多条件缩范围**：用 `gh api search/repositories?q=<关键词>+created:<date-range>` 拿到 ≤30 条候选。若零命中放宽日期±3 天再试；若仍零命中改用关键词子集（先只搜 `simulation + art`）让噪声筛过滤掉，再逐步加严。**单字段多关键词 OR / 多字段 AND 的组合顺序决定召回：先粗后细**（先 OR 让候选宽一点，再用 AND 紧），避免一开始就用 `ascii+simulation+art+console` 拼长串触发 0 命中；单次查询报错（TLS 握手超时/503）不等于 0 命中——先原样重试该查询再下结论，搜索端点间歇抖动，同一查询重试即命中是常态，把报错当零命中会漏掉真身
      3. **候选消歧到唯一**：在候选列表上跑与"同名候选消歧"相同的证据链——**亲授全称 > 语义锚定 > 衍生排除 > 创建时间匹配 > Star 数量级（仅参考）**。本场景无亲授/截图，所以重点是：① `created_at` 落在用户口述的时间窗口内（误差 ±3 天）；② `description` 含线索关键词（"ascii"/"simulation"/"art"/"console"任一）；③ owner 名含候选用户片段（`Skent*`、`skent*` 任一前缀）。三条都满足即可定为唯一，置信度反映给用户
      - **使用约束**：① 不要把"用户名片段"当成"完整 owner"——它只用于 owner 候选枚举，不参与最终判定；② 时间窗口比关键词更重要——近期项目关键词噪声大，时间是更稳的锚；③ 候选命中但 `created_at` 偏离用户口述超 ±5 天，要么放宽/收严窗口与用户核对，要么放弃。实测反例：直接搜 `ascii simulation art console` 在 8 月 24 号前后日期范围内 GitHub 站内搜索 0 命中，但按"主题 + 时间窗口 + 用户片段"三段拆解后 API 检索唯一命中——这就是本规则的必要性证据
    - 直接匹配：内容中找到的完整 GitHub URL
    - 半截 URL 补全：owner 确定而 name 截断（如 `mcncarl/jianyi…`）时，列该 owner 名下仓库（`gh api users/OWNER/repos`），按名称前缀 + description 语义匹配补全（实测：jianyi…→jianying-headless，yichen…→yichen-skills）
-   - owner 拼写修正：截图直读的 owner 404 时先怀疑 OCR 误读而非仓库不存在——按 repo 名搜索锁定真身，用星数量级与截图侧栏数字互证（实测：截图误读 `webadderalorg`→真身 `webadderallorg/Recordly`，30.9k⭐ 与侧栏 20.1k 同量级确认）
+   - owner 拼写修正：截图直读的 owner 404 时先怀疑 OCR 误读而非仓库不存在——先 GET `users/<owner>` 分流：用户也不存在基本坐实 owner 整体错读，直接按 repo 名搜索锁定真身；用户存在则列其仓库按名称+description 语义匹配，用星数量级与截图侧栏数字互证（实测：截图误读 `webadderalorg`→真身 `webadderallorg/Recordly`，30.9k⭐ 与侧栏 20.1k 同量级确认）
    - 社交账号名 ↔ GitHub owner 互证：博主昵称与 owner 名常有派生关系，可作中优先级佐证（实测：抖音"耳朵"→erduo1998-cell、"姚老师"→yaojingang、"文森特"→Vincentwei1021），但不单独定论
    - 改名仓库识别：内容中的旧名 404 时，查 `gh api repos/旧名` 是否返回 301/新 full_name——GitHub API 对改名仓库自动重定向，返回的 full_name 即新名；若新仓库已在库则视为同一项目跳过（实测：erduo-hyperframes-broll → erduo-broll-loop-engineering）
    - 按名称搜索：当只有项目名时使用 `gh search repos`
@@ -71,9 +71,9 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
      3. **衍生仓库排除**：name 带 `-lite`/`-editor`/`-skills` 等后缀、description 自述"基于上游/fork 适配/补原仓库不做的半边"的直接排除
      4. **版本交叉核对**：内容提到版本号（如"升级到 2.0"）时，查候选仓库 releases/tags，原仓库应存在对应版本轨迹
      5. **Star 数量级（仅参考）**：多数情况下原仓库比 fork/搬运高 1–2 个数量级（mono-color-skill 3250 vs 0~3；native-subtitle-quote-image 795 vs 5/7），但同名高星同类项目随时可能推翻它——高星候选与亲授/语义证据冲突时，以后者为准
-   - 候选仍无法唯一确定时：不凭猜测 star，列出候选与判断依据请用户确认
+   - 候选仍无法唯一确定时：不凭猜测 star，列出候选与判断依据请用户确认。穷尽搜索路线仍无候选时，按路线汇报已试范围（名称/品牌词变体、同名用户账号探测、README 品牌短语、近期窗口按星排序、代码搜索、awesome 清单 grep），并指出用户侧取证位置（视频置顶评论、作者主页签名、简介链接）——只回一句“找不到”等于把取证成本甩回给用户
    - 上下文相关性验证：检查 topics、description、技术栈是否匹配
-   - **截图/视频帧输入专用**：OCR 直读的 owner/repo 404 时**不**判定"找不到"，按 [`references/owner-repo-disambiguation.md`](references/owner-repo-disambiguation.md) 的 7 条视觉消歧规则重新尝试（字母形态漂移、整 owner 错读、README 迁移公告、截图只露目录名、跨项目互引等）
+   - **截图/视频帧输入专用**：OCR 直读的 owner/repo 404 时**不**判定"找不到"，按 [`references/owner-repo-disambiguation.md`](references/owner-repo-disambiguation.md) 的视觉消歧规则重新尝试（字母形态漂移、整 owner 错读、README 迁移公告、截图只露目录名、跨项目互引，以及整 token 错读、缩写标题、0 公开仓库、跨平台 ID 等扩展规则）
 
 3. **检查是否已 Star**
    ```bash
@@ -86,13 +86,15 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
    ```bash
    gh api -X PUT user/starred/owner/repo
    ```
-   成功后用第 3 步的 GET 回读，204 才算完成，不要以 PUT 退出码为准。
+   成功后用第 3 步的 GET 回读，204 才算完成，不要以 PUT 退出码为准。回读失败（404/空响应）时等几秒重试一次再判 FAIL——PUT 后立刻回读可能撞限流或缓存未传播，重试后仍非 204 才算失败。
    批量任务（一次内容提取出多个仓库）时循环执行"查重→star→回读"，单个仓库失败不阻断其余，最后按第 5 步汇总成功/跳过/失败。
 
 5. **生成报告**
    - 新 star 的仓库列表
    - 已 star 的仓库（跳过）
    - 需人工确认的仓库
+   - 覆盖率核对：报告前把每个输入（每张截图/每条链接）映射到处置（已 star / 与其他输入去重归并 / 待确认），输入数=处置数才准发报告；“待确认”必须列全所有未解决项，漏报一项会让用户误以为全部完成
+   - 用户中途追加输入时沿用同一份映射账本增量更新；同一项目出现在多张截图里按佐证处理（作者亲授/评论区确认优先级最高），不重复 star 也不重复汇报
 
 ### 2. 更新追踪
 - **版本检测**：检测项目的新 Release 和 Tag
