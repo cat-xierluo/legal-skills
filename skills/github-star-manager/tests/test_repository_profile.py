@@ -91,6 +91,8 @@ class RepositoryProfileTests(unittest.TestCase):
     def test_invalid_repo_rejected_and_api_failure_retains_complete_cache(self):
         with self.assertRaises(ValueError):
             rp.build_profile("bad repo", self.data, [self.skills])
+        for name in ("owner/..", "owner/.", "../repo", ".hidden/repo", "owner/.hidden"):
+            self.assertFalse(rp.valid_repo(name))
         cached = {"schema_version": "repository-profile/1.0", "repo": "owner/repo",
                   "status": "complete", "profile_revision": "old"}
         rp.atomic_json(rp.cache_path(self.data, "owner/repo"), cached)
@@ -99,6 +101,18 @@ class RepositoryProfileTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 rp.build_profile("owner/repo", self.data, [self.skills])
         self.assertEqual(rp.read_json(rp.cache_path(self.data, "owner/repo")), cached)
+
+    def test_profile_refresh_failure_returns_last_complete_cache(self):
+        cached = {"schema_version": "repository-profile/1.0", "repo": "owner/repo",
+                  "status": "complete", "profile_revision": "old"}
+        rp.atomic_json(rp.cache_path(self.data, "owner/repo"), cached)
+        args = self.args(repo="owner/repo")
+        with patch.object(rp, "build_profile", side_effect=RuntimeError("GitHub unavailable")):
+            rc, result = capture(rp.cmd_profile, args)
+        self.assertEqual(rc, 2)
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["items"], [cached])
+        self.assertIn("last complete cache", result["warnings"][0])
 
     def test_partial_profile_preserved_only_when_no_complete_cache(self):
         paths = ["README.md"]
@@ -185,6 +199,13 @@ class RepositoryProfileTests(unittest.TestCase):
         self.assertEqual(update["status"], "partial")
         self.assertIn("drifted", update["errors"][0])
 
+    def test_source_package_create_missing_target_is_cli_error(self):
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "repository_profile.py"),
+                              "source-package", "create", "owner/repo",
+                              "--data-dir", str(self.data)], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("--target", run.stderr)
+
     def test_source_package_size_guard_uses_selected_tree_blobs(self):
         tree = {"truncated": False, "tree": [
             {"path": "core/engine.py", "type": "blob", "size": 20},
@@ -194,6 +215,42 @@ class RepositoryProfileTests(unittest.TestCase):
         with patch.object(rp, "github_get", return_value=tree):
             size, count = rp.estimate_package_bytes("owner/repo", "a" * 40, ["core"])
         self.assertEqual((size, count), (20, 1))
+
+    def test_source_package_size_guard_includes_sparse_root_files(self):
+        tree_rows = [
+            {"path": "README.md", "type": "blob", "size": 50},
+            {"path": "big-model.bin", "type": "blob", "size": 200},
+            {"path": "core/engine.py", "type": "blob", "size": 20},
+            {"path": "styles/full/poster.png", "type": "blob", "size": 300},
+        ]
+        with patch.object(rp, "github_get", return_value={"truncated": False, "tree": tree_rows}):
+            size, count = rp.estimate_package_bytes("owner/repo", "a" * 40, ["core"])
+        self.assertEqual((size, count), (270, 3))
+
+    def test_source_package_create_cleans_partial_target_and_rejects_unknown_path(self):
+        target = self.root / "failed-package"
+        tree_rows = [
+            {"path": "README.md", "type": "blob", "size": 10},
+            {"path": "core", "type": "tree"},
+            {"path": "core/engine.py", "type": "blob", "size": 20},
+        ]
+        git_calls = []
+        def git(command, cwd=None, timeout=120):
+            git_calls.append(command)
+            if command[1:3] == ["ls-remote", "https://github.com/owner/repo.git"]:
+                return "a" * 40 + "\tHEAD"
+            if command[1] == "clone":
+                target.mkdir()
+                (target / ".git").mkdir()
+                return ""
+            raise AssertionError(command)
+        args = self.args(target=target, path=["does-not-exist"], max_bytes=1000)
+        with patch.object(rp, "run_git", side_effect=git), \
+             patch.object(rp, "github_get", return_value={"truncated": False, "tree": tree_rows}):
+            rc, result = capture(rp.cmd_package_create, args)
+        self.assertEqual(rc, 1)
+        self.assertIn("not found", result["errors"][0])
+        self.assertFalse(target.exists())
 
     def test_source_package_default_rejects_unbounded_style_media_bundle(self):
         target = self.root / "media-bundle"

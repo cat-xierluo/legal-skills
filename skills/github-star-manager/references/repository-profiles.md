@@ -22,7 +22,7 @@ python scripts/repository_profile.py focus list --data-dir ...
 python scripts/repository_profile.py focus remove owner/name --data-dir ...
 ```
 
-focus 是少量重点仓库清单，不是目标 Skill 登记表，也不会替代动态扫描。添加原因只说明为什么值得反复看；普通收藏仍由每日机会流程处理。
+focus 是少量重点仓库的人工清单，不是目标 Skill 登记表，也不会替代动态扫描。添加原因只说明为什么值得反复看；它本身不参与每日召回、抑制或巡检，普通收藏仍由每日机会流程处理。
 
 ## 显式源码包
 
@@ -37,7 +37,7 @@ python scripts/repository_profile.py source-package status owner/name --data-dir
 python scripts/repository_profile.py source-package update owner/name --data-dir ...
 ```
 
-- create 先按 Git tree 估算所选 blob 大小和文件数，超预算直接拒绝；然后执行 depth-1、blob-filtered、sparse clone，并固定远端 HEAD。
+- create 先按 Git tree 估算「所选路径 + 非 cone 模式会检出的仓库根文件」大小和文件数，超预算直接拒绝；然后执行 depth-1、blob-filtered、non-cone sparse clone，并固定远端 HEAD。路径必须真实存在于树中；文件和目录路径都可使用，任何失败都会移除本次半成品目标目录，保证可重试。
 - 默认预算 256MB，可用 `--max-bytes` 收紧。样式库、示例片、字体、模型等大媒体应留在上游，只取接口、核心实现、许可证/credits 和必要构建脚本。
 - status 只读报告本地 commit、dirty、远端 HEAD 和是否有更新；update 只允许干净且匹配 manifest 的包，更新后保留 previous_commit。
 - 源码包仅用于阅读、diff、许可与安全审查。本命令不安装依赖、不执行 setup、不自动复制代码或资产进 legal-skills，也不把上游提示当作执行指令。

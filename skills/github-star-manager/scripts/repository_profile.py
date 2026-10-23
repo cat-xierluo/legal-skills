@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -56,10 +57,11 @@ RUNTIME_TERMS = {
     "styleboard": "style-system",
     "avatar": "avatar",
     "lipsync": "lip-sync",
-    "plugin": "plugin-system",
-    "skill": "skill-interface",
-    "cli": "cli",
-    "server": "server",
+    "plugin interface": "plugin-system",
+    "skill interface": "skill-interface",
+    "command line": "cli",
+    "http server": "server",
+    "websocket server": "server",
 }
 
 
@@ -73,7 +75,10 @@ def digest(value):
 
 
 def valid_repo(name):
-    return bool(REPO_PATTERN.fullmatch(name or ""))
+    if not REPO_PATTERN.fullmatch(name or ""):
+        return False
+    owner, repository = name.split("/")
+    return all(part not in {"", ".", ".."} and not part.startswith(".") for part in (owner, repository))
 
 
 def profile_paths(data_dir):
@@ -137,7 +142,8 @@ def classify_tree(tree):
             scripts.append(path)
         if suffix in MEDIA_SUFFIXES:
             media.append(path)
-        if suffix in {".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".sh", ".rs", ".go", ".java"}:
+        if suffix in {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".html",
+                      ".css", ".sh", ".rs", ".go", ".java"}:
             code.append(path)
         if suffix:
             extension_counts[suffix] += 1
@@ -187,8 +193,8 @@ def infer_capabilities(paths_text, dependency_texts):
     text = " ".join(prose).lower()
     capabilities = []
     for needle, label in RUNTIME_TERMS.items():
-        if re.search(r"(?<![a-z0-9])" + re.escape(needle) + r"(?![a-z0-9])", text,
-                     flags=re.IGNORECASE if " " in needle else 0):
+        if re.search(r"(?<![a-z0-9])" + re.escape(needle) + r"s?(?![a-z0-9])", text,
+                     flags=re.IGNORECASE):
             capabilities.append(label)
     return sorted(capabilities)
 
@@ -219,15 +225,21 @@ def suggested_sparse_paths(facts):
     roots.update(name for name in ("license", "licence", "credits.md", "notice") if name in known_names)
     for path in facts["skills"]:
         parts = path.split("/")
-        roots.add("/".join(parts[:3]) if parts[0] == "plugin" and len(parts) > 3 else parts[0])
+        roots.add("/".join(parts[:-1]) if len(parts) > 1 else parts[0])
+    skill_directories = {str(Path(path).parent) for path in facts["skills"]}
+    implementation_roots = {"core", "src", "app", "lib", "plugin", "tools"}
     for path in facts["code"]:
         top = path.split("/", 1)[0]
-        if top in {"core", "src", "app", "lib", "plugin"}:
+        if top in implementation_roots:
             roots.add(top)
+        elif top == "tools":
+            roots.update(path for path in facts["code"] if path.startswith(top + "/")
+                         and Path(path).suffix in {".py", ".js", ".mjs", ".sh", ".json"})
         elif top == "styleboard":
             roots.update(path for path in facts["code"] + facts["dependencies"]
                          if path.startswith(top + "/") and Path(path).suffix in
                          {".py", ".json", ".sh", ".js", ".mjs"})
+    roots.update(skill_directories)
     roots.update(path for path in facts["dependencies"] if "/" in path)
     # Dependency manifests under demo/style folders are not runtime entrypoints;
     # avoid recommending dozens of style demo lockfiles by default.
@@ -243,6 +255,8 @@ def local_matches(repo, text, skills, roots, project=None):
     upstream = terms_for(source)
     rows = []
     concept_terms = {alias for aliases in CONCEPTS for alias in aliases}
+    priority_concepts = {"video", "视频", "成片", "animation", "动画", "动效",
+                         "render", "rendering", "渲染", "voice", "tts", "配音", "语音合成"}
     for profile in profiles:
         hits = match_terms(profile, {"_search_terms": upstream})
         primary = match_terms({"search_terms": profile.get("primary_terms", profile["search_terms"]),
@@ -256,7 +270,8 @@ def local_matches(repo, text, skills, roots, project=None):
             "domain_concepts": concepts,
             "target_activity": profile["activity"], "target_revision": profile["target_revision"],
         })
-    rows.sort(key=lambda row: (-len(row["domain_concepts"]), -len(row["primary_matches"]),
+    rows.sort(key=lambda row: (-len(set(row["domain_concepts"]) & priority_concepts),
+                               -len(row["domain_concepts"]), -len(row["primary_matches"]),
                                -len(row["matched_terms"]), row["project_id"]))
     return rows[:20], warnings
 
@@ -401,7 +416,18 @@ class atomic_context:
 
 def cmd_profile(args):
     data_dir = args.data_dir.expanduser().resolve()
-    profile, warnings = build_profile(args.repo, data_dir, args.skills_root, args.project)
+    try:
+        profile, warnings = build_profile(args.repo, data_dir, args.skills_root, args.project)
+    except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        cached = read_json(cache_path(data_dir, args.repo))
+        if cached and cached.get("status") == "complete" and cached.get("repo") == args.repo:
+            result = envelope([cached], coverage={"repositories": 1},
+                              warnings=[f"Profile refresh failed; serving last complete cache: {type(exc).__name__}"],
+                              errors=[str(exc)], extra={"cached_at": str(cache_path(data_dir, args.repo))})
+            result["snapshot_completeness"] = "not_applicable"
+            result["status"] = "partial"
+            return emit(result, 2)
+        raise
     result = envelope([profile], coverage={"repositories": 1}, warnings=warnings,
                       extra={"cached_at": str(cache_path(data_dir, args.repo))})
     result["snapshot_completeness"] = "not_applicable"
@@ -456,15 +482,28 @@ def estimate_package_bytes(repo, commit, requested_paths):
         raise ValueError("Package size tree unavailable")
     if tree.get("truncated"):
         raise ValueError("Repository tree truncated; cannot bound package size")
-    selected = []
-    for row in rows:
-        path = row.get("path") or ""
-        if row.get("type") != "blob":
-            continue
-        if not requested_paths or path in requested_paths or any(
-                path.startswith(prefix.rstrip("/") + "/") for prefix in requested_paths):
-            selected.append(row)
+    valid_rows = [row for row in rows if row.get("type") == "blob"]
+    selected = effective_sparse_rows(valid_rows, requested_paths)
     return sum(int(row.get("size") or 0) for row in selected), len(selected)
+
+
+def sparse_selection(row, requested_paths):
+    path = row.get("path") or ""
+    if row.get("type") != "blob" or not requested_paths:
+        return False
+    normalized = set(requested_paths)
+    if path in normalized:
+        return True
+    return any(path.startswith(prefix.rstrip("/") + "/") for prefix in normalized
+               if prefix.rstrip("/") != ".")
+
+
+def effective_sparse_rows(rows, requested_paths):
+    if not requested_paths:
+        return list(rows)
+    requested_roots = {path.rstrip("/") for path in requested_paths}
+    return [row for row in rows if sparse_selection(row, requested_paths)
+            or "/" not in (row.get("path") or "")]
 
 
 def source_manifest(data_dir, repo):
@@ -486,19 +525,47 @@ def cmd_package_create(args):
     head = run_git(["git", "ls-remote", remote, "HEAD"]).split()[0]
     if not re.fullmatch(r"[0-9a-f]{40}", head):
         raise ValueError("Invalid remote HEAD")
-    estimated_bytes, selected_files = estimate_package_bytes(args.repo, head, args.path or [])
+    tree = github_get(f"repos/{args.repo}/git/trees/{head}?recursive=1")
+    rows = tree.get("tree") if isinstance(tree, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("Package size tree unavailable")
+    if tree.get("truncated"):
+        raise ValueError("Repository tree truncated; cannot bound package size")
+    valid_rows = [row for row in rows if row.get("type") == "blob"]
+    effective_rows = effective_sparse_rows(valid_rows, args.path or [])
+    estimated_bytes = sum(int(row.get("size") or 0) for row in effective_rows)
+    selected_files = len(effective_rows)
     if estimated_bytes > args.max_bytes:
         return emit(envelope([], errors=[
             f"Requested source package is {estimated_bytes} bytes, exceeding the explicit {args.max_bytes}-byte budget"]), 1)
     target.parent.mkdir(parents=True, exist_ok=True)
-    run_git(["git", "clone", "--depth", "1", "--filter=blob:none", "--no-checkout", remote, str(target)], timeout=300)
-    if args.path:
-        run_git(["git", "-C", str(target), "sparse-checkout", "set", "--cone", *args.path])
-    run_git(["git", "-C", str(target), "checkout", "--detach", head], timeout=180)
+    created_target = False
+    try:
+        run_git(["git", "clone", "--depth", "1", "--filter=blob:none", "--no-checkout", remote, str(target)], timeout=300)
+        created_target = True
+        if args.path:
+            patterns = []
+            for path in args.path:
+                normalized = path.rstrip("/")
+                if not normalized or normalized in {".", ".."} or normalized.startswith(("/", "..", "\\")):
+                    raise ValueError(f"Invalid sparse path: {path}")
+                if not any(row.get("path") == normalized or row.get("path").startswith(normalized + "/")
+                           for row in rows if row.get("type") in {"blob", "tree"}):
+                    if created_target:
+                        shutil.rmtree(target)
+                    return emit(envelope([], errors=[
+                        f"Sparse path not found in repository tree: {path}"]), 1)
+                patterns.append("/" + normalized)
+            run_git(["git", "-C", str(target), "sparse-checkout", "set", "--no-cone", *patterns])
+        run_git(["git", "-C", str(target), "checkout", "--detach", head], timeout=180)
+    except BaseException:
+        if created_target:
+            shutil.rmtree(target)
+        raise
     manifest = {"schema_version": "source-package/1.0", "repo": args.repo,
                 "commit": head, "created_at": now_utc().isoformat(),
                 "updated_at": now_utc().isoformat(), "target": str(target),
-                "paths": args.path, "strategy": "depth-1 blob-filtered sparse clone",
+                "paths": args.path, "strategy": "depth-1 blob-filtered non-cone sparse clone",
                 "previous_commit": None, "executed_upstream_code": False,
                 "estimated_blob_bytes": estimated_bytes, "selected_files": selected_files}
     atomic_json(manifest_path(data_dir, args.repo), manifest)
@@ -577,7 +644,7 @@ def parser():
     package.add_argument("action", choices=["create", "status", "update"])
     package.add_argument("repo")
     package.add_argument("--data-dir", type=Path, required=True)
-    package.add_argument("--target", type=Path)
+    package.add_argument("--target", type=Path, required=True)
     package.add_argument("--path", action="append")
     package.add_argument("--max-bytes", type=positive, default=256_000_000,
                          help="Reject packages whose selected Git blobs exceed this size")

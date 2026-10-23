@@ -9,8 +9,8 @@
 ### 新增
 
 - **重点项目画像**：新增 `repository_profile.py profile`，用 GitHub API 有界读取元数据、递归树、README、Skill 单元和依赖声明，识别仓库形态、能力线索、媒体/代码比例、许可证风险，并按领域概念匹配本地 Skill。API 失败保留上一次完整画像，树截断和取样边界显式可见。
-- **重点仓库 focus**：支持 add/list/remove 少量重点仓库，记录关注原因；不把用户套件退回逐项目手工登记。
-- **有界源码包**：显式 create/status/update 固定 commit 的 depth-1 blob-filtered sparse checkout。create 先按 Git tree 估算所选 blob 大小并拒绝超预算，status 只读报告远端差异，update 拒绝脏现场并保留 previous_commit。不安装依赖、不执行上游 setup、不复制资产进公开仓库。
+- **重点仓库 focus**：支持 add/list/remove 少量重点仓库，记录关注原因；它是人工优先级清单，不改变每日召回或反馈抑制，也不把用户套件退回逐项目手工登记。
+- **有界源码包**：显式 create/status/update 固定 commit 的 depth-1 blob-filtered non-cone sparse checkout。create 先按 Git tree 估算所选路径及仓库根文件，拒绝超预算或不存在路径；失败清理半成品目标目录，status 只读报告远端差异，update 拒绝脏现场并保留 previous_commit。不安装依赖、不执行上游 setup、不复制资产进公开仓库。API 刷新失败时返回上一次完整画像并明确 partial，不把旧数据伪装成本次新证据。
 
 ### 验证边界
 
