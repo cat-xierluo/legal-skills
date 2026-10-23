@@ -227,14 +227,11 @@ def suggested_sparse_paths(facts):
         parts = path.split("/")
         roots.add("/".join(parts[:-1]) if len(parts) > 1 else parts[0])
     skill_directories = {str(Path(path).parent) for path in facts["skills"]}
-    implementation_roots = {"core", "src", "app", "lib", "plugin", "tools"}
+    implementation_roots = {"core", "src", "app", "lib"}
     for path in facts["code"]:
         top = path.split("/", 1)[0]
         if top in implementation_roots:
             roots.add(top)
-        elif top == "tools":
-            roots.update(path for path in facts["code"] if path.startswith(top + "/")
-                         and Path(path).suffix in {".py", ".js", ".mjs", ".sh", ".json"})
         elif top == "styleboard":
             roots.update(path for path in facts["code"] + facts["dependencies"]
                          if path.startswith(top + "/") and Path(path).suffix in

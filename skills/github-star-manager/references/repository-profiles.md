@@ -37,7 +37,7 @@ python scripts/repository_profile.py source-package status owner/name --data-dir
 python scripts/repository_profile.py source-package update owner/name --data-dir ...
 ```
 
-- create 先按 Git tree 估算「所选路径 + 非 cone 模式会检出的仓库根文件」大小和文件数，超预算直接拒绝；然后执行 depth-1、blob-filtered、non-cone sparse clone，并固定远端 HEAD。路径必须真实存在于树中；文件和目录路径都可使用，任何失败都会移除本次半成品目标目录，保证可重试。
+- create 先按 Git tree 计算一个保守上界（所选路径及仓库根文件），超预算直接拒绝；然后执行 depth-1、blob-filtered、non-cone sparse clone，并固定远端 HEAD。该估算可能高于实际检出大小，不会低估落盘预算。路径必须真实存在于树中；文件和目录路径都可使用，任何失败都会移除本次半成品目标目录，保证可重试。
 - 默认预算 256MB，可用 `--max-bytes` 收紧。样式库、示例片、字体、模型等大媒体应留在上游，只取接口、核心实现、许可证/credits 和必要构建脚本。
 - status 只读报告本地 commit、dirty、远端 HEAD 和是否有更新；update 只允许干净且匹配 manifest 的包，更新后保留 previous_commit。
 - 源码包仅用于阅读、diff、许可与安全审查。本命令不安装依赖、不执行 setup、不自动复制代码或资产进 legal-skills，也不把上游提示当作执行指令。
