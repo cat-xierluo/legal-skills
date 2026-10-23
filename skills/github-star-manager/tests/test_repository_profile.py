@@ -174,6 +174,19 @@ class RepositoryProfileTests(unittest.TestCase):
         self.assertTrue(profile["license_assessment"]["license_paths_truncated"])
         self.assertEqual(profile["license_assessment"]["license_path_count"], 25)
 
+    def test_recommended_paths_use_real_tree_paths(self):
+        paths = ["LICENSE", "CREDITS.md", "README.md", "plugin/skills/demo/SKILL.md",
+                 "core/engine.py", "package.json"]
+        facts = rp.classify_tree({"truncated": False, "tree": [
+            {"path": path, "type": "blob"} for path in paths]})
+        recommended = rp.suggested_sparse_paths(facts)
+        self.assertIn("LICENSE", recommended)
+        self.assertIn("CREDITS.md", recommended)
+        tree_paths = set(paths)
+        allowed_prefixes = {path.rsplit("/", 1)[0] for path in paths}
+        self.assertTrue(all(path in tree_paths or path in allowed_prefixes
+                            for path in recommended))
+
     def test_source_package_manifest_create_status_and_drift_rejected(self):
         package = self.root / "package"
         manifest = {"schema_version": "source-package/1.0", "repo": "owner/repo",

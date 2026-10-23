@@ -220,9 +220,7 @@ def infer_kind(repo, facts, skills, capabilities):
 def suggested_sparse_paths(facts):
     """Prefer implementation and Skill launchers; leave bulky demo/media assets upstream."""
     roots = {path for path in facts["dependencies"] if "/" not in path}
-    known_names = {Path(path).name.lower() for path in (
-        facts["code"] + facts["media"] + facts["dependencies"] + facts["licenses"])}
-    roots.update(name for name in ("license", "licence", "credits.md", "notice") if name in known_names)
+    roots.update(path for path in facts["licenses"] if "/" not in path)
     for path in facts["skills"]:
         parts = path.split("/")
         roots.add("/".join(parts[:-1]) if len(parts) > 1 else parts[0])
