@@ -244,6 +244,49 @@ def suggested_sparse_paths(facts):
     return sorted(roots)
 
 
+def local_reference_snapshots(repo, roots):
+    """Find immutable snapshots already curated by an installed Skill."""
+    slug = repo.replace("/", "--")
+    result = []
+    for root in roots:
+        root_path = Path(root)
+        libraries = []
+        if root_path.is_dir():
+            libraries.append(root_path / "reference-library")
+            libraries.extend(path / "reference-library" for path in root_path.glob("*") if path.is_dir())
+        for library in libraries:
+            source = library / "sources" / slug
+            if not source.is_dir():
+                continue
+            commit = None
+            if (source / ".git").exists():
+                try:
+                    commit = run_git(["git", "-C", str(source), "rev-parse", "HEAD"])
+                except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                    pass
+            catalog_entry = None
+            readme = library / "README.md"
+            if readme.is_file():
+                try:
+                    text = readme.read_text(encoding="utf-8", errors="replace")
+                    marker = "sources/" + slug + "/"
+                    position = text.find(marker)
+                    if position >= 0:
+                        tail = text[position + len(marker): position + len(marker) + 400]
+                        match = re.search(r"`([0-9a-f]{7,40})`", tail)
+                        if match:
+                            catalog_entry = match.group(1)
+                except OSError:
+                    pass
+            pinned = commit or catalog_entry
+            result.append({
+                "path": str(source), "commit": pinned,
+                "git_commit": commit, "catalog_commit": catalog_entry,
+                "status": "existing-local-snapshot",
+                "upstream_commit_comparison": "local pinned commit compared with profile head by the Agent",
+            })
+    return result
+
 def local_matches(repo, text, skills, roots, project=None):
     profiles, warnings = discover(roots, project)
     source = " ".join([repo, text, " ".join(s.get("description") or "" for s in skills if s.get("valid"))])
@@ -305,6 +348,7 @@ def build_profile(repo, data_dir, roots, project=None):
     capabilities = infer_capabilities(combined_text, dependency_docs)
     kind = infer_kind(meta, facts, skills, capabilities)
     matches, match_warnings = local_matches(repo, " ".join(combined_text), skills, roots, project)
+    snapshots = local_reference_snapshots(repo, roots)
     profile = {
         "schema_version": "repository-profile/1.0", "repo": repo,
         "repo_id": meta.get("id"), "default_branch": branch, "head_commit": commit,
@@ -338,15 +382,12 @@ def build_profile(repo, data_dir, roots, project=None):
                 "Check asset, font, model, and music licenses separately from the repository license.",
                 "Inspect dependency size and setup scripts before installation; profile evidence is not execution evidence.",
             ],
-            "candidate_conclusion_for_lemo_style_repositories": {
-                "direct_skill_use": "Likely viable only as a production backend/style library after one bounded sample and license/dependency checks; the upstream Skill is a launcher, not the runtime itself.",
-                "method_reuse": "Compare timeline, renderer, audio, subtitles, and style-contract designs separately; copying the whole system is not the default.",
-                "do_not_claim": "Do not mark tested/adopted from this API profile alone.",
-            },
         },
+        "local_snapshots": snapshots,
         "source_package": {
             "default_strategy": "none; API profile is sufficient for initial review",
-            "recommended_strategy": ("bounded source package pinned to commit"
+            "recommended_strategy": ("existing-local-snapshot; compare its pinned commit with upstream before materializing another package" if snapshots else
+                                     "bounded source package pinned to commit"
                                      if kind == "skill-backed runtime/repository"
                                      or any(len(row["domain_concepts"]) >= 2 for row in matches) else "none"),
             "recommended_paths": [],
@@ -355,8 +396,17 @@ def build_profile(repo, data_dir, roots, project=None):
         },
         "profile_revision": None,
     }
-    if profile["source_package"]["recommended_strategy"] != "none":
+    if profile["source_package"]["recommended_strategy"].startswith("bounded source package"):
         profile["source_package"]["recommended_paths"] = suggested_sparse_paths(facts)
+    for snapshot in snapshots:
+        if snapshot.get("commit") and snapshot["commit"] != commit:
+            if len(snapshot["commit"]) < 40:
+                prefix = snapshot["commit"]
+                snapshot["upstream_commit_comparison"] = "different-prefix" if not commit.startswith(prefix) else "same-prefix"
+            else:
+                snapshot["upstream_commit_comparison"] = "different" if snapshot["commit"] != commit else "same"
+        else:
+            snapshot["upstream_commit_comparison"] = "unknown"
     profile["profile_revision"] = digest({
         "repo_id": profile["repo_id"], "pushed_at": profile["identity"]["pushed_at"],
         "readme": profile["readme"] and profile["readme"]["blob_sha"],
@@ -510,8 +560,17 @@ def source_manifest(data_dir, repo):
 
 
 def cmd_package_create(args):
+    try:
+        return _cmd_package_create(args)
+    except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        return emit(envelope([], errors=[str(exc)]), 1)
+
+
+def _cmd_package_create(args):
     if not valid_repo(args.repo):
         return emit(envelope([], errors=["Invalid owner/repo"]), 1)
+    if args.target is None:
+        return emit(envelope([], errors=["--target is required for source-package create"]), 1)
     data_dir = args.data_dir.expanduser().resolve()
     target = args.target.expanduser().resolve()
     if target.exists() and any(target.iterdir()):
@@ -534,7 +593,9 @@ def cmd_package_create(args):
         return emit(envelope([], errors=[
             f"Requested source package is {estimated_bytes} bytes, exceeding the explicit {args.max_bytes}-byte budget"]), 1)
     target.parent.mkdir(parents=True, exist_ok=True)
-    created_target = False
+    # A non-empty target is rejected above, so this directory is ours to manage
+    # and must be removed if any later step fails.
+    created_target = True
     try:
         run_git(["git", "clone", "--depth", "1", "--filter=blob:none", "--no-checkout", remote, str(target)], timeout=300)
         created_target = True
@@ -639,7 +700,8 @@ def parser():
     package.add_argument("action", choices=["create", "status", "update"])
     package.add_argument("repo")
     package.add_argument("--data-dir", type=Path, required=True)
-    package.add_argument("--target", type=Path, required=True)
+    package.add_argument("--target", type=Path)
+    # Only create mutates a target; status/update read it from the manifest.
     package.add_argument("--path", action="append")
     package.add_argument("--max-bytes", type=positive, default=256_000_000,
                          help="Reject packages whose selected Git blobs exceed this size")

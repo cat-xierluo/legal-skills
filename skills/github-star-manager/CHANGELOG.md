@@ -8,13 +8,15 @@
 
 ### 新增
 
-- **重点项目画像**：新增 `repository_profile.py profile`，用 GitHub API 有界读取元数据、递归树、README、Skill 单元和依赖声明，识别仓库形态、能力线索、媒体/代码比例、许可证风险，并按领域概念匹配本地 Skill。API 失败保留上一次完整画像，树截断和取样边界显式可见。
+- **重点项目画像**：新增 `repository_profile.py profile`，用 GitHub API 有界读取元数据、递归树、README、Skill 单元和依赖声明，识别仓库形态、能力线索、媒体/代码比例、许可证风险，并按领域概念匹配本地 Skill。画像同时扫描本地套件的 `reference-library/sources/`，命中时报告既有快照路径、固定 commit 与上游差异，避免重复克隆。API 失败返回上一次完整画像并标 partial，树截断和取样边界显式可见。
 - **重点仓库 focus**：支持 add/list/remove 少量重点仓库，记录关注原因；它是人工优先级清单，不改变每日召回或反馈抑制，也不把用户套件退回逐项目手工登记。
 - **有界源码包**：显式 create/status/update 固定 commit 的 depth-1 blob-filtered non-cone sparse checkout。create 先按 Git tree 估算所选路径及仓库根文件，拒绝超预算或不存在路径；失败清理半成品目标目录，status 只读报告远端差异，update 拒绝脏现场并保留 previous_commit。不安装依赖、不执行上游 setup、不复制资产进公开仓库。API 刷新失败时返回上一次完整画像并明确 partial，不把旧数据伪装成本次新证据。
 
 ### 验证边界
 
-- 真实 `lemomo-ai/lemo-opuscar` API 画像确认其为 Skill-backed runtime/repository，包含 2 个 Skill 启动文档、966 个代码/文档文件、402 个媒体资产；本地优先匹配 legal-video、code-video、voice-craft、code-livephoto 等。真实稀疏包按实现路径取样约 0.5MB Git blob、本地约 2.4MB，未执行其代码。直接生产采用仍是 `needs_review`，需一个有界样例与资产许可核查。
+- 真实 `lemomo-ai/lemo-opuscar` API 画像确认其为 Skill-backed runtime/repository：2 个 Skill 启动文档、1056 个代码/文档文件、402 个媒体资产、8 个依赖声明、97 个脚本；推断能力含 canvas 渲染、FFmpeg 合成、字幕、TTS/voice、音乐、混音与风格系统。本地优先匹配 legal-video、code-video、voice-craft、code-livephoto。
+- 画像命中 `code-video` 参照库已有快照（固定 `b65efe6ea393fdc71212898ea4c57c754cfefa46`），因此不再建议重复克隆，并报告其与上游 head `3961ddb3d24d8876e0e2754f7790d66908acee51` 不一致。
+- 直接生产采用仍是 `needs_review`：需要上游生产契约与本地等价物对照、有界样例和资产许可核查；画像本身不产生任何仓库专属结论。
 
 ## [0.10.0] - 2026-10-22
 

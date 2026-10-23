@@ -81,6 +81,7 @@ class RepositoryProfileTests(unittest.TestCase):
         self.assertEqual(profile["local_matches"][0]["project_id"], "video-skill")
         self.assertEqual(profile["local_matches"][0]["domain_concepts"], ["timeline", "video", "voice"])
         self.assertEqual(profile["reuse_assessment"]["status"], "needs_review")
+        self.assertNotIn("candidate_conclusion_for_lemo_style_repositories", profile["reuse_assessment"])
         self.assertEqual(profile["source_package"]["recommended_strategy"], "bounded source package pinned to commit")
         self.assertIn("package.json", profile["source_package"]["recommended_paths"])
         self.assertIn("plugin/skills/demo", profile["source_package"]["recommended_paths"])
@@ -101,6 +102,24 @@ class RepositoryProfileTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 rp.build_profile("owner/repo", self.data, [self.skills])
         self.assertEqual(rp.read_json(rp.cache_path(self.data, "owner/repo")), cached)
+
+    def test_existing_local_reference_snapshot_supersedes_new_package(self):
+        source = self.skills / "video-skill" / "reference-library" / "sources" / "owner--repo"
+        source.mkdir(parents=True)
+        (source / "README.md").write_text("demo snapshot\n", encoding="utf-8")
+        library = self.skills / "video-skill" / "reference-library" / "README.md"
+        library.write_text("| [owner/repo](sources/owner--repo/) | `bbbbbbb` | demo |", encoding="utf-8")
+        paths = ["README.md", "plugin/skills/demo/SKILL.md", "core/engine.py", "package.json"]
+        readme = {"path": "README.md", "sha": "sha", "encoding": "none", "text": "video timeline"}
+        skill = {"path": "plugin/skills/demo/SKILL.md", "sha": "skill", "encoding": "none",
+                 "text": "---\nname: demo\ndescription: code video styles\n---\n"}
+        dependency = {"path": "package.json", "sha": "dep", "encoding": "none", "text": "{}"}
+        with patch.object(rp, "github_get", side_effect=[meta(), branch(), tree(paths), readme, skill, dependency]):
+            profile, _ = rp.build_profile("owner/repo", self.data, [self.skills])
+        self.assertEqual(profile["source_package"]["recommended_strategy"].split(";")[0], "existing-local-snapshot")
+        self.assertEqual(profile["local_snapshots"][0]["catalog_commit"], "bbbbbbb")
+        self.assertEqual(profile["local_snapshots"][0]["upstream_commit_comparison"], "different-prefix")
+        self.assertEqual(profile["source_package"]["recommended_paths"], [])
 
     def test_profile_refresh_failure_returns_last_complete_cache(self):
         cached = {"schema_version": "repository-profile/1.0", "repo": "owner/repo",
@@ -216,8 +235,8 @@ class RepositoryProfileTests(unittest.TestCase):
         run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "repository_profile.py"),
                               "source-package", "create", "owner/repo",
                               "--data-dir", str(self.data)], capture_output=True, text=True)
-        self.assertEqual(run.returncode, 2)
-        self.assertIn("--target", run.stderr)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("--target", json.loads(run.stdout)["errors"][0])
 
     def test_source_package_size_guard_uses_selected_tree_blobs(self):
         tree = {"truncated": False, "tree": [
@@ -275,6 +294,25 @@ class RepositoryProfileTests(unittest.TestCase):
             rc, result = capture(rp.cmd_package_create, args)
         self.assertEqual(rc, 1)
         self.assertIn("exceeding", result["errors"][0])
+        self.assertFalse(target.exists())
+
+    def test_clone_failure_cleans_partial_target(self):
+        target = self.root / "clone-failure"
+        tree_rows = [{"path": "README.md", "type": "blob", "size": 10}]
+        def git(command, cwd=None, timeout=120):
+            if command[1:3] == ["ls-remote", "https://github.com/owner/repo.git"]:
+                return "a" * 40 + "\tHEAD"
+            if command[1] == "clone":
+                target.mkdir()
+                (target / ".git").mkdir()
+                (target / ".git" / "config").write_text("partial\n")
+                raise RuntimeError("git failed (128): clone")
+            raise AssertionError(command)
+        args = self.args(target=target, path=None, max_bytes=1000)
+        with patch.object(rp, "run_git", side_effect=git), \
+             patch.object(rp, "github_get", return_value={"truncated": False, "tree": tree_rows}):
+            rc, result = capture(rp.cmd_package_create, args)
+        self.assertEqual(rc, 1)
         self.assertFalse(target.exists())
 
     def test_cli_invalid_names_do_not_touch_network(self):
