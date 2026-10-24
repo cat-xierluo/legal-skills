@@ -66,6 +66,39 @@ def github_get(endpoint, paginate=False, accept="application/vnd.github+json"):
     return json.loads(result.stdout)
 
 
+class BudgetExceeded(RuntimeError):
+    """The run's GitHub GET budget is exhausted."""
+
+
+def budgeted_get(budget, endpoint, **kwargs):
+    """Count one GET against the run budget, then perform it."""
+    if budget is not None and not budget.take("get"):
+        raise BudgetExceeded(endpoint)
+    return github_get(endpoint, **kwargs)
+
+
+class RequestBudget:
+    """Hard ceiling on GitHub GET calls issued in one run."""
+
+    def __init__(self, limit):
+        self.limit = limit
+        self.used = 0
+        self.by_kind = {}
+
+    def take(self, kind, cost=1):
+        if self.limit is not None and self.used + cost > self.limit:
+            # Record the attempt so a saturated budget stays visible.
+            self.by_kind[kind + "_denied"] = self.by_kind.get(kind + "_denied", 0) + 1
+            return False
+        self.used += cost
+        self.by_kind[kind] = self.by_kind.get(kind, 0) + cost
+        return True
+
+    def report(self):
+        return {"limit": self.limit, "used": self.used, "by_kind": dict(self.by_kind),
+                "exhausted": self.limit is not None and self.used >= self.limit}
+
+
 def refresh_snapshot(data_dir, old):
     login = github_get("user").get("login")
     if not isinstance(login, str) or not re.fullmatch(r"[A-Za-z0-9-]+", login):
@@ -556,7 +589,7 @@ def fetch_evidence(candidate, data_dir, prior=None):
                            ("releases", f"repos/{name}/releases?per_page=1"),
                            ("commits", f"repos/{name}/commits?per_page=5")):
         try:
-            value = github_get(endpoint)
+            value = budgeted_get(candidate.get("budget"), endpoint)
             if kind == "readme":
                 content = base64.b64decode(value.get("content", ""), validate=False).decode("utf-8", "replace")
                 record["readme"] = {"blob_sha": value.get("sha"), "url": value.get("html_url"),
@@ -572,6 +605,9 @@ def fetch_evidence(candidate, data_dir, prior=None):
                 TypeError, KeyError, AttributeError) as exc:
             record["status"] = "partial"
             record["errors"].append(f"{kind}: {type(exc).__name__}")
+            if isinstance(exc, BudgetExceeded):
+                record["status"] = "skipped"
+                break
     record["change_summary"] = {
         "baseline_available": bool(prior),
         "head_changed": (record.get("head_sha") != prior.get("head_sha")) if prior else None,
@@ -589,6 +625,55 @@ def fetch_evidence(candidate, data_dir, prior=None):
     if record["status"] == "complete":
         atomic_json(path, record)
     # A partial refresh never destroys the last complete evidence.
+    return record
+
+
+def fetch_cheap_evidence(candidate, data_dir, prior=None, budget=None):
+    """One GET: the latest release, for background coverage rotation."""
+    name = candidate["repo"]
+    if not REPO_PATTERN.fullmatch(name):
+        raise ValueError("Invalid owner/repo")
+    record = {"repo": name, "repo_id": candidate.get("repo_id"),
+              "repo_revision": candidate["repo_revision"], "fetched_at": now_utc().isoformat(),
+              "status": "complete", "errors": [], "probe": "cheap",
+              "previous": {"head_sha": (prior or {}).get("head_sha"),
+                           "release": (prior or {}).get("release"),
+                           "readme": (prior or {}).get("readme")}}
+    try:
+        value = budgeted_get(budget, f"repos/{name}/releases?per_page=1")
+        record["release"] = release_record(value)
+    except BudgetExceeded:
+        record["status"] = "skipped"
+        record["errors"].append("request budget exhausted")
+        return record
+    except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired,
+            TypeError, KeyError, AttributeError) as exc:
+        record["status"] = "partial"
+        record["errors"].append(f"releases: {type(exc).__name__}")
+        return record
+    baseline = bool(prior and prior.get("status") == "complete")
+    record["baseline_available"] = baseline
+    if baseline:
+        record["changed"] = {"release_changed": record.get("release") != prior.get("release"),
+                             "head_changed": None, "readme_changed": None}
+    record["cheap_revision"] = shared_evidence_revision(
+        {"head": None, "release": record.get("release"), "readme": {"blob_sha": None}})
+    record["scope"] = ("Latest release only; README and commit evidence were not fetched "
+                        "in this cheap probe")
+    path = data_dir / "auto-opportunities" / "evidence" / (name.replace("/", "__") + ".json")
+    if record["status"] == "complete" and prior and prior.get("status") == "complete":
+        # A cheap probe must not destroy a richer previous record.
+        merged = {**prior, **{key: record[key] for key in
+                              ("release", "fetched_at", "changed", "baseline_available")},
+                  "repo": name, "repo_id": record.get("repo_id"),
+                  "repo_revision": record["repo_revision"], "status": "complete",
+                  "errors": [], "probe": "cheap",
+                  "cheap_revision": record["cheap_revision"]}
+        merged["changed_at"] = (record["fetched_at"]
+                                if record["cheap_revision"] != prior.get("cheap_revision")
+                                else prior.get("changed_at", record["fetched_at"]))
+        atomic_json(path, merged)
+        return merged
     return record
 
 
@@ -655,7 +740,8 @@ def watch_state(data_dir, warnings):
 
 def probe_watched(snapshot, suppressed, data_dir, budget, *, focused=None,
                   candidates=(), prior=None, state=None, focus_limit=8, now=None,
-                  metadata_changes=(), used_repos=(), cheap_budget=0):
+                  metadata_changes=(), used_repos=(), request_budget=None,
+                  cheap_budget=0):
     """Reserve at least half the budget for the oldest checks across all Stars.
 
     The other half prioritizes new interest, focus and relevant metadata changes.
@@ -682,6 +768,7 @@ def probe_watched(snapshot, suppressed, data_dir, budget, *, focused=None,
     def oldest(name):
         return state.get(name, {}).get("checked_at", "")
     selected = []
+    cheap_selected = []
     def take(ordered, count):
         for name in ordered:
             if count <= 0:
@@ -694,15 +781,36 @@ def probe_watched(snapshot, suppressed, data_dir, budget, *, focused=None,
             count -= 1
     take(sorted(rows, key=lambda n: (oldest(n), priority(n))), (budget + 1) // 2)
     take(sorted(rows, key=lambda n: (priority(n)[:-1], oldest(n), n)), budget - len(selected))
+    # Cheap probes cover the background tail at one GET per repository.
+    if cheap_budget:
+        for name in sorted(rows, key=lambda n: (oldest(n), priority(n))):
+            if len(cheap_selected) >= cheap_budget:
+                break
+            if name in selected:
+                continue
+            if name in focused and sum(n in focused for n in selected + cheap_selected) >= focus_limit:
+                continue
+            cheap_selected.append(name)
     results, updates = {}, {}
     for name in selected:
         row = rows[name]
-        candidate = {"repo": name, "repo_id": row.get("id"), "repo_revision": repo_revision(row)}
+        candidate = {"repo": name, "repo_id": row.get("id"), "repo_revision": repo_revision(row),
+                     "budget": request_budget}
         value = fetch_evidence(candidate, data_dir, prior.get(name))
         results[name] = value
         updates[name] = {"checked_at": now_utc().isoformat(), "status": value["status"],
                          "repo_id": row.get("id"), "repo": name,
                          "repo_revision": repo_revision(row)}
+    for name in cheap_selected:
+        row = rows[name]
+        candidate = {"repo": name, "repo_id": row.get("id"), "repo_revision": repo_revision(row)}
+        value = fetch_cheap_evidence(candidate, data_dir, prior.get(name), request_budget)
+        results.setdefault(name, value)
+        updates.setdefault(name, {"checked_at": now_utc().isoformat(),
+                                  "status": value["status"],
+                                  "repo_id": row.get("id"), "repo": name,
+                                  "repo_revision": repo_revision(row),
+                                  "probe": "cheap"})
     if updates:
         directory = data_dir / "auto-opportunities"
         with write_lock(directory):
@@ -793,10 +901,13 @@ def cmd_auto(args):
                        args.recent_days, args.update_days, args.show_suppressed, focused,
                        queue=queue, queue_now=queue_now)
     candidates, suppressed, eligible = all_candidates(snapshot, queue=queue, queue_now=current)
+    request_budget = RequestBudget(getattr(args, "request_budget", None))
     unique = (probe_watched(snapshot, suppressed, data_dir, args.evidence_limit,
                            focused=focused, candidates=candidates, prior=prior, state=state,
                            focus_limit=getattr(args, "focus_limit", 8), now=current,
-                           metadata_changes=metadata_changes, used_repos=used_repos)
+                           metadata_changes=metadata_changes, used_repos=used_repos,
+                           request_budget=request_budget,
+                           cheap_budget=getattr(args, "cheap_budget", 0))
               if args.fetch_evidence else {})
     failed_now = {name for name, row in unique.items() if row["status"] != "complete"}
     unavailable = (previous_failures - set(unique)) | failed_now
@@ -903,6 +1014,9 @@ def cmd_auto(args):
         "used_repos_checked": sorted(set(unique) & used_repos),
         "used_repos": len(used_repos),
         "strategy": "at least half oldest-first across all Stars; remainder prioritizes metadata change, used source, new interest, focus and relevance",
+        "request_budget": request_budget.report(),
+        "cheap_probed_repos": sorted(name for name, row in unique.items()
+                                     if row.get("probe") == "cheap"),
     }
     queue_entries = list((queue.get("entries") or {}).values())
     queue_pending = [entry for entry in queue_entries if entry.get("state") in {"pending", "shown"}]
@@ -982,6 +1096,10 @@ def main():
             p.add_argument("--refresh", action="store_true", help="Explicit GET via gh; atomically commit only a full same-account snapshot")
             p.add_argument("--fetch-evidence", action="store_true", help="Explicit bounded README/release/commit GETs")
             p.add_argument("--evidence-limit", type=positive, default=4)
+            p.add_argument("--request-budget", type=positive,
+                           help="Maximum GitHub GET calls in this run (star refresh and evidence included)")
+            p.add_argument("--cheap-budget", type=positive, default=0,
+                           help="Additional one-GET release probes for background coverage rotation")
             p.add_argument("--focus-limit", type=positive, default=8,
                            help="Maximum focused repositories fetched per run within the shared evidence budget")
             p.add_argument("--write", action="store_true")

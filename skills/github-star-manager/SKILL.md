@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.13.1"
+version: "0.13.2"
 license: MIT
 description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star 和 Dashboard。不要用于单个未知仓库的一次性深度研究。
 ---

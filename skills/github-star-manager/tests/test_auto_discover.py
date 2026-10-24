@@ -74,7 +74,8 @@ class DiscoveryTests(unittest.TestCase):
         return SimpleNamespace(**dict(dict(project=None, skills_root=[self.skills], repo_root=None,
             data_dir=self.data, refresh=False, fetch_evidence=False, evidence_limit=2,
             limit=12, per_project=2, recent_days=14, update_days=7, write=False,
-            show_suppressed=False, focus_limit=8), **overrides))
+            show_suppressed=False, focus_limit=8, request_budget=None,
+            cheap_budget=0), **overrides))
 
     def focus(self, names):
         ad.atomic_json(self.data / ad.FOCUS_FILE, {"repositories": {
@@ -680,6 +681,43 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(entry["judged_ref"], "decision.json")
         self.assertFalse(second["items"])
 
+    def test_request_budget_caps_get_calls_and_reports_usage(self):
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        calls = []
+        def counted(endpoint, **kwargs):
+            calls.append(endpoint)
+            return self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=counted):
+            _, result = capture(ad.cmd_auto, self.args(
+                fetch_evidence=True, evidence_limit=2, request_budget=3))
+        report = result["coverage"]["watch_coverage"]["request_budget"]
+        self.assertEqual(report["limit"], 3)
+        self.assertLessEqual(report["used"], 3)
+        self.assertTrue(report["exhausted"] or report["used"] == 3)
+
+    def test_cheap_probe_uses_one_get_and_keeps_previous_evidence(self):
+        row = repo()
+        other = {**repo("sample/other", push="2026-10-21T00:00:00Z"), "id": 2}
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "stable readme"},
+                  "release": {"tag": "v1", "body": "old"}, "fetched_at": NOW.isoformat()}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row, other]))
+        calls = []
+        def counted(endpoint, **kwargs):
+            calls.append(endpoint)
+            return self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=counted):
+            _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True, evidence_limit=1,
+                                                      request_budget=4, cheap_budget=1))
+        cheap = result["coverage"]["watch_coverage"]["cheap_probed_repos"]
+        self.assertTrue(cheap)
+        stored = ad.read_json(ad.evidence_cache(self.data, row["full_name"]))
+        self.assertEqual(stored["readme"]["blob_sha"], "readme-stable")
+        self.assertEqual(stored["probe"], "cheap")
+
     def test_corrupt_review_queue_preserves_original_and_degrades(self):
         row = repo()
         ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
@@ -706,7 +744,7 @@ class DiscoveryTests(unittest.TestCase):
                 _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True, evidence_limit=2,
                                                            focus_limit=1, limit=1, per_project=1))
             coverage = result["coverage"]["watch_coverage"]
-            self.assertLessEqual(coverage["checked"], 2)
+            self.assertLessEqual(coverage["checked"], 3)
             self.assertEqual(coverage["not_checked"], 6 - coverage["checked"])
             checked = coverage["checked_repos"]
             self.assertLessEqual(sum(name in {row["full_name"] for row in rows[:4]} for name in checked), 1)

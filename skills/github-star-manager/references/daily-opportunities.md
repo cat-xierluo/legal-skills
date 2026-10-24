@@ -28,6 +28,7 @@ python scripts/auto_discover.py auto-discover \
 
 - `--refresh` 读取当前账户完整分页 Star 列表，继承真实 `starred_at`，复用现有写入口保存快照。分页失败、畸形行、重复 ID 或跨账户覆盖被拒，旧快照保留。首次使用建立基线，不捏造过去的变化。
 - `--fetch-evidence` 在 `evidence-limit` 个仓库预算内读取 README、最新 Release 正文和最近五条提交摘要。全部收藏均可轮巡，包含未匹配组件、已研判、普通收藏和 focus；至少一半预算按最久未检查时间分配，其余优先收藏元数据变化、本地已固定引用来源、新关注、focus 与相关更新，避免固定前几项长期占满。保存 URL、blob/commit SHA、获取时间、截断与部分失败状态；基线在任何刷新前捕获。
+- `--request-budget` 是单轮 GitHub GET 的硬上限（含收藏分页与取证），超出后拒绝新请求并在 `coverage.watch_coverage.request_budget` 披露已用次数、分类用量和拒绝次数。`--cheap-budget` 追加“一次 GET 只读最新 Release”的廉价探测档，用于大收藏量的背景轮巡；廉价探测不覆盖已有的完整 README/提交证据。按请求计价后，覆盖周期可核算：静态 N 个仓库、每天 R 次有效 GET 时，完整轮巡约需 ⌈N/R⌉ 天。
 - 每仓库最多两次固定 commit 间的 GitHub compare：先上次观察→本次，再按组件自己的固定版本补取；相同基线复用结果。多个组件的固定版本不同且预算不足时，该组件记 `not_fetched` 和自己的 base/head，不借用另一组件的 diff；已跟上 HEAD 记 `identical`。各 compare 最多保留 30 个文件、每文件 1200 字符 patch；API 的 300 文件上限、截断、失败显式披露。`upstream_change.observation_comparison` 是观察增量，候选 `target_snapshots/source_comparison` 绑定具体组件，`local_snapshots` 提供其他组件已有副本的线索。提交摘要和截断 diff 只能支持线索，不能证明机制有效。
 - 不带上述两个开关只读现有本地数据。超过 36 小时或未知时间的快照提示过时，不能据此声称已检查今日更新。
 - `--write` 保存本轮 JSON 到状态目录的 `auto-opportunities/runs/`；取证缓存位于 `auto-opportunities/evidence/`。结果中的 `run_path` 是实际产物。完整旧证据不会被一次失败刷新覆盖。
