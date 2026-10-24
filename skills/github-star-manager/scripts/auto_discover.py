@@ -381,9 +381,9 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
             name = repo.get("full_name", "")
             if not REPO_PATTERN.fullmatch(name):
                 continue
-            hits = match_terms(profile, repo)
             hints = [hint for hint in repo.get("_capability_hints", [])
                      if set(hint.get("concepts", [])) & set(profile.get("search_terms", []))]
+            hits = match_terms(profile, repo)
             # Capability hints form an independent, anchored recall channel.
             # They can surface a component when a new Release capability is not
             # present in stale README or repository metadata.
