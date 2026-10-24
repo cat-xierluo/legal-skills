@@ -129,14 +129,25 @@ focus 仓库即使没有组件匹配，也保留在 `focus_deltas` 检查汇总�
 python scripts/auto_discover.py reconcile --data-dir ~/.local/state/github-star-manager/discovery
 python scripts/auto_discover.py receipt --data-dir ~/.local/state/github-star-manager/discovery --outcome auto
 python scripts/auto_discover.py lease acquire --data-dir ~/.local/state/github-star-manager/discovery \
-  --owner "<本轮执行者>" --ttl 1800
+
+  --owner "<本轮执行者>" --run-id "<本轮运行 ID>" --ttl 1800
 python scripts/auto_discover.py lease release --data-dir ~/.local/state/github-star-manager/discovery \
-  --owner "<本轮执行者>"
+  --owner "<本轮执行者>" --run-id "<本轮运行 ID>"
 ```
 
 - **reconcile** 重新读取 `feedback/` 与 `review-queue.json`，把已有反馈卡对应的队列条目更新为 judged，并输出本轮新研判数量与积压统计。它复用与自动发现相同的判定规则和修订绑定：证据或目标修订已变、无法与当前证据对齐的卡不算已研判。没有反馈卡的条目保持 pending/shown，不会被标成已处理。队列文件损坏时保留原件、显式降级并以退出码 1 结束。
-- **receipt** 写 `auto-opportunities/runs/<ts>.receipt.json`，区分 judged / silent / failed。silent 必须有正向证据（存在准备阶段运行包、候选数为 0、队列无新增未研判、无卡片写入），否则被拒绝并以退出码 1 结束；Agent 崩溃、候选未研判、队列损坏一律记 failed。回执记录请求预算用量、候选数、写入卡片、reconcile 结果与通知结论。缺运行包时按“候选数为 0”处理并附显式警告。
-- **lease** 维护 `auto-opportunities/lease.json`（owner、run_id、acquired_at、expires_at），保证同一状态目录只有一个执行者消费队列。未过期且属于其他 owner 的租约会明确拒绝（退出码 1）；过期租约可被接管；释放只删除自己持有的那一份。租约文件损坏会被隔离备份并显式降级告警，而不是被当作“没有租约”静默通过。
+- **receipt** 写 `auto-opportunities/runs/<ts>.receipt.json`，区分 judged / silent / failed。
+  - `--outcome` 取值 `auto` / `judged` / `silent` / `failed`。**不传 `--outcome` 与传 `--outcome auto` 等价**：按本轮事实自动判定（默认即此行为）。`auto` 是合法取值，不会被参数解析拒绝。
+  - 判定口径：silent 必须有正向证据（存在**新鲜**的准备阶段运行包、候选数为 0、队列无新增未研判、无卡片写入），否则被拒绝并以退出码 1 结束；Agent 崩溃、候选未研判、队列损坏一律记 failed。
+  - 显式覆盖同样受事实约束：`failed` 始终保留（Agent 主动报错是合法意图）；`silent` 仍须通过正向证据校验；**显式 `judged` 也必须有正向证据**——本轮写出反馈卡，或队列条目真实变为 judged，且不存在队列损坏等失败事实；否则降级为 failed 并在 `errors` 说明原因。显式覆盖不能用来伪造与事实矛盾的结论。
+  - 回执记录请求预算用量、候选数、写入卡片、reconcile 结果与通知结论。缺运行包时按“候选数为 0”处理并附显式警告。
+  - **运行包新鲜度**：运行包的 `generated_at` 距今超过 `--max-run-age-hours`（默认 24 小时）时，本轮按“没有有效运行包”处理——候选数按 0 计、该运行包不作为“本轮”的边界（旧运行包之后写出的卡片不计入本轮 `cards_written`），并给出显式警告与错误。这种情况下不得记成静默成功。阈值可用 `--max-run-age-hours` 覆盖；过期判定用运行包自带的 `generated_at`，缺失时回退到文件 mtime。
+  - **运行包不可读**：运行包损坏（JSON 解析失败）或格式异常（顶层不是 JSON 对象）时，同样按“没有有效运行包”处理——候选数按 0 计、给出显式警告、**不得走 silent 分支**，无研判证据时判 failed。新鲜度判定在可读性检查**之前**生效（用文件 mtime），因此“长时间停机 + 运行包损坏”不会变成零警告的静默成功。此时“本轮边界”回退到文件 mtime，使本轮之后新出现的未研判条目仍被计入统计，而不是因为拿不到 `generated_at` 就被排除在外；连文件 mtime 都不可读时显式披露边界失效（`facts.run_boundary_known=false`）。
+- **lease** 维护 `auto-opportunities/lease.json`（owner、run_id、acquired_at、expires_at），保证同一状态目录只有一个执行者消费队列。
+  - 未过期且属于其他 owner 的租约会明确拒绝（退出码 1）；过期租约可被接管；释放只删除自己持有的那一份。
+  - 租约文件损坏会被隔离备份（改名保留，必要时先复制再删）并显式降级告警，而不是被当作“没有租约”静默通过。**隔离失败时拒绝获取租约**（退出码 1）并把损坏原文原样留在原位——不会用新租约覆盖掉无法保留的现场。
+  - **run_id 与续租**：同一 owner 续租时若未显式传入 `--run-id`，保留现有 run_id（原 run_id 因此仍可用于 release）；显式传入新的 `--run-id` 时按新值更新，并在 `notes` 里说明运行 ID 切换。过期租约被其他 owner 接管时分配新的 run_id。
+
 
 调用顺序：acquire 租约 → auto-discover 准备 → Agent 研判并写卡 → reconcile → receipt → release 租约。`opportunity.py record` 与这里的 `--data-dir` 是各自独立的入口，跨命令写卡时必须显式传入同一个目录，否则卡会落到默认缓存目录而 reconcile 看不到。
 
