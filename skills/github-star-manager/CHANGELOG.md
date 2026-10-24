@@ -4,6 +4,16 @@
 
 ---
 
+## [0.14.0] - 2026-10-24
+
+### 新增
+
+- **每日闭环三件套**：`auto_discover.py reconcile` 离线重读 `feedback/` 与研判队列，把有反馈卡的条目标为 judged 并披露积压；`receipt` 写 `runs/<ts>.receipt.json` 区分 judged / silent / failed，silent 需要正向证据；`lease` 用 `auto-opportunities/lease.json` 保证同一状态目录只有一个执行者消费队列，过期租约可接管、释放只删自己持有的那一份。三个命令全程离线。
+
+### 验证边界
+
+- 离线回归覆盖写卡后立即对账、无卡不置 judged、租约互斥与过期接管、损坏租约与队列的显式降级，以及 silent/failed 判定。每日调度仍未在本仓库启用：没有宿主侧真实触发回执就不宣称“每天已运行”。
+
 ## [0.13.2] - 2026-10-24
 
 ### 新增

@@ -66,6 +66,25 @@ focus 仓库即使没有组件匹配，也保留在 `focus_deltas` 检查汇总�
 
 `local_snapshots` 优先读取各组件的 `reference-library/manifests/<owner>--<repo>.json`，辅以 Git/目录表，记录固定 commit 和上游 head。固定版本长期落后可能是主动选择；已研判且上游/本地需求无新变化时保持静默。GSM 管自己的证据缓存；组件负责研究、固定来源版本、逐文件哈希、省略清单和采用结果。未在 Star 集合内的 focus 只报缺失，不称已查远端；组件独立登记的非收藏来源仍沿其已有研究流程。
 
+## 每日闭环：对账、回执与租约
+
+`auto-discover --write` 只负责“准备”。Agent 写完机会卡后，由三个离线命令补齐闭环，全部不联网：
+
+```bash
+python scripts/auto_discover.py reconcile --data-dir ~/.local/state/github-star-manager/discovery
+python scripts/auto_discover.py receipt --data-dir ~/.local/state/github-star-manager/discovery --outcome auto
+python scripts/auto_discover.py lease acquire --data-dir ~/.local/state/github-star-manager/discovery \
+  --owner "<本轮执行者>" --ttl 1800
+python scripts/auto_discover.py lease release --data-dir ~/.local/state/github-star-manager/discovery \
+  --owner "<本轮执行者>"
+```
+
+- **reconcile** 重新读取 `feedback/` 与 `review-queue.json`，把已有反馈卡对应的队列条目更新为 judged，并输出本轮新研判数量与积压统计。它复用与自动发现相同的判定规则和修订绑定：证据或目标修订已变、无法与当前证据对齐的卡不算已研判。没有反馈卡的条目保持 pending/shown，不会被标成已处理。队列文件损坏时保留原件、显式降级并以退出码 1 结束。
+- **receipt** 写 `auto-opportunities/runs/<ts>.receipt.json`，区分 judged / silent / failed。silent 必须有正向证据（存在准备阶段运行包、候选数为 0、队列无新增未研判、无卡片写入），否则被拒绝并以退出码 1 结束；Agent 崩溃、候选未研判、队列损坏一律记 failed。回执记录请求预算用量、候选数、写入卡片、reconcile 结果与通知结论。缺运行包时按“候选数为 0”处理并附显式警告。
+- **lease** 维护 `auto-opportunities/lease.json`（owner、run_id、acquired_at、expires_at），保证同一状态目录只有一个执行者消费队列。未过期且属于其他 owner 的租约会明确拒绝（退出码 1）；过期租约可被接管；释放只删除自己持有的那一份。租约文件损坏会被隔离备份并显式降级告警，而不是被当作“没有租约”静默通过。
+
+调用顺序：acquire 租约 → auto-discover 准备 → Agent 研判并写卡 → reconcile → receipt → release 租约。`opportunity.py record` 与这里的 `--data-dir` 是各自独立的入口，跨命令写卡时必须显式传入同一个目录，否则卡会落到默认缓存目录而 reconcile 看不到。
+
 ## 宿主调度提示
 
 本 Skill 不启动常驻线程。以下是可给已有定时 Agent 的提示模板；安装或生成模板不代表已启用：
