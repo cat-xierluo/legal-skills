@@ -192,11 +192,6 @@ def terms_for(text: str) -> set[str]:
     return terms - STOP
 
 
-def scope_terms(text: str) -> set[str]:
-    """Concepts that a skill explicitly excludes; they stay out of recall."""
-    return terms_for(" ".join(exclusion_fragments(text)))
-
-
 def implementation_files(profile: dict) -> list[Path]:
     """Bounded implementation references: entry code, scripts, and local tests."""
     root = Path(profile.get("skill_path") or "")
@@ -431,12 +426,24 @@ def discover(roots=None, project=None) -> tuple[list[dict], list[str]]:
         # positive recall while preserving them as inspectable scope warnings.
         excluded = set()
         for fragment in profile["exclusions"]:
-            # Concept aliases intentionally expand both sides of the boundary:
-            # "配音" excludes the whole voice concept, not just that spelling.
-            excluded.update(terms_for(fragment))
-            excluded.update(terms_for(" ".join(
-                alias for aliases in CONCEPTS for alias in aliases
-                if alias in fragment)))
+            # Match aliases with word boundaries, then exclude the whole
+            # canonical concept. A substring such as "academic" containing
+            # "cad" must not erase CAD capabilities; conversely, "不承担配音"
+            # must remove voice/tts/配音 as one concept, not just one spelling.
+            for aliases in CONCEPTS:
+                if concept_hits(fragment, aliases):
+                    excluded.update(aliases)
+        # Keep only whole aliases present in positive recall. This avoids
+        # expanding a concept merely because its synonym appeared in a negative
+        # fragment.
+        positive_concepts = set(positive)
+        # A concept asserted positively is a real capability even if a later
+        # exclusion narrows one use case ("voice clips, not voice courses").
+        asserted = set()
+        for aliases in CONCEPTS:
+            if positive_concepts.intersection(aliases):
+                asserted.update(aliases)
+        excluded = {alias for alias in excluded if alias not in asserted}
         profile["search_terms"] = sorted(positive - excluded)
         profile["primary_terms"] = sorted(terms_for(profile["name"] + " " + description))
         profile["implementation_terms"] = sorted(terms_for(" ".join(implementation_text)) - excluded)

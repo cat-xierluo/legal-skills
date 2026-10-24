@@ -74,7 +74,7 @@ class DiscoveryTests(unittest.TestCase):
         return SimpleNamespace(**dict(dict(project=None, skills_root=[self.skills], repo_root=None,
             data_dir=self.data, refresh=False, fetch_evidence=False, evidence_limit=2,
             limit=12, per_project=2, recent_days=14, update_days=7, write=False,
-            show_suppressed=False, focus_limit=8, request_budget=None,
+            show_suppressed=False, focus_limit=8, request_budget=60,
             cheap_budget=0), **overrides))
 
     def focus(self, names):
@@ -181,6 +181,19 @@ class DiscoveryTests(unittest.TestCase):
         for term in ("voice", "tts", "配音", "lipsync", "口型"):
             self.assertNotIn(term, profiles["static-ip"]["search_terms"])
 
+    def test_exclusion_uses_word_boundaries_and_positive_claim_wins(self):
+        boundary = write_skill(self.skills, "legal-search",
+                               "法律检索。不要用于 academic research 场景。")
+        positive = write_skill(self.skills, "voice-clips",
+                               "负责配音的短视频工具。不承担长篇配音课程。")
+        profiles = {p["project_id"]: p for p in self.profiles()}
+        for term in ("search", "检索", "retrieval"):
+            self.assertIn(term, profiles["legal-search"]["search_terms"])
+        for term in ("voice", "tts", "配音", "语音合成"):
+            self.assertIn(term, profiles["voice-clips"]["search_terms"])
+        self.assertNotIn("cad", profiles["legal-search"]["search_terms"])
+        self.assertTrue(boundary.is_dir() and positive.is_dir())
+
     def test_unknown_and_future_star_are_not_recent_interest(self):
         for starred in (None, "nonsense", "2099-01-01T00:00:00Z"):
             selected, _, _ = ad.prepare(snapshot([{**repo(), "starred_at": starred}]), self.profiles(), {}, NOW)
@@ -250,7 +263,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(rc, 1)
 
     def test_full_refresh_real_writer_and_failure_retains_baseline(self):
-        responses = [{"login": "sample"}, [[{"starred_at": repo()["starred_at"], "repo": repo()}]]]
+        responses = [{"login": "sample"}, [{"starred_at": repo()["starred_at"], "repo": repo()}]]
         with patch.object(ad, "github_get", side_effect=responses):
             saved = ad.refresh_snapshot(self.data, None)
         self.assertEqual(saved["repos"][0]["id"], 1)
@@ -696,6 +709,111 @@ class DiscoveryTests(unittest.TestCase):
         self.assertLessEqual(report["used"], 3)
         self.assertTrue(report["exhausted"] or report["used"] == 3)
 
+    def test_refresh_counts_each_star_page_against_the_budget(self):
+        rows = [{**repo(f"sample/subtitle{i}"), "id": i} for i in range(100)]
+        pages = [rows[:100], [rows[0]]]  # synthetic second page triggers a duplicate
+        ad.atomic_json(self.data / "original_latest.json", snapshot([]))
+        calls = []
+        def github(endpoint, **kwargs):
+            calls.append(endpoint)
+            if endpoint == "user":
+                return {"login": "sample"}
+            if endpoint.endswith("&page=1"):
+                return pages[0]
+            if endpoint.endswith("&page=2"):
+                return pages[1]
+            raise AssertionError(endpoint)
+        with patch.object(ad, "github_get", side_effect=github):
+            with self.assertRaises(ValueError):
+                ad.refresh_snapshot(self.data, None, ad.RequestBudget(3))
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(calls[1].endswith("&page=1"))
+        self.assertTrue(calls[2].endswith("&page=2"))
+
+    def test_refresh_and_compare_share_the_same_request_budget(self):
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), {
+            "status": "complete", "head_sha": "a" * 40,
+            "repo_revision": ad.repo_revision(row),
+            "readme": {"blob_sha": "stable", "text": "stable"},
+            "release": None})
+        pinned, head = "a" * 40, "b" * 40
+        library = self.directory / "reference-library"
+        (library / "sources" / "sample--subtitle").mkdir(parents=True)
+        ad.atomic_json(library / "manifests" / "sample--subtitle.json",
+                       {"repo": row["full_name"], "commit": pinned})
+        calls = []
+        def github(endpoint, **kwargs):
+            calls.append(endpoint)
+            if endpoint == "user":
+                return {"login": "sample"}
+            if "user/starred" in endpoint:
+                return [{"starred_at": row["starred_at"], "repo": row}]
+            if "/commits?" in endpoint:
+                return [{"sha": head, "commit": {"message": "new"}}]
+            if "/compare/" in endpoint:
+                return {"status": "ahead", "files": []}
+            return self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=github):
+            _, result = capture(ad.cmd_auto, self.args(
+                refresh=True, fetch_evidence=True, evidence_limit=1,
+                request_budget=8))
+        report = result["coverage"]["watch_coverage"]["request_budget"]
+        self.assertLessEqual(report["used"], 8)
+        self.assertEqual(report["used"], len(calls))
+        self.assertGreater(report["by_kind"].get("refresh", 0), 0)
+        self.assertGreater(report["by_kind"].get("compare", 0), 0)
+
+
+    def test_budget_skip_does_not_advance_checked_or_release_suppression(self):
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "stable readme"},
+                  "release": {"tag": "v1", "body": "old"},
+                  "fetched_at": (NOW - timedelta(days=2)).isoformat(),
+                  "changed_at": (NOW - timedelta(days=2)).isoformat()}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "auto-opportunities" / "watch.json", {
+            row["full_name"]: {"checked_at": (NOW - timedelta(days=2)).isoformat(),
+                               "status": "complete", "repo_id": row["id"],
+                               "repo": row["full_name"],
+                               "repo_revision": ad.repo_revision(row)}})
+        with patch.object(ad, "github_get", side_effect=ad.BudgetExceeded("test")):
+            _, result = capture(ad.cmd_auto, self.args(
+                fetch_evidence=True, evidence_limit=1, request_budget=1))
+        # Deep evidence issues readme first and is skipped before any partial
+        # data can replace the complete cache.
+        coverage = result["coverage"]["watch_coverage"]
+        self.assertEqual(coverage["skipped_budget"], [row["full_name"]])
+        self.assertEqual(coverage["checked"], 0)
+        self.assertEqual(coverage["not_checked"], 1)
+        stored = ad.read_json(ad.evidence_cache(self.data, row["full_name"]))
+        self.assertEqual(stored["changed_at"], cached["changed_at"])
+        watch = ad.read_json(self.data / "auto-opportunities" / "watch.json")
+        self.assertEqual(watch[row["full_name"]]["checked_at"],
+                         (NOW - timedelta(days=2)).isoformat())
+        self.assertTrue(watch[row["full_name"]]["last_attempt_at"])
+
+    def test_first_cheap_probe_persists_release_baseline(self):
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        release = [{"tag_name": "v1", "body": "initial", "html_url": "https://example.test/v1"}]
+        def github(endpoint, **kwargs):
+            return release if "/releases?" in endpoint else self.github_evidence(endpoint, **kwargs)
+        with patch.object(ad, "github_get", side_effect=github):
+            _, first = capture(ad.cmd_auto, self.args(
+                fetch_evidence=True, evidence_limit=0,
+                cheap_budget=1, request_budget=4))
+        stored = ad.read_json(ad.evidence_cache(self.data, row["full_name"]))
+        self.assertEqual(stored["release"]["tag"], "v1")
+        self.assertEqual(stored["probe"], "cheap")
+        self.assertTrue(stored.get("changed_at"))
+        self.assertEqual(first["coverage"]["watch_coverage"]["cheap_probed"],
+                         [row["full_name"]])
+
     def test_cheap_probe_uses_one_get_and_keeps_previous_evidence(self):
         row = repo()
         other = {**repo("sample/other", push="2026-10-21T00:00:00Z"), "id": 2}
@@ -712,11 +830,28 @@ class DiscoveryTests(unittest.TestCase):
         with patch.object(ad, "github_get", side_effect=counted):
             _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True, evidence_limit=1,
                                                       request_budget=4, cheap_budget=1))
-        cheap = result["coverage"]["watch_coverage"]["cheap_probed_repos"]
+        cheap = result["coverage"]["watch_coverage"]["cheap_probed"]
         self.assertTrue(cheap)
         stored = ad.read_json(ad.evidence_cache(self.data, row["full_name"]))
         self.assertEqual(stored["readme"]["blob_sha"], "readme-stable")
         self.assertEqual(stored["probe"], "cheap")
+
+    def test_cheap_probe_legacy_cache_does_not_refresh_changed_at(self):
+        row = repo()
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "stable readme"},
+                  "release": None, "fetched_at": NOW.isoformat(),
+                  "changed_at": "2026-10-01T00:00:00+00:00"}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        with patch.object(ad, "github_get", side_effect=self.github_evidence):
+            _, result = capture(ad.cmd_auto, self.args(
+                fetch_evidence=True, evidence_limit=1,
+                cheap_budget=1, request_budget=2))
+        stored = ad.read_json(ad.evidence_cache(self.data, row["full_name"]))
+        self.assertEqual(stored["changed_at"], cached["changed_at"])
+        self.assertFalse(result["items"][0]["upstream_change"]["changed"] or {})
 
     def test_corrupt_review_queue_preserves_original_and_degrades(self):
         row = repo()
