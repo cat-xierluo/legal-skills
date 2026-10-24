@@ -455,12 +455,30 @@ def reconcile_queue(data_dir, now=None, since=None):
     return result, (1 if degraded else 0)
 
 
+def _file_mtime_iso(path):
+    """文件 mtime 的 ISO 时间戳；不可得时返回 None。"""
+    try:
+        return datetime.fromtimestamp(
+            Path(path).stat().st_mtime, timezone.utc).isoformat()
+    except (OSError, TypeError, ValueError):
+        return None
+
+
 def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=None):
     """读取最近一次准备阶段的运行包（离线），提取候选数与请求预算用量。
 
-    新鲜度：运行包 generated_at 距今超过 max_age_hours 时，本轮视为"没有有效
-    运行包"——候选数按 0 计、该运行包不作为"本轮"的边界，事实里给出
-    stale_run=True 与显式警告，避免长时间停机被记成"本轮无变化"的静默成功。
+    新鲜度判定基于运行包时间戳（generated_at，缺失或不可解析时回退文件 mtime）：
+    距今超过 max_age_hours 时，本轮视为"没有有效运行包"——候选数按 0 计、该运行包
+    不作为"本轮"的边界，事实里给出 stale_run=True 与显式警告，避免长时间停机被
+    记成"本轮无变化"的静默成功。
+
+    新鲜度判定在可读性检查之前生效：文件 mtime 在内容损坏时依然可读，因此不可读
+    或格式异常的运行包同样会被判定是否过期，不会因为解析失败就跳过新鲜度判定。
+
+    不可读/格式异常的运行包按"没有有效运行包"处理（与过期、缺失同口径）：显式警告、
+    候选数按 0 计、不得走 silent 分支、无研判证据时判 failed。此时"本轮边界"回退到
+    文件 mtime，使本轮之后新出现的未研判条目仍被计入；若连 mtime 都不可读，则显式
+    披露边界失效（run_boundary_known=False），不假装边界有效。
     """
     now = now or now_utc()
     path = daily_loop.latest_run_file(data_dir)
@@ -468,18 +486,27 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
                "generated_at": None, "candidates": 0, "request_budget": None,
                "status": None, "warnings": [], "stale_run": False,
                "run_age_hours": None, "max_run_age_hours": max_age_hours,
-               "run_stale_reason": None}
+               "run_stale_reason": None, "run_readable": False,
+               "run_usable": False, "run_invalid": False,
+               "run_invalid_reason": None, "run_boundary_known": False,
+               "boundary_at": None, "boundary_source": None}
     if not path:
-        context["warnings"].append("没有找到准备阶段运行包——本轮候选数按 0 计")
+        context["warnings"].append(
+            "没有找到准备阶段运行包——本轮候选数按 0 计；"
+            "本轮边界不可判定（新增未研判条目与本轮写入的卡片均无法界定）")
         return context
+    # 新鲜度先于可读性判定：内容损坏时文件 mtime 依然可读。
+    mtime_age = daily_loop.run_age_hours(path, None, now)
+    mtime_iso = _file_mtime_iso(path)
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        context["warnings"].append(f"运行包不可读（{type(exc).__name__}）——本轮候选数按 0 计")
-        return context
+        return _invalid_run_context(context, mtime_age, mtime_iso, max_age_hours,
+                                    f"运行包不可读（{type(exc).__name__}）")
     if not isinstance(value, dict):
-        context["warnings"].append("运行包格式异常——本轮候选数按 0 计")
-        return context
+        return _invalid_run_context(context, mtime_age, mtime_iso, max_age_hours,
+                                    "运行包格式异常（顶层不是 JSON 对象）")
+    context["run_readable"] = True
     items = value.get("items")
     context["generated_at"] = value.get("generated_at")
     context["candidates"] = len(items) if isinstance(items, list) else 0
@@ -500,6 +527,53 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
             + "\u2014\u2014\u672c\u8f6e\u6309\u6ca1\u6709\u6709\u6548\u8fd0\u884c\u5305\u5904\u7406\uff1a\u5019\u9009\u6570\u6309 0 \u8ba1\uff0c"
             "\u4e14\u8be5\u8fd0\u884c\u5305\u4e0d\u4f5c\u4e3a\u672c\u8f6e\u8fb9\u754c")
         context["candidates"] = 0
+    else:
+        # 新鲜且可读：运行包的生成时间就是"本轮"边界。
+        context["run_usable"] = True
+        if parse_dt(context["generated_at"]) is not None:
+            context["run_boundary_known"] = True
+            context["boundary_at"] = context["generated_at"]
+            context["boundary_source"] = "generated_at"
+        elif mtime_iso:
+            # generated_at 缺失或不可解析 → 与新鲜度判定同口径回退到文件 mtime。
+            context["run_boundary_known"] = True
+            context["boundary_at"] = mtime_iso
+            context["boundary_source"] = "file_mtime"
+    return context
+
+
+def _invalid_run_context(context, mtime_age, mtime_iso, max_age_hours, reason):
+    """运行包不可读或格式异常：按"没有有效运行包"处理，不走静默分支。
+
+    新鲜度用文件 mtime 判定（内容损坏时 generated_at 不可得），过期与否都显式披露；
+    运行包新鲜且可定界时，"本轮边界"回退到 mtime，保证本轮之后新出现的未研判条目
+    仍被计入统计，而不是因为拿不到 generated_at 就被排除在统计之外。
+    """
+    context["run_invalid"] = True
+    context["run_invalid_reason"] = reason
+    context["candidates"] = 0
+    context["generated_at"] = None
+    if mtime_age is not None:
+        context["run_age_hours"] = round(mtime_age, 2)
+    stale_note = ""
+    if mtime_age is not None and mtime_age > max_age_hours:
+        context["stale_run"] = True
+        context["run_stale_reason"] = (
+            f"准备阶段运行包已过期（文件 mtime 距今 {mtime_age:.1f} 小时前，"
+            f"超过阈值 {max_age_hours} 小时）")
+        stale_note = "；且" + context["run_stale_reason"]
+    elif mtime_iso:
+        # 运行包本身新鲜（mtime 在阈值内）→ 边界回退到 mtime。
+        context["run_boundary_known"] = True
+        context["boundary_at"] = mtime_iso
+        context["boundary_source"] = "file_mtime"
+    else:
+        context["warnings"].append(
+            "运行包时间边界不可判定（文件 mtime 不可读）"
+            "——本轮无法区分新增未研判条目")
+    context["warnings"].append(
+        f"{reason}——本轮按没有有效运行包处理：候选数按 0 计，"
+        f"该运行包不作为本轮边界{stale_note}")
     return context
 
 
@@ -548,9 +622,13 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
     - "judged" 必须有正向证据（本轮写出反馈卡或队列条目真实变为 judged），
       且队列损坏等失败事实存在时降级为 failed。
 
-    运行包新鲜度：generated_at 距今超过 max_run_age_hours 的运行包不代表
-    "本轮准备"——本轮按没有有效运行包处理（候选数按 0 计、不作为本轮边界），
-    并给出显式警告，绝不记成零警告的 silent。
+    运行包新鲜度：运行包时间戳（generated_at，缺失或不可解析时回退文件 mtime）距今
+    超过 max_run_age_hours 的运行包不代表"本轮准备"——本轮按没有有效运行包处理
+    （候选数按 0 计、不作为本轮边界），并给出显式警告，绝不记成零警告的 silent。
+
+    运行包不可读或格式异常同样按"没有有效运行包"处理：显式警告、候选数按 0 计、
+    不得走 silent 分支、无研判证据时判 failed。此时"本轮边界"回退到文件 mtime，
+    使本轮之后新出现的未研判条目仍被计入；边界确实不可判定时显式披露。
 
     没有准备阶段运行包时，"本轮写入的卡片"无法界定（历史卡片不算本轮），
     但 reconcile 真实把条目判为 judged 仍是 judged 结局，缺运行包记为显式警告。
@@ -558,10 +636,13 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
     now = now or now_utc()
     run = latest_run_context(data_dir, max_age_hours=max_run_age_hours, now=now)
     stale_run = bool(run.get("stale_run"))
-    # 过期运行包不能作为"本轮"边界：卡片不能按它的生成时间起算。
-    run_at = None if stale_run else parse_dt(run.get("generated_at"))
+    invalid_run = bool(run.get("run_invalid"))
+    # 过期或不可读的运行包不能作为"本轮"边界：卡片不能按它的生成时间起算。
+    # 不可读运行包的边界回退到文件 mtime（见 latest_run_context），使本轮之后
+    # 新出现的未研判条目仍被计入；边界确实不可判定时 run_at 为 None，并显式披露。
+    run_at = None if stale_run else parse_dt(run.get("boundary_at"))
     reconcile, reconcile_code = reconcile_queue(data_dir, now=now, since=run_at)
-    written = cards_written_since(data_dir, run.get("generated_at")
+    written = cards_written_since(data_dir, run.get("boundary_at")
                                   if not stale_run else None)
     backlog = reconcile.get("backlog") or {}
     new_pending = reconcile.get("new_pending", 0)
@@ -581,6 +662,12 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
         "stale_run": stale_run,
         "run_age_hours": run.get("run_age_hours"),
         "max_run_age_hours": max_run_age_hours,
+        "run_readable": bool(run.get("run_readable")),
+        "run_invalid": invalid_run,
+        "run_invalid_reason": run.get("run_invalid_reason"),
+        "run_boundary_known": bool(run.get("run_boundary_known")),
+        "run_boundary_at": run.get("boundary_at"),
+        "run_boundary_source": run.get("boundary_source"),
     }
     actionable = [card for card in written
                   if card.get("decision") in {"tested", "adopted", "experiment_proposed"}]
@@ -598,6 +685,7 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
     if reconcile_code:
         failures.extend(reconcile.get("errors") or [])
     stale_reason = run.get("run_stale_reason") if stale_run else None
+    invalid_reason = run.get("run_invalid_reason") if invalid_run else None
     # judged 的正向证据：本轮写出反馈卡，或队列条目真实变为 judged。
     judged_evidence = bool(facts["cards_written"] or facts["newly_judged"])
     resolved = outcome
@@ -606,14 +694,18 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
             resolved = "failed"
         elif judged_evidence:
             # 与"缺运行包"同口径：reconcile 真实判为 judged 仍是 judged 结局，
-            # 但运行包过期/缺失必须留显式警告。
+            # 但运行包过期/缺失/不可读必须留显式警告。
             resolved = "judged"
-        elif (facts["run_found"] and not stale_run and facts["candidates"] == 0
+        elif (facts["run_found"] and not stale_run and not invalid_run
+              and facts["candidates"] == 0
               and facts["new_unjudged"] == 0 and facts["cards_written"] == 0):
             resolved = "silent"
         else:
             resolved = "failed"
-            if stale_run:
+            if invalid_run:
+                failures.append(str(invalid_reason) + "，本轮按没有有效准备处理"
+                                "——无法取得候选数=0 的正向证据，不得记为静默")
+            elif stale_run:
                 failures.append(str(stale_reason) + "，本轮按没有有效准备处理"
                                 "——无法取得候选数=0 的正向证据，不得记为静默")
             elif not facts["run_found"]:
@@ -646,13 +738,15 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
             "max_run_age_hours": max_run_age_hours,
             "note": "历史积压只披露不阻断——相同未恢复问题不每天重报",
         }
-        if (not facts["run_found"] or stale_run or facts["candidates"] != 0
+        if (not facts["run_found"] or stale_run or invalid_run
+                or facts["candidates"] != 0
                 or facts["new_unjudged"] != 0 or facts["cards_written"] != 0
                 or failures):
             return {"ok": False,
                     "error": "silent 需要正向证据，但本轮事实不支持："
                              f"run_found={facts['run_found']}, "
                              f"stale_run={stale_run}, "
+                             f"run_invalid={invalid_run}, "
                              f"candidates={facts['candidates']}, "
                              f"new_unjudged={facts['new_unjudged']}, "
                              f"backlog_pending_total={facts['backlog_pending_total']}, "

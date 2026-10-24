@@ -17,9 +17,11 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -706,6 +708,204 @@ class ReviewFixRegressionTests(unittest.TestCase):
                                  capture_output=True, text=True)
         self.assertEqual(release.returncode, 0)
         self.assertTrue(json.loads(release.stdout)["released"])
+
+
+class UnreadableRunPackageRegressionTests(unittest.TestCase):
+    """运行包不可读/格式异常时的回执判定回归（PR #341 第二轮 F1）。
+
+    缺陷：不可读或格式异常的运行包会提前 return，跳过新鲜度判定，于是
+    stale_run 恒为 False、run_age_hours 恒为 None；候选数按 0 计使
+    outcome 落进 silent 分支——长时间停机 + 运行包损坏变成零警告静默成功。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.data = Path(self.tmp.name) / "data"
+        self.data.mkdir(parents=True)
+        self.runs = self.data / "auto-opportunities" / "runs"
+        self.runs.mkdir(parents=True)
+
+    def write_broken_run(self, content="{broken", age_hours=None, name=None):
+        """写一个内容损坏或格式异常的运行包，可选回拨 mtime。"""
+        name = name or "20260101T000000.000000Z.json"
+        path = self.runs / name
+        path.write_text(content, encoding="utf-8")
+        if age_hours is not None:
+            stamp = time.time() - age_hours * 3600
+            os.utime(path, (stamp, stamp))
+        return path
+
+    def write_queue(self, entries):
+        value = {"schema_version": ad.QUEUE_SCHEMA,
+                 "entries": {entry["candidate_key"]: entry for entry in entries},
+                 "cursor": {"round_seq": 1, "last_round_at": NOW.isoformat()}}
+        ad.atomic_json(self.data / ad.QUEUE_FILE, value)
+        return value
+
+    def entry(self, state="shown", first_seen_at=None):
+        first_seen_at = first_seen_at or datetime.now(timezone.utc)
+        return {
+            "candidate_key": "k1", "project_id": "demo-video", "repo_id": 7,
+            "repo": "sample/subtitle", "capability_key": "subtitle",
+            "capability_label": "subtitle", "scope": "direction", "state": state,
+            "first_seen_at": first_seen_at.isoformat(),
+            "last_shown_at": first_seen_at.isoformat(), "shown_count": 1,
+            "last_target_revision": "t1", "last_repo_revision": "r1",
+            "last_evidence_revision": "e1",
+        }
+
+    def write_valid_run(self, candidates=0, generated_at=None):
+        generated_at = generated_at or datetime.now(timezone.utc)
+        payload = {"schema_version": "1.0", "generated_at": generated_at.isoformat(),
+                   "status": "ok", "items": [{"x": i} for i in range(candidates)]}
+        path = self.runs / (generated_at.strftime("%Y%m%dT%H%M%S.%fZ") + ".json")
+        ad.atomic_json(path, payload)
+        return path
+
+    # ---------- F1-1：损坏运行包不得静默成功 ----------
+
+    def test_f1_corrupt_run_package_is_not_silent(self):
+        self.write_broken_run(age_hours=72)
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data)],
+                             capture_output=True, text=True)
+        payload = json.loads(run.stdout)
+        # 长时间停机 + 运行包损坏不得记成静默成功
+        self.assertNotEqual(payload["outcome"], "silent")
+        self.assertEqual(payload["outcome"], "failed")
+        self.assertEqual(run.returncode, 1)
+        # 必须有显式警告，不能是零警告
+        self.assertTrue(payload["warnings"])
+        self.assertTrue(any("运行包不可读" in w for w in payload["warnings"]))
+        self.assertTrue(payload["errors"])
+
+    def test_f1_corrupt_run_package_freshness_is_still_checked(self):
+        # 新鲜度判定必须在可读性检查之前生效：mtime 可读，损坏也要判过期
+        self.write_broken_run(age_hours=72)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 1)
+        self.assertTrue(receipt["facts"]["stale_run"])
+        self.assertIsNotNone(receipt["facts"]["run_age_hours"])
+        self.assertGreater(receipt["facts"]["run_age_hours"], 24)
+
+    def test_f1_corrupt_run_package_fresh_is_still_failed(self):
+        # 运行包本身新鲜（mtime 在阈值内）但内容损坏 → 仍不得 silent
+        self.write_broken_run(age_hours=1)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["outcome"], "failed")
+        self.assertFalse(receipt["facts"]["stale_run"])
+        self.assertTrue(receipt["facts"]["run_invalid"])
+        self.assertTrue(receipt["warnings"])
+
+    def test_f1_malformed_but_parseable_run_package_is_not_silent(self):
+        # 格式异常但可解析（顶层不是 dict）→ 同上
+        self.write_broken_run(content="[1, 2, 3]", age_hours=72)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["outcome"], "failed")
+        self.assertTrue(receipt["facts"]["run_invalid"])
+        self.assertTrue(any("格式异常" in w for w in receipt["warnings"]))
+        self.assertTrue(receipt["errors"])
+
+    def test_f1_corrupt_run_package_with_new_pending_entry_is_not_silent(self):
+        # 损坏运行包 + 队列有本轮新增未研判条目 → 不得静默成功
+        self.write_broken_run(age_hours=1)
+        self.write_queue([self.entry(first_seen_at=datetime.now(timezone.utc))])
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 1)
+        self.assertNotEqual(receipt["outcome"], "silent")
+        self.assertEqual(receipt["outcome"], "failed")
+        self.assertTrue(receipt["errors"])
+
+    def test_f1_corrupt_run_package_keeps_new_unjudged_counted(self):
+        # 不可读运行包的"本轮边界"回退到文件 mtime：本轮新增未研判条目仍被计入，
+        # 不能因为 run_at=None 就被排除在统计之外。
+        self.write_broken_run(age_hours=1)
+        self.write_queue([self.entry(first_seen_at=datetime.now(timezone.utc))])
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertTrue(receipt["facts"]["run_boundary_known"])
+        self.assertEqual(receipt["facts"]["run_boundary_source"], "file_mtime")
+        self.assertEqual(receipt["facts"]["new_unjudged"], 1)
+        self.assertEqual(receipt["facts"]["new_pending"], 1)
+
+    def test_f1_corrupt_run_package_boundary_failure_is_disclosed(self):
+        # 边界确实不可判定（mtime 不可读）时显式披露，不假装边界有效
+        self.write_broken_run(age_hours=1)
+        with mock.patch.object(ad.daily_loop, "run_age_hours", return_value=None), \
+                mock.patch.object(ad, "_file_mtime_iso", return_value=None):
+            payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["outcome"], "failed")
+        self.assertFalse(receipt["facts"]["run_boundary_known"])
+        self.assertTrue(any("边界不可判定" in w for w in receipt["warnings"]))
+
+    def test_f1_explicit_silent_with_corrupt_run_package_is_rejected(self):
+        # 显式 silent 也必须被事实校验拒绝
+        self.write_broken_run(age_hours=1)
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data),
+                              "--outcome", "silent"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1)
+        payload = json.loads(run.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertIn("silent", payload["error"])
+
+    def test_f1_corrupt_run_package_candidates_counted_as_zero(self):
+        self.write_broken_run(age_hours=1)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(receipt["facts"]["candidates"], 0)
+        self.assertEqual(receipt["cards_written"], 0)
+
+    # ---------- 已验证通过的行为不得被矫枉过正 ----------
+
+    def test_f1_valid_fresh_run_package_still_allows_silent(self):
+        self.write_valid_run(candidates=0)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 0)
+        self.assertEqual(receipt["outcome"], "silent")
+        self.assertFalse(receipt["facts"]["stale_run"])
+        self.assertFalse(receipt["facts"]["run_invalid"])
+        self.assertTrue(receipt["facts"]["run_boundary_known"])
+        self.assertEqual(receipt["facts"]["run_boundary_source"], "generated_at")
+
+    def test_f1_valid_stale_run_package_still_fails(self):
+        old = datetime.now(timezone.utc) - timedelta(hours=30)
+        self.write_valid_run(candidates=0, generated_at=old)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["outcome"], "failed")
+        self.assertTrue(receipt["facts"]["stale_run"])
+
+    def test_f1_missing_run_package_still_fails(self):
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["outcome"], "failed")
+        self.assertFalse(receipt["facts"]["run_found"])
+        self.assertTrue(any("运行包" in w for w in receipt["warnings"]))
+
+    def test_f1_max_run_age_hours_override_still_works(self):
+        # 阈值可覆盖：把阈值调大后旧的（可读）运行包重新有效
+        old = datetime.now(timezone.utc) - timedelta(hours=30)
+        self.write_valid_run(candidates=0, generated_at=old)
+        payload, code = ad.build_receipt(self.data, max_run_age_hours=48,
+                                         now=datetime.now(timezone.utc))
+        receipt = payload["receipt"]
+        self.assertEqual(code, 0)
+        self.assertEqual(receipt["outcome"], "silent")
+        self.assertFalse(receipt["facts"]["stale_run"])
 
 
 if __name__ == "__main__":

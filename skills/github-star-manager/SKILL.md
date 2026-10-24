@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.14.1"
+version: "0.14.2"
 license: MIT
 description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star 和 Dashboard。不要用于单个未知仓库的一次性深度研究。
 ---
@@ -292,8 +292,8 @@ python scripts/auto_discover.py lease release \
 ```
 
 - **receipt** 的 `--outcome` 取值 `auto`/`judged`/`silent`/`failed`，默认（不传）等价于 `auto`。silent 必须有正向证据；显式 `judged` 也必须有正向证据（本轮写出反馈卡或队列条目真实变为 judged）且无队列损坏等失败事实，否则降级为 failed；显式 `failed` 始终保留。回执字段含 `facts`（候选数、写入卡片、新增研判、队列状态、`stale_run`、`run_age_hours`、`max_run_age_hours`）、`evidence`、`errors`、`warnings`、`notification`、`requested_outcome`；结局 failed 时退出码 1。
-- **运行包新鲜度**：准备阶段运行包 `generated_at` 超过 `--max-run-age-hours`（默认 24）即视为没有有效运行包——候选数按 0 计、不作为本轮边界，并给出显式警告；长时间停机不得记成静默成功。
-- **lease**：未过期且属于其他 owner 的租约明确拒绝（退出码 1）；损坏租约被隔离备份后显式降级，**隔离失败时拒绝获取租约并把损坏原文原样留在原位**；同 owner 续租未显式给 `--run-id` 时保留原 run_id。
+- **运行包新鲜度**：准备阶段运行包 `generated_at` 超过 `--max-run-age-hours`（默认 24）即视为没有有效运行包——候选数按 0 计、不作为本轮边界，并给出显式警告；长时间停机不得记成静默成功。运行包损坏或格式异常同样按“没有有效运行包”处理（显式警告、不得 silent、无证据判 failed）；新鲜度用文件 mtime 在可读性检查之前判定，本轮边界回退到 mtime 以免新增未研判条目被漏计。
+- **lease**：未过期且属于其他 owner 的租约明确拒绝（退出码 1）；损坏租约被隔离备份后显式降级，**隔离失败时拒绝获取租约并把损坏原文原样留在原位**；同 owner 续租未显式给 `--run-id` 时保留原 run_id——同 owner 接管自己已过期的租约同样保留原 run_id，只有其他 owner 接管过期租约时才分配新 run_id。
 
 ### 重点项目画像与复用判断
 

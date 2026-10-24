@@ -314,4 +314,3 @@ def latest_run_file(data_dir) -> Optional[Path]:
     if not files:
         return None
     return max(files, key=lambda p: (p.stat().st_mtime, p.name))
-
