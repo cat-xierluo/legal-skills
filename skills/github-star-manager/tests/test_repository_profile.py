@@ -16,6 +16,7 @@ from unittest.mock import patch
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import repository_profile as rp  # noqa: E402
+import project_context as pc  # noqa: E402
 
 
 def capture(func, args):
@@ -376,6 +377,157 @@ class RepositoryProfileTests(unittest.TestCase):
                              capture_output=True, text=True)
         self.assertEqual(run.returncode, 1)
         self.assertTrue(json.loads(run.stdout)["errors"])
+
+
+class ScopeExclusionTests(unittest.TestCase):
+    """A scope conflict must follow the component's own exclusion sentence.
+
+    The historical extractor cut the text at the exclusion marker and kept
+    the whole remainder, so a React UI library looked like a conflict with
+    the publishing skill because the rest of that skill's own documentation
+    mentioned "video" and "cover".
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.skills = self.root / "skills"
+        self.skills.mkdir()
+
+    def skill(self, name, description, tasks=None):
+        directory = self.skills / name
+        directory.mkdir()
+        (directory / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: {description}\n---\n# Demo\n", encoding="utf-8")
+        if tasks is not None:
+            (directory / "TASKS.md").write_text(tasks, encoding="utf-8")
+        return directory
+
+    def profile(self, name, description, tasks=None):
+        self.skill(name, description, tasks)
+        profiles, _ = rp.discover([self.skills])
+        return next(p for p in profiles if p["project_id"] == name)
+
+    def test_exclusion_clause_does_not_swallow_the_whole_document(self):
+        profile = self.profile(
+            "douyin-video-publish",
+            "将律师 IP 成片与封面通过抖音创作者中心上传，填写标题与话题标签。"
+            "不用于剪辑、生图、代写未经核验的法律结论或账号复盘。")
+        for clause in profile["exclusion_clauses"]:
+            self.assertLess(len(clause), 200, clause)
+        self.assertTrue(any("剪辑" in clause for clause in profile["exclusion_clauses"]))
+
+    def test_react_ui_upstream_is_not_a_conflict_with_the_publishing_skill(self):
+        # R7: an unrelated React/view/component repository must not be
+        # reported as conflicting with douyin-video-publish.
+        profile = self.profile(
+            "douyin-video-publish",
+            "将律师 IP 成片与封面通过抖音创作者中心上传。"
+            "不用于剪辑、生图、代写未经核验的法律结论或账号复盘。")
+        upstream = pc.terms_for(
+            "react component library view ui browser render cover layout subtitle")
+        conflicts = pc.scope_conflicts(profile, upstream)
+        self.assertEqual(conflicts, [], conflicts)
+        self.assertEqual(pc.scope_status(profile, conflicts), "no_stated_scope_conflict")
+
+    def test_real_exclusion_still_creates_a_conflict(self):
+        # The functionality must not be blinded: a real exclusion sentence
+        # still triggers the conflict.
+        profile = self.profile(
+            "video-skill",
+            "维护角色静帧素材。不承担配音或视频短片生产。")
+        upstream = pc.terms_for("short film production voice audio video")
+        conflicts = pc.scope_conflicts(profile, upstream)
+        self.assertTrue(conflicts, "The real exclusion no longer triggers")
+        self.assertTrue(any("视频" in row["exclusion"] for row in conflicts))
+        self.assertEqual(pc.scope_status(profile, conflicts), "conflicts_with_stated_scope")
+
+    def test_task_marker_does_not_swallow_the_following_task_lines(self):
+        # A marker inside a task line must not turn the rest of the task
+        # excerpt into one long exclusion fragment.
+        profile = self.profile(
+            "motion-animator",
+            "Motion Composer 的既有 HTML/CSS 录制兼容入口。",
+            tasks=('## 当前\n'
+                   '- [ ] 音频对齐能力评估：当前明确"不用于需要音频同步的复杂后期"，'
+                   '但口播稿配套动画与口播音频的对齐是高频需求，需评估是否纳入或明确交接给 '
+                   '`video-creator`\n'
+                   '- [ ] 字幕 / 标题动画预设库，把常见动效沉淀为可复用片段\n'
+                   '- [ ] 三种模式在 1920x1080 下的渲染质量回归\n'))
+        for clause in profile["exclusion_clauses"]:
+            self.assertLess(len(clause), 120, clause)
+        self.assertTrue(any("音频同步" in clause for clause in profile["exclusion_clauses"]))
+        self.assertFalse(any("字幕" in clause for clause in profile["exclusion_clauses"]))
+
+    def test_component_without_a_readable_exclusion_is_reported_as_unparsed(self):
+        # Silence must not be read as "no conflict": the status distinguishes
+        # the unparsed case and says a human has to confirm.
+        profile = self.profile("code-livephoto",
+                               "调用 code-video 的导演方法，制作动态卡片与 Live Photo。")
+        self.assertEqual(profile["exclusion_clauses"], [])
+        conflicts = pc.scope_conflicts(profile, pc.terms_for("video animation render"))
+        self.assertEqual(conflicts, [])
+        self.assertEqual(pc.scope_status(profile, conflicts), "stated_scope_unparsed")
+        note = pc.scope_note(profile)
+        self.assertTrue(note and "人工确认" in note)
+
+    def test_explicit_scope_limit_is_read_as_a_stated_boundary(self):
+        profile = self.profile(
+            "code-livephoto",
+            "调用 code-video 的导演方法。本 Skill 只维护卡片场景的适配。")
+        self.assertTrue(any("只维护" in clause for clause in profile["exclusion_clauses"]))
+
+    def test_component_can_declare_its_exclusions_explicitly(self):
+        directory = self.skill("declared-skill", "生成视频成片。")
+        (directory / "scope.json").write_text(
+            json.dumps({"exclusions": ["不承担配音", "不用于字幕翻译"]}), encoding="utf-8")
+        profiles, _ = rp.discover([self.skills])
+        profile = next(p for p in profiles if p["project_id"] == "declared-skill")
+        self.assertEqual(profile["exclusion_source"], "declared")
+        self.assertIn("不承担配音", profile["exclusion_clauses"])
+        upstream = pc.terms_for("voice dubbing subtitle translation video")
+        conflicts = pc.scope_conflicts(profile, upstream)
+        self.assertTrue(conflicts, "The declared exclusions must still create a conflict")
+
+    def test_tasks_file_can_declare_its_exclusions_explicitly(self):
+        directory = self.skill("declared-tasks-skill", "生成视频成片。")
+        (directory / "TASKS.md").write_text(
+            "## 当前\ndeclared_exclusions:\n- 不承担配音\n- 不用于字幕翻译\n",
+            encoding="utf-8")
+        profiles, _ = rp.discover([self.skills])
+        profile = next(p for p in profiles if p["project_id"] == "declared-tasks-skill")
+        self.assertEqual(profile["exclusion_source"], "declared")
+        self.assertIn("不承担配音", profile["exclusion_clauses"])
+
+    def test_profile_output_exposes_the_judgement_basis(self):
+        # The Agent has to see the sentence the judgement is based on.
+        directory = self.skill("video-static-skill",
+                               "维护角色静帧素材。不承担配音或视频短片生产。")
+        matches, _ = rp.local_matches("owner/repo", "voice short film video",
+                                      [], [self.skills])
+        row = matches[0]
+        self.assertTrue(row["exclusion_clauses"])
+        self.assertTrue(row["scope_conflicts"])
+        self.assertEqual(row["scope_status"], "conflicts_with_stated_scope")
+        self.assertTrue(any("视频短片生产" in clause for clause in row["exclusion_clauses"]))
+
+    def test_dai_ti_marker_is_read_as_an_exclusion(self):
+        # "不代替" states the same boundary as "不用于" and must be readable,
+        # otherwise a real exclusion looks like an unparsable scope.
+        profile = self.profile(
+            "legal-ai-hot",
+            "监测行业更新并交付候选素材。用于找近期选题；不代替法律检索、原文核验或写稿发布。")
+        self.assertTrue(any("法律检索" in clause for clause in profile["exclusion_clauses"]))
+        self.assertNotEqual(pc.scope_status(profile, []), "stated_scope_unparsed")
+
+    def test_routing_statement_is_not_an_exclusion(self):
+        # "完整视频走 code-video" is routing, not a statement of negative
+        # scope. It must not become an exclusion clause.
+        profile = self.profile(
+            "ascii-art-generator",
+            "Code Slides 的字符视觉层。完整卡片、视频、课件与 Live Photo 配对仍由对应制作 Skill 负责。")
+        self.assertEqual(profile["exclusion_clauses"], [])
 
 
 if __name__ == "__main__":

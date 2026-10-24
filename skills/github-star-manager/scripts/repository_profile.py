@@ -21,8 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from auto_discover import REPO_PATTERN, atomic_json, github_get, read_json, release_record  # noqa: E402
 from lockutil import write_lock  # noqa: E402
 from project_context import (CONCEPTS, discover, frontmatter, match_terms, terms_for,  # noqa: E402
-                           compare_snapshot_commit, scope_conflicts, shared_evidence_revision,
-                           shared_repo_revision)
+                           compare_snapshot_commit, scope_conflicts, scope_note, scope_status,
+                           shared_evidence_revision, shared_repo_revision)
 from star_query import emit, envelope  # noqa: E402
 
 
@@ -331,8 +331,11 @@ def local_matches(repo, text, skills, roots, project=None):
             "matched_terms": hits, "primary_matches": primary,
             "domain_concepts": concepts,
             "exclusions": profile.get("exclusions") or [],
+            "exclusion_clauses": list(profile.get("exclusion_clauses") or []),
+            "exclusion_source": profile.get("exclusion_source"),
             "scope_conflicts": conflicts,
-            "scope_status": "conflicts_with_stated_scope" if conflicts else "no_stated_scope_conflict",
+            "scope_status": scope_status(profile, conflicts),
+            "scope_note": scope_note(profile),
             "target_activity": profile["activity"], "target_revision": profile["target_revision"],
         })
     rows.sort(key=lambda row: (-len(set(row["domain_concepts"]) & priority_concepts),

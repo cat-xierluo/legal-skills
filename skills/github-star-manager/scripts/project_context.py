@@ -277,17 +277,153 @@ def capability_hints(readme_text="", release=None, commits=(), readme_blob_sha=N
 
 
 def positive_scope(text: str) -> str:
-    return re.split(r"不要用于|不承担|不用于|do not use|not for", text, maxsplit=1, flags=re.I)[0]
+    return re.split("|".join(re.escape(marker) for marker in EXCLUSION_MARKERS),
+                    text, maxsplit=1, flags=re.I)[0]
 
 
-EXCLUSION_MARKERS = ("不要用于", "不承担", "不用于", "do not use", "not for")
+# The markers that open an exclusion. "不代替" and "不替代" state the same
+# boundary as "不用于" and were missing, which left real exclusions
+# unreadable.
+EXCLUSION_MARKERS = ("不要用于", "不承担", "不用于", "不代替", "不替代",
+                     "do not use", "not for")
+
+# A marker only opens an exclusion. The exclusion itself is the short clause
+# that follows it, up to the next sentence boundary. Cutting the text at the
+# marker and keeping the whole remainder swallowed the rest of the document -
+# including the skill's own positive vocabulary - and turned unrelated
+# upstream repositories into false scope conflicts.
+# A clause ends at a sentence boundary, a line break, or the closing quote of
+# the quoted statement it belongs to. A comma does not end it: the real
+# exclusions list their items with "、" or "，".
+EXCLUSION_CLAUSE_END = re.compile(r"[。；;！!？?\n」』”\"]")
+EXCLUSION_CLAUSE_MAX = 200
+
+# Sentences that state a boundary without excluding a capability. They are
+# routing or authorship statements, not negative scope.
+NON_EXCLUSION_PATTERNS = (
+    re.compile(r"由\s*\S+\s*(统一)?(管理|维护|负责)"),
+    re.compile(r"走\s*\S+"),
+    re.compile(r"通用创作方法"),
+    re.compile(r"只(维护|负责|用于|支持|适配)"),
+)
+
+# A component can also limit itself with an explicit "only" clause instead of
+# a negative marker. These are read from the description, which is the
+# component's own statement of its boundary.
+SCOPE_LIMIT_MARKER = re.compile(
+    r"(?:本\s*(?:Skill|技能|工具|组件)?\s*)?只(?:维护|负责|支持|用于|适配|覆盖|处理|产出|生成)"
+    r"(?:[^，。；;\n]{1,60})")
+
+SCOPE_STATUS_CONFLICT = "conflicts_with_stated_scope"
+SCOPE_STATUS_NONE = "no_stated_scope_conflict"
+SCOPE_STATUS_UNPARSED = "stated_scope_unparsed"
+
+
+def exclusion_clauses(text: str) -> list[str]:
+    """Extract the stated exclusion clauses of a skill.
+
+    Only the clause that follows an exclusion marker is returned, and only up
+    to the first sentence boundary. The remainder of the document is never
+    part of the result.
+    """
+    clauses = []
+    for marker in EXCLUSION_MARKERS:
+        for match in re.finditer(re.escape(marker), text, re.I):
+            tail = text[match.end():]
+            clause = EXCLUSION_CLAUSE_END.split(tail, maxsplit=1)[0].strip()
+            clause = clause.strip(" \t\u3000,，、:：;；.。!！?？")
+            if not clause:
+                continue
+            if len(clause) > EXCLUSION_CLAUSE_MAX:
+                clause = clause[:EXCLUSION_CLAUSE_MAX]
+            if any(pattern.search(clause) for pattern in NON_EXCLUSION_PATTERNS):
+                continue
+            clauses.append(clause)
+    # Keep the first occurrence of each clause; a repeated marker is not a
+    # second, different exclusion.
+    seen, result = set(), []
+    for clause in clauses:
+        if clause in seen:
+            continue
+        seen.add(clause)
+        result.append(clause)
+    return result
+
+
+def scope_limit_clauses(text: str) -> list[str]:
+    """Read an explicit "only ..." boundary from a component's own text.
+
+    Some components state their boundary with an explicit limit ("only
+    maintains the card-scenario adaptation") instead of a negative marker.
+    These clauses are read from the description only, and the extracted
+    clause is the one the sentence itself states.
+    """
+    clauses = []
+    for match in SCOPE_LIMIT_MARKER.finditer(text or ""):
+        clause = match.group(0).strip()
+        if clause and clause not in clauses:
+            clauses.append(clause)
+    return clauses
 
 
 def exclusion_fragments(text: str) -> list[str]:
-    """Return the stated negative scope of a skill, kept verbatim for review."""
-    parts = re.split("|".join(re.escape(marker) for marker in EXCLUSION_MARKERS),
-                     text, flags=re.I)
-    return [part.strip() for part in parts[1:] if part.strip()]
+    """Return the stated negative scope of a skill, kept verbatim for review.
+
+    The result is the short exclusion clause only. The historical behaviour
+    returned everything after the marker up to the end of the text, which
+    mixed a real exclusion with the whole document.
+    """
+    return exclusion_clauses(text)
+
+
+def declared_exclusion_clauses(directory: Path):
+    """Read an explicit exclusion declaration from the component itself.
+
+    A component may state its boundary in a machine-readable way so the
+    offline extractor does not have to guess. Two forms are accepted:
+
+    - ``scope.json`` in the component directory with an ``exclusions`` list.
+    - A ``declared_exclusions:`` line in ``TASKS.md`` followed by one
+      clause per line.
+
+    ``None`` means "no explicit declaration", which is different from an
+    explicit empty list ("this component excludes nothing").
+    """
+    path = directory / "scope.json"
+    if path.is_file():
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if isinstance(value, dict) and isinstance(value.get("exclusions"), list):
+            clauses = [str(item).strip() for item in value["exclusions"]
+                       if isinstance(item, str) and item.strip()]
+            return clauses
+        return None
+    tasks = directory / "TASKS.md"
+    if tasks.is_file():
+        try:
+            text = tasks.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        match = re.search(r"^declared_exclusions:[ \t]*$", text, re.M)
+        if not match:
+            return None
+        clauses = []
+        lines = text[match.end():].splitlines()
+        # The declaration line is followed by its own items; a blank line
+        # ends the declaration.
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        for line in lines:
+            if not line.strip():
+                break
+            item = line.strip().lstrip("-*").strip()
+            if not item:
+                break
+            clauses.append(item)
+        return clauses
+    return None
 
 
 def concept_hits(text: str, concepts) -> list[str]:
@@ -306,15 +442,42 @@ def concept_hits(text: str, concepts) -> list[str]:
 
 
 def scope_conflicts(profile: dict, upstream_concepts) -> list[dict]:
-    """Match a local skill's stated exclusions against the upstream domain concepts."""
+    """Match a local skill's stated exclusions against the upstream domain concepts.
+
+    Only the skill's structured exclusion clauses take part. A concept that
+    merely appears somewhere in the skill's own documentation is not a
+    statement of negative scope and must not create a conflict.
+    """
     vocabulary = {alias for aliases in CONCEPTS for alias in aliases}
     relevant = set(upstream_concepts) & vocabulary
     conflicts = []
-    for fragment in profile.get("exclusions") or []:
+    for fragment in profile.get("exclusion_clauses") or profile.get("exclusions") or []:
         hits = concept_hits(fragment, relevant)
         if hits:
             conflicts.append({"exclusion": fragment[:300], "conflicting_concepts": hits})
     return conflicts
+
+
+def scope_status(profile: dict, conflicts) -> str:
+    """The scope judgement of a profile, including the unparsed case.
+
+    ``stated_scope_unparsed`` means the skill states no exclusion clause this
+    tool could read. It is not the same as "no conflict": the scope is
+    unverified and needs a human read.
+    """
+    if conflicts:
+        return SCOPE_STATUS_CONFLICT
+    if not (profile.get("exclusion_clauses") or profile.get("exclusions")):
+        return SCOPE_STATUS_UNPARSED
+    return SCOPE_STATUS_NONE
+
+
+def scope_note(profile: dict) -> str | None:
+    """Why the scope judgement could not be made, when it could not be made."""
+    if profile.get("exclusion_clauses") or profile.get("exclusions"):
+        return None
+    return ("排除条款未能结构化解析，请人工确认：该组件没有可读取的排除短句，"
+            "本次未做范围冲突判定")
 
 
 def compare_snapshot_commit(pinned, head):
@@ -381,12 +544,25 @@ def discover(roots=None, project=None) -> tuple[list[dict], list[str]]:
                         local_warnings.append("TASKS.md exceeds read budget; target incomplete")
                 exclusions = exclusion_fragments(meta["description"])
                 exclusions += exclusion_fragments("\n".join(t["text"] for t in tasks))
+                # An explicit limit is a stated boundary too. It is read from
+                # the description only, and it never widens the exclusion.
+                exclusions += scope_limit_clauses(meta["description"])
+                declared = declared_exclusion_clauses(real)
+                if declared is not None:
+                    # An explicit declaration is authoritative. It replaces
+                    # what the extractor read, so a component can state a
+                    # boundary the parser cannot see.
+                    exclusions = declared
+                    local_warnings.append(
+                        "Exclusion clauses taken from the component's explicit declaration")
                 profile = {
                     "project_id": meta["name"], "name": meta["name"],
                     "skill_path": str(real), "origin": "dynamic-skill-scan/2",
                     "description": meta["description"], "needs": [t["text"] for t in tasks],
                     "capabilities": [meta["description"]], "tasks": tasks,
                     "exclusions": exclusions,
+                    "exclusion_clauses": exclusions,
+                    "exclusion_source": "declared" if declared is not None else "extracted",
                     "source_ref": list(refs), "hashes": refs, "warnings": local_warnings,
                     "activity": {"status": "not_git", "commits": 0, "latest_at": None,
                                  "latest_commit": None},

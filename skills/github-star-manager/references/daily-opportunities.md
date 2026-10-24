@@ -13,6 +13,25 @@ python scripts/auto_discover.py projects --skills-root /path/to/suite-a --skills
 
 目标事实取自 `SKILL.md`、`TASKS.md` 的显式当前目标、路径限定 Git 历史，以及最多三个入口脚本/参考文档的有界实现摘要。历史/归档/DONE 条目不作为当前需求，description/TASKS 的“不承担/不要用于”按概念从正向召回剔除，但仍保留原文供范围预警。Git 近期投入用于排序；提交多不等于质量好或需求仍有效。非 Git、读取失败、实现摘要截断和无可识别能力分别保留状态。
 
+### 排除句的判定口径
+
+范围冲突只能依据组件**真实声明的排除短句**判定，不能对整份 SKILL.md 正文做概念命中。旧实现按标记切分文本并保留其后全部内容，切片因此吞进组件自己的正向词汇（"视频""封面""字幕"），让一个 React UI 库也被判成与发布 Skill 冲突。现在只读到第一个句读边界为止：
+
+- `exclusion_clauses` 是判定依据的原文短句，`exclusion_source` 标明它来自 `extracted`（自动抽取）还是 `declared`（组件显式声明）。
+- 抽取来源是 `description` 与 `TASKS.md` 的当前目标行，句读边界为 `。；;！!？?`、换行或引号收尾。逗号不结束短句——真实排除句会用"、"或"，列出被排除的事项。
+- 组件也可以用显式限缩句声明边界（"本 Skill 只维护卡片场景的适配"），这同样是排除短句。
+- 组件可以在自己的目录里写 `scope.json`（`{"exclusions": [...]}`），或在 `TASKS.md` 写 `declared_exclusions:` 段逐行列出。显式声明优先于自动抽取，默认行为完全离线可跑，不需要模型参与。
+
+`scope_status` 的三个取值：
+
+| 取值 | 含义 |
+|---|---|
+| `conflicts_with_stated_scope` | 上游命中组件真实声明的排除短句；`scope_conflicts` 给出命中的短句与概念 |
+| `no_stated_scope_conflict` | 组件有可解析的排除短句，本轮未命中 |
+| `stated_scope_unparsed` | 组件没有可读取的排除短句，本轮**未做**范围判定；`scope_note` 注明"排除条款未能结构化解析，请人工确认" |
+
+第三种不是"无冲突"，而是"没有判定依据"。把它与第二种分开，是为了不让一个没写排除句的组件静默获得"已确认不冲突"的结论。
+
 `research --project <已安装Skill名或目录>` 同样支持动态目标。`output/projects/*.json` 是可选的目标补充与约束，失效的显式引用仍拒绝出包；不会自动写一堆永久 profile。
 
 ## 每日准备入口

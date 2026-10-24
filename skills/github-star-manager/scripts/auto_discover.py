@@ -19,6 +19,7 @@ from lockutil import write_lock
 import daily_loop
 from project_context import (capability_hints, compare_snapshot_commit, default_roots, digest, discover,
                              match_terms, terms_for, scope_conflicts,
+                             scope_note, scope_status,
                              shared_evidence_revision, shared_repo_revision)
 from star_query import emit, envelope, parse_dt
 from star_tracker import StarTracker
@@ -979,7 +980,10 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
                                         for card in sorted(prior, key=lambda row: row.get("_recorded_at", ""),
                                                            reverse=True)[:3]],
                     "scope_conflicts": conflicts,
-                    "scope_status": "conflicts_with_stated_scope" if conflicts else "no_stated_scope_conflict",
+                    "scope_status": scope_status(profile, conflicts),
+                    "scope_note": scope_note(profile),
+                    "exclusion_clauses": list(profile.get("exclusion_clauses") or []),
+                    "exclusion_source": profile.get("exclusion_source"),
                 })
     candidates.sort(key=lambda c: (
         -int(c["queue_state"]["cooldown_due"]),
