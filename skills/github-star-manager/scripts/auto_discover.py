@@ -487,7 +487,7 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
                "status": None, "warnings": [], "stale_run": False,
                "run_age_hours": None, "max_run_age_hours": max_age_hours,
                "run_stale_reason": None, "run_readable": False,
-               "run_usable": False, "run_invalid": False,
+               "run_invalid": False,
                "run_invalid_reason": None, "run_boundary_known": False,
                "boundary_at": None, "boundary_source": None}
     if not path:
@@ -529,7 +529,6 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
         context["candidates"] = 0
     else:
         # 新鲜且可读：运行包的生成时间就是"本轮"边界。
-        context["run_usable"] = True
         if parse_dt(context["generated_at"]) is not None:
             context["run_boundary_known"] = True
             context["boundary_at"] = context["generated_at"]
