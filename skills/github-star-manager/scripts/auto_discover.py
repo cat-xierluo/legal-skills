@@ -692,6 +692,50 @@ def update_review_queue(data_dir, old, selected, all_candidates, snapshot, feedb
     return value
 
 
+OBSERVED_FIELDS = ("head", "release", "readme")
+
+
+def observed_fields(record):
+    """Which upstream fields a stored evidence record actually observed.
+
+    A field that was never observed is unknown, not "observed as empty". Cheap
+    probes only observe the Release, so their baseline cannot answer whether
+    HEAD or README changed.
+    """
+    record = record or {}
+    if isinstance(record.get("observed"), dict):
+        return {field: bool(record["observed"].get(field)) for field in OBSERVED_FIELDS}
+    # Legacy caches without an explicit flag: presence of the field means it
+    # was observed. A missing README blob or HEAD was never observed.
+    return {"head": record.get("head_sha") is not None,
+            "release": "release" in record,
+            "readme": bool((record.get("readme") or {}).get("blob_sha"))}
+
+
+def field_value(record, field):
+    if field == "head":
+        return (record or {}).get("head_sha")
+    if field == "release":
+        return (record or {}).get("release")
+    return ((record or {}).get("readme") or {}).get("blob_sha")
+
+
+def compare_observed(current, prior, current_observed):
+    """Compare only fields both sides observed; unknown stays None."""
+    prior_seen = observed_fields(prior)
+    result = {}
+    for field in OBSERVED_FIELDS:
+        if prior_seen[field] and current_observed.get(field):
+            result[field + "_changed"] = field_value(current, field) != field_value(prior, field)
+        else:
+            result[field + "_changed"] = None
+    return result
+
+
+def any_change(changed):
+    return any(value is True for value in changed.values())
+
+
 def evidence_delta(name, current, prior):
     complete = bool(current and current.get("status") == "complete")
     baseline = bool(prior and prior.get("status") == "complete")
@@ -700,12 +744,7 @@ def evidence_delta(name, current, prior):
              "changed": None, "new_commits": [],
              "commit_scope": "At most five messages; unobserved history is not inferred"}
     if complete and baseline:
-        delta["changed"] = {
-            "head_changed": current.get("head_sha") != prior.get("head_sha"),
-            "release_changed": current.get("release") != prior.get("release"),
-            "readme_changed": ((current.get("readme") or {}).get("blob_sha")
-                               != (prior.get("readme") or {}).get("blob_sha")),
-        }
+        delta["changed"] = compare_observed(current, prior, observed_fields(current))
         if delta["changed"]["head_changed"]:
             old = {row.get("sha") for row in prior.get("commits", [])}
             old.add(prior.get("head_sha"))
@@ -929,18 +968,21 @@ def fetch_evidence(candidate, data_dir, prior=None):
             if isinstance(exc, BudgetExceeded):
                 record["status"] = "skipped"
                 break
+    changed = (compare_observed(record, prior, {"head": True, "release": True, "readme": True})
+               if prior else {"head_changed": None, "release_changed": None,
+                              "readme_changed": None})
     record["change_summary"] = {
         "baseline_available": bool(prior),
-        "head_changed": (record.get("head_sha") != prior.get("head_sha")) if prior else None,
-        "release_changed": (record.get("release") != prior.get("release")) if prior else None,
-        "readme_changed": ((record.get("readme") or {}).get("blob_sha")
-                           != (prior.get("readme") or {}).get("blob_sha")) if prior else None,
+        "observed": {"head": True, "release": True, "readme": True},
+        "head_changed": changed["head_changed"],
+        "release_changed": changed["release_changed"],
+        "readme_changed": changed["readme_changed"],
         "scope": "Latest release and five commit messages; not a complete source diff or proof of value",
     }
     if record["status"] == "complete":
+        record["observed"] = {"head": True, "release": True, "readme": True}
         record["content_revision"] = evidence_revision(record)
-        before = evidence_revision(prior) if prior else None
-        record["changed_at"] = (record["fetched_at"] if before != record["content_revision"]
+        record["changed_at"] = (record["fetched_at"] if any_change(changed)
                                 else (prior or {}).get("changed_at", record["fetched_at"]))
     path = data_dir / "auto-opportunities" / "evidence" / (name.replace("/", "__") + ".json")
     if record["status"] == "complete":
@@ -974,9 +1016,14 @@ def fetch_cheap_evidence(candidate, data_dir, prior=None, budget=None):
         return record
     baseline = bool(prior and prior.get("status") == "complete")
     record["baseline_available"] = baseline
+    record["observed"] = {"head": False, "release": True, "readme": False}
     release_changed = False
     if baseline:
-        release_changed = record.get("release") != prior.get("release")
+        # A cheap probe only observes the Release. HEAD and README stay unknown
+        # even when a previous deep probe recorded them.
+        release_changed = compare_observed(record, prior,
+                                          {"head": False, "release": True, "readme": False}
+                                          )["release_changed"]
         record["changed"] = {"release_changed": release_changed,
                              "head_changed": None, "readme_changed": None}
     record["cheap_revision"] = shared_evidence_revision(
@@ -992,6 +1039,7 @@ def fetch_cheap_evidence(candidate, data_dir, prior=None, budget=None):
                   "repo_revision": record["repo_revision"], "status": "complete",
                   "errors": [], "probe": "cheap",
                   "cheap_revision": record["cheap_revision"]}
+        merged["observed"] = {**observed_fields(prior), "release": True}
         merged["changed_at"] = (record["fetched_at"]
                                 if release_changed
                                 else prior.get("changed_at", record["fetched_at"]))
@@ -1223,7 +1271,8 @@ def cmd_auto(args):
     queue = load_review_queue(data_dir, warnings)
     # Capture all baselines BEFORE any fetch can atomically replace the cache.
     prior = load_evidence(snapshot, data_dir, warnings)
-    previous_failures = {name for name, row in state.items() if row.get("status") == "partial"}
+    previous_failures = {name for name, row in state.items()
+                         if row.get("status") in {"partial", "skipped"}}
     snapshot = attach_cached_revisions(snapshot, data_dir, prior, previous_failures)
     from repository_profile import local_reference_snapshots
     metadata_changes, used_repos = set(), set()
