@@ -23,12 +23,14 @@ import os
 import json
 import argparse
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 from star_tracker import StarTracker  # noqa: E402
+from lockutil import write_lock  # noqa: E402
 
 # 审计 §4 的 gap 枚举
 GAP_TYPES = {"新增能力", "接入缺口", "执行缺陷", "验证缺口", "已有等价能力", "不适用"}
@@ -44,6 +46,8 @@ DECISIONS = {
 }
 
 REQUIRED_CARD_FIELDS = ["signal", "target", "evidence", "gap", "hypothesis", "experiment", "decision"]
+CARD_SCHEMA = "opportunity-card/1.1"
+DECISION_SCOPES = {"direction", "repo", "component"}
 
 # 状态短词白名单（R5/J2：明确列举，避免 "somedir" 这类目录名被误豁免）
 _STATUS_WORDS = {"ok", "pass", "passed", "fail", "failed", "done", "true", "false",
@@ -286,6 +290,9 @@ def validate_card(card: Dict, base_dir: Optional[Path] = None) -> Tuple[bool, Li
         if not signal.get("starred_at"):
             warnings.append("signal.starred_at 缺失：按 F02 口径这是未知时间，"
                             "卡内不得声称「近期关注」")
+        repo_id = signal.get("repo_id")
+        if repo_id is not None and (isinstance(repo_id, bool) or not isinstance(repo_id, int) or repo_id <= 0):
+            errors.append("signal.repo_id 必须是正整数")
 
     # 3. target：必须有 project_id 与目标能力
     target = card["target"]
@@ -296,6 +303,12 @@ def validate_card(card: Dict, base_dir: Optional[Path] = None) -> Tuple[bool, Li
             errors.append("target.project_id 缺失")
         if not target.get("capability"):
             errors.append("target.capability 缺失（目标能力/需求描述）")
+        capability_key = target.get("capability_key")
+        if capability_key is not None and (
+                not isinstance(capability_key, str)
+                or not re.fullmatch(r"[a-z0-9\u4e00-\u9fff][a-z0-9\u4e00-\u9fff-]{0,63}",
+                                    capability_key)):
+            errors.append("target.capability_key 必须是稳定 slug（小写字母/数字/中文/连字符，≤64字符）")
 
     # 4. evidence：必须区分证据类型 + R5/J2 源码证据可回查
     evidence = card["evidence"]
@@ -335,7 +348,30 @@ def validate_card(card: Dict, base_dir: Optional[Path] = None) -> Tuple[bool, Li
                 _verify_evidence_paths({req: decision[req]}, f"decision",
                                        errors, warnings, base_dir)
 
+    scope = card.get("scope") or (card.get("target") or {}).get("scope")
+    capability_key = (card.get("target") or {}).get("capability_key")
+    if scope is None and capability_key:
+        scope = "direction"
+        card["scope"] = scope
+    if scope is not None and scope not in DECISION_SCOPES:
+        errors.append(f"scope 必须是 {sorted(DECISION_SCOPES)} 之一")
+    if scope == "direction" and not (card.get("target") or {}).get("capability_key"):
+        errors.append("scope=direction 缺少 target.capability_key")
+
     return len(errors) == 0, errors, warnings
+
+
+def atomic_json(path: Path, value) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+        os.replace(name, path)
+    except BaseException:
+        Path(name).unlink(missing_ok=True)
+        raise
 
 
 def save_card(card: Dict) -> Path:
@@ -346,30 +382,54 @@ def save_card(card: Dict) -> Path:
     d = feedback_dir()
     d.mkdir(parents=True, exist_ok=True)
     project_id = card["target"]["project_id"]
-    repo_slug = str(card["signal"]["repo"]).replace("/", "__")
+    repo_id = card["signal"].get("repo_id")
+    repo_slug = str(repo_id) if isinstance(repo_id, int) else str(card["signal"]["repo"]).replace("/", "__")
+    target = card.get("target") or {}
+    scope = card.get("scope") or target.get("scope") or "legacy"
+    direction = ""
+    if scope == "direction":
+        direction = "__" + str(target.get("capability_key") or "unaligned")
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    path = d / f"{project_id}__{repo_slug}__{ts}.json"
-    seq = 0
-    while path.exists():  # 防同毫秒碰撞覆盖
-        seq += 1
-        path = d / f"{project_id}__{repo_slug}__{ts}_{seq}.json"
+    stem = f"{project_id}__{repo_slug}__{scope}{direction}__{ts}"
+    path = d / f"{stem}.json"
     card["_recorded_at"] = datetime.now(timezone.utc).isoformat()
-    card["_schema"] = "opportunity-card/1.0"
-    path.write_text(json.dumps(card, ensure_ascii=False, indent=2), encoding="utf-8")
+    card["_schema"] = CARD_SCHEMA
+    with write_lock(d):
+        seq = 0
+        candidate = path
+        while candidate.exists():  # 防同毫秒碰撞覆盖
+            seq += 1
+            candidate = d / f"{stem}_{seq}.json"
+        atomic_json(candidate, card)
+        path = candidate
     return path
 
 
 def existing_decisions(project_id: str, repo: str) -> List[Dict]:
-    """某项目对某 repo 的既有反馈（用于拒绝抑制）"""
-    prefix = f"{project_id}__{str(repo).replace('/', '__')}__"
+    """某项目对某 repo 的既有反馈（按卡片内容匹配，文件名仅兼容旧布局）"""
     out = []
     if feedback_dir().exists():
-        for p in sorted(feedback_dir().glob(f"{prefix}*.json")):
+        for p in sorted(feedback_dir().glob("*.json")):
             try:
-                out.append(json.loads(p.read_text(encoding="utf-8")))
+                card = json.loads(p.read_text(encoding="utf-8"))
+                target = card.get("target") or {}
+                signal = card.get("signal") or {}
+                if (target.get("project_id") != project_id
+                        or signal.get("repo") != repo):
+                    continue
+                out.append(card)
             except Exception:
                 continue
     return out
+
+
+def decision_scope(card: Dict) -> str:
+    return card.get("scope") or (card.get("target") or {}).get("scope") or "legacy"
+
+
+def decision_capability(card: Dict):
+    target = card.get("target") or {}
+    return target.get("capability_key") or target.get("decision_capability_key")
 
 
 # ==================== 子命令 ====================
@@ -447,6 +507,12 @@ def cmd_suppress(args) -> int:
         print("❌ 需要 --repo owner/name 与 --project ID", file=sys.stderr)
         return 1
     prior = existing_decisions(args.project, args.repo)
+    prior = [p for p in prior if getattr(args, "repo_id", None) is None
+             or (p.get("signal") or {}).get("repo_id") in (None, args.repo_id)]
+    requested_direction = getattr(args, "direction", None)
+    if requested_direction:
+        prior = [p for p in prior if decision_scope(p) in {"direction", "legacy"}
+                 and decision_capability(p) in (None, requested_direction)]
     rejected = [p for p in prior if (p.get("decision") or {}).get("status") == "rejected"]
     result = {
         "repo": args.repo,
@@ -455,6 +521,8 @@ def cmd_suppress(args) -> int:
         "rejected_count": len(rejected),
         # 抑制语义：有拒绝记录 → 默认跳过推荐；携带新 repo revision/需求版本时可重新评估
         "suppressed": len(rejected) > 0,
+        "scope": "direction" if requested_direction else "legacy/repository",
+        "direction": requested_direction,
         "note": "抑制只针对该候选在该方向的重复推荐，不屏蔽整个方向；"
                 "新实质证据（revision 变化/需求变化）允许重新出卡",
     }
@@ -491,6 +559,8 @@ def main() -> int:
     p = sub.add_parser("suppress", help="查询候选的拒绝抑制状态")
     p.add_argument("--repo", required=True, help="owner/name")
     p.add_argument("--project", required=True, help="项目 ID")
+    p.add_argument("--repo-id", type=int)
+    p.add_argument("--direction", help="stable capability_key")
     p.set_defaults(func=cmd_suppress)
 
     for command in sub.choices.values():

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from lockutil import write_lock
-from project_context import (compare_snapshot_commit, default_roots, digest, discover,
+from project_context import (capability_hints, compare_snapshot_commit, default_roots, digest, discover,
                              match_terms, terms_for, scope_conflicts,
                              shared_evidence_revision, shared_repo_revision)
 from star_query import emit, envelope, parse_dt
@@ -99,6 +99,8 @@ def refresh_snapshot(data_dir, old):
 
 
 def repo_revision(repo):
+    if repo.get("_repo_revision"):
+        return repo["_repo_revision"]
     return shared_repo_revision(repo)
 
 
@@ -107,21 +109,66 @@ def feedback_index(data_dir):
     for path in sorted((data_dir / "feedback").glob("*.json")):
         try:
             card = read_json(path)
-            key = (card.get("target", {}).get("project_id"), card.get("signal", {}).get("repo"))
-            if all(key):
-                result.setdefault(key, []).append(card)
-                repo_id = card.get("signal", {}).get("repo_id")
-                if repo_id is not None:
-                    result.setdefault((key[0], f"id:{repo_id}"), []).append(card)
+            card["_file"] = path.name
+            project_id = card.get("target", {}).get("project_id")
+            repo = card.get("signal", {}).get("repo")
+            repo_id = card.get("signal", {}).get("repo_id")
+            if not project_id or not repo:
+                continue
+            target = card.get("target") or {}
+            capability = target.get("capability_key") or target.get("decision_capability_key")
+            scope = card.get("scope") or target.get("scope") or (
+                "direction" if capability else "legacy")
+            for repo_key in ([f"id:{repo_id}", repo] if isinstance(repo_id, int) else [repo]):
+                # Legacy 1.0 cards remain repository-wide for compatibility.
+                # New explicit directions and repository-wide decisions expose
+                # stable lookup keys without rewriting old files.
+                if scope == "direction" and capability:
+                    keys = [(scope, capability)]
+                elif scope in {"repo", "component", "legacy"}:
+                    keys = [(scope, None)]
+                else:
+                    keys = []
+                for decision_scope, capability_key in keys:
+                    result.setdefault((project_id, repo_key, decision_scope, capability_key), []).append(card)
         except (OSError, ValueError, AttributeError):
             warnings.append(f"Unreadable feedback: {path.name}")
     return result, warnings
 
 
-def suppression(profile, repo, prior, now):
+def prior_for_direction(prior, capability_key):
+    if not prior:
+        return []
+    directions = [card for card in prior
+                  if ((card.get("scope") or (card.get("target") or {}).get("scope")) == "direction")
+                  and ((card.get("target") or {}).get("capability_key")
+                       or (card.get("target") or {}).get("decision_capability_key")) == capability_key]
+    broad = [card for card in prior
+             if ((card.get("scope") or (card.get("target") or {}).get("scope")) in {"repo", "legacy", "component"})
+             or not ((card.get("scope") or (card.get("target") or {}).get("scope")) == "direction")]
+    return directions + broad
+
+
+def suppression(profile, repo, prior, now, requested_direction=None):
     if not prior:
         return None
-    card = max(prior, key=lambda c: c.get("_recorded_at", ""))
+    # A direction decision wins over broad compatibility only when it is newer
+    # than the latest broad card. This preserves an explicit later repository
+    # rejection while avoiding the old "latest card erases scope" behavior.
+    requested_scope = requested_direction
+    direction_cards = [card for card in prior
+                       if ((card.get("scope") or (card.get("target") or {}).get("scope")) == "direction")
+                       and ((card.get("target") or {}).get("capability_key")
+                            or (card.get("target") or {}).get("decision_capability_key")) == requested_scope]
+    broad_cards = [card for card in prior if card not in direction_cards]
+    latest_direction = max(direction_cards, key=lambda c: c.get("_recorded_at", ""), default=None)
+    latest_broad = max(broad_cards, key=lambda c: c.get("_recorded_at", ""), default=None)
+    card = latest_direction
+    if latest_broad and (not latest_direction
+                         or latest_broad.get("_recorded_at", "") >= latest_direction.get("_recorded_at", "")):
+        card = latest_broad
+    if card is None:
+        return None
     decision = card.get("decision") or {}
     status = decision.get("status")
     if status not in {"rejected", "deferred", "researched", "experiment_proposed", "tested", "adopted"}:
@@ -159,6 +206,10 @@ def suppression(profile, repo, prior, now):
             return None
     return {"decision": status, "recorded_at": card.get("_recorded_at"),
             "review_after": due.isoformat() if due else None,
+            "decision_scope": (card.get("scope") or target.get("scope")
+                               or ("direction" if target.get("capability_key")
+                                   or target.get("decision_capability_key") else "legacy")),
+            "capability_key": target.get("capability_key") or target.get("decision_capability_key"),
             "binding": "revision" if old_target and old_repo else "legacy-time-fallback"}
 
 
@@ -168,6 +219,8 @@ def valid_recent(date, cutoff, now):
 
 
 FOCUS_FILE = "repository-profiles/focus.json"
+QUEUE_FILE = "auto-opportunities/review-queue.json"
+QUEUE_SCHEMA = "review-queue/1.0"
 
 
 def focus_repositories(data_dir, warnings=None):
@@ -184,6 +237,105 @@ def focus_repositories(data_dir, warnings=None):
         if warnings is not None:
             warnings.append("Unreadable focus state; ordinary Star discovery continues")
         return {}
+
+
+def load_review_queue(data_dir, warnings):
+    path = data_dir / QUEUE_FILE
+    if path.exists() and not path.is_file():
+        raise ValueError("Review queue path is not a file")
+    try:
+        value = read_json(path, {"schema_version": QUEUE_SCHEMA, "entries": {},
+                                 "cursor": {"round_seq": 0, "last_round_at": None}}) or {
+            "schema_version": QUEUE_SCHEMA, "entries": {}, "cursor": {"round_seq": 0, "last_round_at": None}}
+        if value.get("schema_version") != QUEUE_SCHEMA or not isinstance(value.get("entries"), dict):
+            raise ValueError("Invalid review queue")
+        value["cursor"] = value.get("cursor") or {}
+        return value
+    except (OSError, ValueError, TypeError) as exc:
+        if path.exists():
+            backup = path.with_name(f"{path.name}.corrupt-{now_utc().strftime('%Y%m%dT%H%M%S.%fZ')}")
+            try:
+                backup.write_bytes(path.read_bytes())
+            except OSError:
+                pass
+        warning = f"Unreadable review queue retained at {path}; queue unavailable and not cleared: {type(exc).__name__}"
+        warnings.append(warning)
+        return {"schema_version": QUEUE_SCHEMA, "entries": {}, "cursor": {},
+                "state": "degraded", "source_path": str(path)}
+
+
+def update_review_queue(data_dir, old, selected, all_candidates, snapshot, feedback, now):
+    current_ids = {row.get("id") for row in snapshot.get("repos", [])}
+    entries = {}
+    for key, entry in (old.get("entries") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        repo_id = entry.get("repo_id")
+        if repo_id is not None and repo_id not in current_ids:
+            entry = {**entry, "state": "stale",
+                     "note": "Repository absent from the current snapshot; retained for audit"}
+        entries[key] = entry
+    for candidate in all_candidates:
+        key = candidate["candidate_key"]
+        old_entry = entries.get(key) or {}
+        entry = {
+            "candidate_key": key,
+            "project_id": candidate["project_id"], "repo_id": candidate.get("repo_id"),
+            "repo": candidate["repo"], "capability_key": candidate["capability"]["key"],
+            "capability_label": candidate["capability"].get("label"),
+            "scope": candidate["decision_scope"], "state": "pending",
+            "first_seen_at": old_entry.get("first_seen_at") or now.isoformat(),
+            "last_shown_at": old_entry.get("last_shown_at"),
+            "shown_count": old_entry.get("shown_count", 0),
+            "last_shown_project": old_entry.get("last_shown_project"),
+            "last_evidence_revision": candidate.get("evidence_revision"),
+            "last_target_revision": candidate.get("target_revision"),
+            "last_repo_revision": candidate.get("repo_revision"),
+        }
+        entries[key] = entry
+    selected_keys = {row["candidate_key"] for row in selected}
+    for candidate in selected:
+        entry = entries[candidate["candidate_key"]]
+        entry["state"] = "shown"
+        entry["last_shown_at"] = now.isoformat()
+        entry["shown_count"] = entry.get("shown_count", 0) + 1
+        entry["last_shown_project"] = candidate["project_id"]
+    # Feedback remains the sole source of judged state. Do not mark shown items
+    # complete merely because an Agent looked at them.
+    for key, entry in entries.items():
+        if entry.get("state") == "stale":
+            continue
+        project_id, repo_id, repo_name, capability = (entry.get("project_id"),
+                                                       entry.get("repo_id"), entry.get("repo"),
+                                                       entry.get("capability_key"))
+        decisions = []
+        if repo_id is not None:
+            decisions += feedback.get((project_id, f"id:{repo_id}", "direction", capability), [])
+            decisions += feedback.get((project_id, f"id:{repo_id}", "repo", None), [])
+            decisions += feedback.get((project_id, f"id:{repo_id}", "legacy", None), [])
+        decisions += feedback.get((project_id, repo_name, "direction", capability), [])
+        decisions += feedback.get((project_id, repo_name, "repo", None), [])
+        decisions += feedback.get((project_id, repo_name, "legacy", None), [])
+        if decisions:
+            merged = prior_for_direction(list({digest(card): card for card in decisions}.values()), capability)
+            if suppression({"target_revision": entry.get("last_target_revision"),
+                            "activity": {}},
+                           {"id": repo_id, "full_name": repo_name,
+                            "pushed_at": None, "description": None, "topics": None,
+                            "_evidence_revision": entry.get("last_evidence_revision"),
+                            "_repo_revision": entry.get("last_repo_revision")},
+                           merged, now, requested_direction=capability):
+                entry["state"] = "judged"
+                entry["judged_ref"] = max(merged, key=lambda card: card.get("_recorded_at", "")).get("_file")
+    value = {"schema_version": QUEUE_SCHEMA, "entries": entries,
+             "cursor": {"round_seq": int((old.get("cursor") or {}).get("round_seq", 0)) + 1,
+                        "last_round_at": now.isoformat()},
+             "last_run_selected_keys": sorted(selected_keys)}
+    path = data_dir / QUEUE_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with write_lock(path.parent):
+        atomic_json(path, value)
+    return value
 
 
 def evidence_delta(name, current, prior):
@@ -214,8 +366,10 @@ def evidence_delta(name, current, prior):
 
 
 def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
-            recent_days=14, update_days=7, show_suppressed=False, focused=None):
+            recent_days=14, update_days=7, show_suppressed=False, focused=None,
+            queue=None, queue_now=None):
     focused = focused or {}
+    queue_now = queue_now or now
     candidates, suppressed = [], []
     indexed_repos = [{**repo, "_search_terms": terms_for(" ".join([
         repo.get("full_name") or "", repo.get("description") or "",
@@ -228,11 +382,20 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
             if not REPO_PATTERN.fullmatch(name):
                 continue
             hits = match_terms(profile, repo)
-            if not hits:
+            hints = [hint for hint in repo.get("_capability_hints", [])
+                     if set(hint.get("concepts", [])) & set(profile.get("search_terms", []))]
+            # Capability hints form an independent, anchored recall channel.
+            # They can surface a component when a new Release capability is not
+            # present in stale README or repository metadata.
+            if not hits and not hints:
                 continue
             primary = match_terms({"search_terms": profile.get("primary_terms", profile["search_terms"])}, repo)
-            if not primary:
+            if not primary and not hints:
                 continue
+            if not hits:
+                hits = sorted({concept for hint in hints for concept in hint.get("concepts", [])})
+            if not primary:
+                primary = sorted({concept for hint in hints for concept in hint.get("concepts", [])})
             reasons = []
             if valid_recent(repo.get("starred_at"), now - timedelta(days=recent_days), now):
                 reasons.append("recent_star")
@@ -240,41 +403,94 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
                 reasons.append("upstream_activity")
             if name in focused:
                 reasons.append("focused_watch")
-            prior = feedback.get((profile["project_id"], name), [])
+            repo_feedback = []
             if repo.get("id") is not None:
-                prior = prior + feedback.get((profile["project_id"], f"id:{repo['id']}"), [])
-            prior = list({digest(card): card for card in prior}.values())
-            state = suppression(profile, repo, prior, now)
-            if state and not show_suppressed:
-                suppressed.append({"project_id": profile["project_id"], "repo": name,
-                                   "watch_scope": "focus" if name in focused else "collection", **state})
-                continue
-            fingerprint = digest([profile["target_revision"], repo_revision(repo),
-                                  repo.get("_evidence_revision"), profile["project_id"]])
+                repo_id_key = f"id:{repo['id']}"
+                for decision_scope in ("direction", "repo", "legacy", "component"):
+                    repo_feedback += feedback.get((profile["project_id"], repo_id_key,
+                                                   decision_scope, None), [])
+                    if decision_scope == "direction":
+                        # Direction values are collected dynamically below from
+                        # capability hints; broad decisions come first.
+                        continue
+            for decision_scope in ("direction", "repo", "legacy", "component"):
+                repo_feedback += feedback.get((profile["project_id"], name,
+                                               decision_scope, None), [])
+            repo_feedback = list({digest(card): card for card in repo_feedback}.values())
             conflicts = scope_conflicts(profile, repo["_search_terms"])
-            candidates.append({
-                "candidate_id": fingerprint[:24], "project_id": profile["project_id"],
-                "skill_path": profile.get("skill_path"),
-                "repo": name, "repo_id": repo.get("id"), "description": repo.get("description"),
-                "matched_terms": hits, "signals": reasons or ["existing_collection_match"],
-                "primary_matches": primary,
-                "starred_at": repo.get("starred_at"), "pushed_at": repo.get("pushed_at"),
-                "repo_revision": repo_revision(repo), "target_revision": profile["target_revision"],
-                "evidence_revision": repo.get("_evidence_revision"),
-                "target_activity": profile["activity"], "suppression": state,
-                "evidence_status": "not_fetched", "archived": bool(repo.get("is_archived")),
-                "watch_scope": "focus" if name in focused else "collection",
-                "focus_reason": focused.get(name, {}).get("reason"),
-                "prior_decisions": [{"status": (card.get("decision") or {}).get("status"),
-                                     "reason": (card.get("decision") or {}).get("reason"),
-                                     "gap": card.get("gap"), "experiment": card.get("experiment"),
-                                     "recorded_at": card.get("_recorded_at")}
-                                    for card in sorted(prior, key=lambda row: row.get("_recorded_at", ""),
-                                                       reverse=True)[:3]],
-                "scope_conflicts": conflicts,
-                "scope_status": "conflicts_with_stated_scope" if conflicts else "no_stated_scope_conflict",
-            })
+            capability_rows = hints or [{"capability_key": None, "capability_label": None,
+                                         "concepts": [], "source": "collection",
+                                         "anchor": None, "text": None}]
+            for hint in capability_rows:
+                capability_key = hint.get("capability_key")
+                if capability_key:
+                    if repo.get("id") is not None:
+                        prior = (feedback.get((profile["project_id"], f"id:{repo['id']}",
+                                               "direction", capability_key), [])
+                                 + feedback.get((profile["project_id"], f"id:{repo['id']}",
+                                                 "repo", None), [])
+                                 + feedback.get((profile["project_id"], f"id:{repo['id']}",
+                                                 "legacy", None), []))
+                    else:
+                        prior = []
+                    prior += (feedback.get((profile["project_id"], name,
+                                            "direction", capability_key), [])
+                              + feedback.get((profile["project_id"], name, "repo", None), [])
+                              + feedback.get((profile["project_id"], name, "legacy", None), []))
+                else:
+                    prior = repo_feedback
+                state = suppression(profile, repo, prior, now,
+                                    requested_direction=capability_key)
+                if state and not show_suppressed:
+                    suppressed.append({"project_id": profile["project_id"], "repo": name,
+                                       "repo_id": repo.get("id"), "capability_key": capability_key,
+                                       "watch_scope": "focus" if name in focused else "collection", **state})
+                    continue
+                candidate_key = digest([profile["project_id"], repo.get("id") or name,
+                                        capability_key or "repository"])[:24]
+                fingerprint = digest([profile["target_revision"], repo_revision(repo),
+                                      repo.get("_evidence_revision"), profile["project_id"],
+                                      capability_key])
+                entry = ((queue or {}).get("entries") or {}).get(candidate_key, {})
+                last_shown = parse_dt(entry.get("last_shown_at"))
+                cooldown_due = (not last_shown or last_shown + timedelta(days=1) <= queue_now
+                                or entry.get("last_target_revision") != profile["target_revision"]
+                                or entry.get("last_evidence_revision") != repo.get("_evidence_revision")
+                                or entry.get("state") == "stale")
+                candidates.append({
+                    "candidate_key": candidate_key,
+                    "snapshot_revision": fingerprint[:24], "project_id": profile["project_id"],
+                    "skill_path": profile.get("skill_path"),
+                    "repo": name, "repo_id": repo.get("id"), "description": repo.get("description"),
+                    "matched_terms": hits, "signals": reasons or ["existing_collection_match"],
+                    "primary_matches": primary,
+                    "capability": {"key": capability_key, "label": hint.get("capability_label"),
+                                   "concepts": hint.get("concepts", []),
+                                   "source": hint.get("source"), "anchor": hint.get("anchor"),
+                                   "text": hint.get("text")},
+                    "decision_scope": "direction" if capability_key else "repo",
+                    "starred_at": repo.get("starred_at"), "pushed_at": repo.get("pushed_at"),
+                    "repo_revision": repo_revision(repo), "target_revision": profile["target_revision"],
+                    "evidence_revision": repo.get("_evidence_revision"),
+                    "target_activity": profile["activity"], "suppression": state,
+                    "queue_state": {"first_seen_at": entry.get("first_seen_at", queue_now.isoformat()),
+                                    "last_shown_at": entry.get("last_shown_at"),
+                                    "shown_count": entry.get("shown_count", 0),
+                                    "cooldown_due": cooldown_due},
+                    "evidence_status": "not_fetched", "archived": bool(repo.get("is_archived")),
+                    "watch_scope": "focus" if name in focused else "collection",
+                    "focus_reason": focused.get(name, {}).get("reason"),
+                    "prior_decisions": [{"status": (card.get("decision") or {}).get("status"),
+                                         "reason": (card.get("decision") or {}).get("reason"),
+                                         "gap": card.get("gap"), "experiment": card.get("experiment"),
+                                         "recorded_at": card.get("_recorded_at")}
+                                        for card in sorted(prior, key=lambda row: row.get("_recorded_at", ""),
+                                                           reverse=True)[:3]],
+                    "scope_conflicts": conflicts,
+                    "scope_status": "conflicts_with_stated_scope" if conflicts else "no_stated_scope_conflict",
+                })
     candidates.sort(key=lambda c: (
+        -int(c["queue_state"]["cooldown_due"]),
         -int("recent_star" in c["signals"]), -int("focused_watch" in c["signals"]),
         -min(c["target_activity"]["commits"], 10),
         -len(c["primary_matches"]), -len(c["matched_terms"]),
@@ -285,17 +501,36 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
 
 def select_candidates(candidates, limit, per_project, per_repo=None):
     selected, counts, repo_counts = [], {}, {}
-    for candidate in candidates:
+    # Cooled-down pending items get the first slice, then one item per project
+    # in round-robin order, then remaining capacity by score. This prevents a
+    # lexicographically early project from monopolising every round.
+    ordered = sorted(candidates, key=lambda c: (
+        -int(c["queue_state"]["cooldown_due"]), c["queue_state"].get("shown_count", 0),
+        c["queue_state"].get("first_seen_at", ""), c["project_id"], c["repo"],
+        c.get("capability", {}).get("key") or ""))
+    def eligible(candidate):
         project = candidate["project_id"]
-        if per_project is not None and counts.get(project, 0) >= per_project:
-            continue
-        if per_repo is not None and repo_counts.get(candidate["repo"], 0) >= per_repo:
-            continue
+        return (per_project is None or counts.get(project, 0) < per_project) and (
+            per_repo is None or repo_counts.get(candidate["repo"], 0) < per_repo)
+    def take(candidate):
         selected.append(candidate)
-        counts[project] = counts.get(project, 0) + 1
+        counts[candidate["project_id"]] = counts.get(candidate["project_id"], 0) + 1
         repo_counts[candidate["repo"]] = repo_counts.get(candidate["repo"], 0) + 1
-        if limit is not None and len(selected) == limit:
+    # First round: one per project, with cooled-down candidates preferred.
+    first = {}
+    for candidate in ordered:
+        first.setdefault(candidate["project_id"], candidate)
+    for candidate in sorted(first.values(), key=lambda c: ordered.index(c)):
+        if limit is not None and len(selected) >= limit:
             break
+        if eligible(candidate):
+            take(candidate)
+    for candidate in ordered:
+        if limit is not None and len(selected) >= limit:
+            break
+        if candidate in selected or not eligible(candidate):
+            continue
+        take(candidate)
     return selected
 
 
@@ -392,9 +627,14 @@ def attach_cached_revisions(snapshot, data_dir, cache=None, unavailable=()):
         name = repo.get("full_name", "")
         cached = cache.get(name)
         if cached and cached.get("status") == "complete":
+            blob_sha = (cached.get("readme") or {}).get("blob_sha")
+            readme_text = (cached.get("readme") or {}).get("text", "")
             repo = {**repo, "_evidence_revision": evidence_revision(cached),
                     "_evidence_changed_at": cached.get("changed_at"),
-                    "_evidence_text": (cached.get("readme") or {}).get("text", "")}
+                    "_evidence_text": readme_text,
+                    "_capability_hints": capability_hints(
+                        readme_text, cached.get("release"), cached.get("commits", []),
+                        readme_blob_sha=blob_sha)}
         if name in unavailable:
             repo = {**repo, "_evidence_unavailable": True}
         rows.append(repo)
@@ -414,7 +654,8 @@ def watch_state(data_dir, warnings):
 
 
 def probe_watched(snapshot, suppressed, data_dir, budget, *, focused=None,
-                  candidates=(), prior=None, state=None, focus_limit=8, now=None):
+                  candidates=(), prior=None, state=None, focus_limit=8, now=None,
+                  metadata_changes=(), used_repos=(), cheap_budget=0):
     """Reserve at least half the budget for the oldest checks across all Stars.
 
     The other half prioritizes new interest, focus and relevant metadata changes.
@@ -425,14 +666,18 @@ def probe_watched(snapshot, suppressed, data_dir, budget, *, focused=None,
     rows = {r["full_name"]: r for r in snapshot.get("repos", [])
             if REPO_PATTERN.fullmatch(r.get("full_name", ""))}
     relevant = {row["repo"] for row in candidates} | {row["repo"] for row in suppressed}
+    metadata_changes = set(metadata_changes)
+    used_repos = set(used_repos)
     def priority(name):
         row = rows[name]
         cached = prior.get(name)
         return (
+            -int(name in metadata_changes),
+            -int(name in used_repos),
+            -int(bool(cached and cached.get("repo_revision") != repo_revision(row))),
             -int(valid_recent(row.get("starred_at"), now - timedelta(days=14), now)
                  and not state.get(name)),
             -int(name in focused),
-            -int(bool(cached and cached.get("repo_revision") != repo_revision(row))),
             -int(name in relevant), name)
     def oldest(name):
         return state.get(name, {}).get("checked_at", "")
@@ -455,7 +700,9 @@ def probe_watched(snapshot, suppressed, data_dir, budget, *, focused=None,
         candidate = {"repo": name, "repo_id": row.get("id"), "repo_revision": repo_revision(row)}
         value = fetch_evidence(candidate, data_dir, prior.get(name))
         results[name] = value
-        updates[name] = {"checked_at": now_utc().isoformat(), "status": value["status"]}
+        updates[name] = {"checked_at": now_utc().isoformat(), "status": value["status"],
+                         "repo_id": row.get("id"), "repo": name,
+                         "repo_revision": repo_revision(row)}
     if updates:
         directory = data_dir / "auto-opportunities"
         with write_lock(directory):
@@ -523,24 +770,40 @@ def cmd_auto(args):
         warnings.append("Snapshot older than 36 hours or unknown; refresh before judging recent upstream changes")
     focused = focus_repositories(data_dir, warnings)
     state = watch_state(data_dir, warnings)
+    queue = load_review_queue(data_dir, warnings)
     # Capture all baselines BEFORE any fetch can atomically replace the cache.
     prior = load_evidence(snapshot, data_dir, warnings)
     previous_failures = {name for name, row in state.items() if row.get("status") == "partial"}
     snapshot = attach_cached_revisions(snapshot, data_dir, prior, previous_failures)
-    def all_candidates(source):
+    from repository_profile import local_reference_snapshots
+    metadata_changes, used_repos = set(), set()
+    for row in snapshot.get("repos", []):
+        name = row.get("full_name", "")
+        if not name:
+            continue
+        prior_meta = state.get(name) or next(
+            (entry for entry in state.values()
+             if isinstance(entry, dict) and entry.get("repo_id") == row.get("id")), {})
+        if prior_meta.get("repo_revision") and prior_meta.get("repo_revision") != repo_revision(row):
+            metadata_changes.add(name)
+        if local_reference_snapshots(name, roots_for(args)):
+            used_repos.add(name)
+    def all_candidates(source, queue=None, queue_now=None):
         return prepare(source, profiles, feedback, current, None, None,
-                       args.recent_days, args.update_days, args.show_suppressed, focused)
-    candidates, suppressed, eligible = all_candidates(snapshot)
+                       args.recent_days, args.update_days, args.show_suppressed, focused,
+                       queue=queue, queue_now=queue_now)
+    candidates, suppressed, eligible = all_candidates(snapshot, queue=queue, queue_now=current)
     unique = (probe_watched(snapshot, suppressed, data_dir, args.evidence_limit,
                            focused=focused, candidates=candidates, prior=prior, state=state,
-                           focus_limit=getattr(args, "focus_limit", 8), now=current)
+                           focus_limit=getattr(args, "focus_limit", 8), now=current,
+                           metadata_changes=metadata_changes, used_repos=used_repos)
               if args.fetch_evidence else {})
     failed_now = {name for name, row in unique.items() if row["status"] != "complete"}
     unavailable = (previous_failures - set(unique)) | failed_now
     cache = {**prior, **{name: row for name, row in unique.items()
                         if row["status"] == "complete"}}
     snapshot = attach_cached_revisions(snapshot, data_dir, cache, unavailable)
-    candidates, suppressed, eligible = all_candidates(snapshot)
+    candidates, suppressed, eligible = all_candidates(snapshot, queue=queue, queue_now=current)
     for name in sorted(unavailable & {row.get("full_name") for row in snapshot.get("repos", [])}):
         warnings.append(f"Watched evidence incomplete: {name}; previous complete evidence retained")
     # Newly checked repositories must reach the review queue even when there
@@ -548,7 +811,8 @@ def cmd_auto(args):
     candidates.sort(key=lambda row: -int(row["repo"] in unique))
     all_rows = candidates
     candidates = select_candidates(candidates, args.limit, args.per_project, getattr(args, "per_repo", 3))
-    from repository_profile import local_reference_snapshots
+    if args.write:
+        queue = update_review_queue(data_dir, queue, candidates, all_rows, snapshot, feedback, current)
     snapshots_by_repo, observation_comparisons = {}, {}
     projects_by_path = {profile["skill_path"]: profile["project_id"] for profile in profiles}
     rows_by_name = {row.get("full_name"): row for row in snapshot.get("repos", [])}
@@ -635,7 +899,26 @@ def cmd_auto(args):
         "unresolved_previous_failures": sorted(unavailable - failed_now),
         "not_checked": len(rows_by_name) - len(unique),
         "checked_repos": list(unique),
-        "strategy": "at least half oldest-first across all Stars; remainder prioritizes new interest/focus/relevance",
+        "metadata_changed_repos": sorted(metadata_changes),
+        "used_repos_checked": sorted(set(unique) & used_repos),
+        "used_repos": len(used_repos),
+        "strategy": "at least half oldest-first across all Stars; remainder prioritizes metadata change, used source, new interest, focus and relevance",
+    }
+    queue_entries = list((queue.get("entries") or {}).values())
+    queue_pending = [entry for entry in queue_entries if entry.get("state") in {"pending", "shown"}]
+    shown_pending = [entry for entry in queue_pending if entry.get("state") == "shown"]
+    oldest_pending = min((entry.get("first_seen_at", "") for entry in queue_pending), default=None)
+    queue_coverage = {
+        "queue_state": queue.get("state", "healthy"),
+        "pending_total": len(queue_pending), "shown_pending": len(shown_pending),
+        "oldest_pending_first_seen_at": oldest_pending,
+        "oldest_pending_age_days": (round((current - parse_dt(oldest_pending)).total_seconds() / 86400, 1)
+                                    if oldest_pending and parse_dt(oldest_pending) else None),
+        "cycle_days_estimate": (len(queue_pending) / max(1, len(candidates))
+                                if args.write and queue.get("state") != "degraded" else None),
+        "admitted_this_round": len(candidates),
+        "starved_projects": sorted({entry.get("project_id") for entry in queue_pending}
+                                   - {entry.get("project_id") for entry in candidates}),
     }
     selected_ids = {c["project_id"] for c in candidates}
     result = envelope(candidates, snapshot=snapshot, coverage={
@@ -648,6 +931,7 @@ def cmd_auto(args):
         "focus_not_fetched": focus_not_fetched,
         "focus_deferred": len(focus_not_fetched),
         "watch_coverage": watch_coverage,
+        "review_queue": queue_coverage,
         "focus_unmatched": focus_unmatched,
         "snapshot_age_hours": round((current-timestamp).total_seconds()/3600, 1) if timestamp else None,
     }, warnings=warnings, extra={

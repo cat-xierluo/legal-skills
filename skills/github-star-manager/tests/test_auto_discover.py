@@ -178,7 +178,7 @@ class DiscoveryTests(unittest.TestCase):
         card = {"target": {"project_id": profile["project_id"], "target_revision": profile["target_revision"]},
                 "signal": {"repo": repo()["full_name"], "repo_revision": ad.repo_revision(repo())},
                 "decision": {"status": "rejected"}, "_recorded_at": NOW.isoformat()}
-        feedback = {(profile["project_id"], repo()["full_name"]): [card]}
+        feedback = {(profile["project_id"], repo()["full_name"], "legacy", None): [card]}
         selected, suppressed, _ = ad.prepare(snapshot([repo()]), [profile], feedback, NOW)
         self.assertFalse(selected)
         self.assertEqual(len(suppressed), 1)
@@ -297,7 +297,7 @@ class DiscoveryTests(unittest.TestCase):
                            "evidence_revision": ad.evidence_revision(cached_v1)},
                 "decision": {"status": "experiment_proposed"},
                 "_recorded_at": (NOW - timedelta(days=1)).isoformat()}
-        feedback = {(profile["project_id"], row["full_name"]): [card]}
+        feedback = {(profile["project_id"], row["full_name"], "legacy", None): [card]}
         ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
         readme = {"content": "ZGVtbyByZWFkbWU=", "sha": "readme-stable",
                   "html_url": "https://github.com/sample/subtitle"}
@@ -507,6 +507,178 @@ class DiscoveryTests(unittest.TestCase):
             {"sha": "new"}, {"sha": "h"}, {"sha": "old"}]}
         self.assertEqual([row["sha"] for row in ad.evidence_delta("a/b", current, prior)["new_commits"]],
                          ["new"])
+
+    def test_release_capability_recalls_new_component_direction(self):
+        write_skill(self.skills, "transition-kit", "视频转场与动效")
+        row = repo()
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "stable readme"},
+                  "release": {"tag": "v2", "url": "https://example.test/v2",
+                              "body": "Added transition timeline export"},
+                  "changed_at": (NOW - timedelta(hours=1)).isoformat()}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        _, result = capture(ad.cmd_auto, self.args())
+        rows = {(item["project_id"], item["capability"]["key"]): item for item in result["items"]}
+        transition = next(key for key in rows if key[0] == "transition-kit")
+        self.assertEqual(transition[1], "transition")
+        self.assertEqual(rows[transition]["capability"]["anchor"], "v2")
+        self.assertEqual(rows[transition]["decision_scope"], "direction")
+
+    def test_direction_feedback_does_not_suppress_other_direction(self):
+        write_skill(self.skills, "transition-kit", "视频转场与动效")
+        row = repo()
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "stable readme"},
+                  "release": {"tag": "v2", "body": "Added subtitle support\nAdded transition export"},
+                  "changed_at": (NOW - timedelta(hours=1)).isoformat()}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        profiles = self.profiles()
+        subtitle = next(p for p in profiles if p["project_id"] == "sample-video")
+        ad.atomic_json(self.data / "feedback" / "direction.json", {
+            "scope": "direction",
+            "target": {"project_id": subtitle["project_id"],
+                       "target_revision": subtitle["target_revision"],
+                       "capability_key": "subtitle"},
+            "signal": {"repo": row["full_name"], "repo_id": row["id"],
+                       "repo_revision": ad.repo_revision(row),
+                       "evidence_revision": ad.evidence_revision(cached)},
+            "decision": {"status": "rejected", "reason": "no local gap"},
+            "_recorded_at": NOW.isoformat(), "_schema": "opportunity-card/1.1"})
+        _, result = capture(ad.cmd_auto, self.args(limit=20, per_project=4, per_repo=10))
+        rows = [item for item in result["items"] if item["repo"] == row["full_name"]]
+        keys = {(item["project_id"], item["capability"]["key"]) for item in rows}
+        self.assertIn(("transition-kit", "transition"), keys)
+        self.assertNotIn((subtitle["project_id"], "subtitle"), keys)
+        self.assertEqual(result["suppressed"][0]["capability_key"], "subtitle")
+
+    def test_capability_key_defaults_to_direction_without_suppressing_other_direction(self):
+        write_skill(self.skills, "transition-kit", "视频转场与动效")
+        row = {**repo(), "description": "database utilities", "topics": []}
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "database utilities"},
+                  "release": {"tag": "v2", "body": "Added subtitle support\nAdded transition export"}}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        subtitle = next(p for p in self.profiles() if p["project_id"] == "sample-video")
+        ad.atomic_json(self.data / "feedback" / "decision.json", {
+            "target": {"project_id": subtitle["project_id"],
+                       "target_revision": subtitle["target_revision"],
+                       "capability_key": "subtitle"},
+            "signal": {"repo": row["full_name"], "repo_id": row["id"],
+                       "repo_revision": ad.repo_revision(row),
+                       "evidence_revision": ad.evidence_revision(cached)},
+            "decision": {"status": "rejected", "reason": "no local gap"},
+            "_recorded_at": NOW.isoformat(), "_schema": "opportunity-card/1.1"})
+        _, result = capture(ad.cmd_auto, self.args(limit=20, per_project=4, per_repo=10))
+        rows = [item for item in result["items"] if item["repo"] == row["full_name"]]
+        self.assertEqual([(row["project_id"], row["capability"]["key"]) for row in rows],
+                         [("transition-kit", "transition")])
+        suppressed = [row for row in result["suppressed"]
+                      if row["project_id"] == subtitle["project_id"]]
+        self.assertEqual(suppressed[0]["decision_scope"], "direction")
+        self.assertEqual(suppressed[0]["capability_key"], "subtitle")
+
+    def test_release_hint_recalls_when_metadata_and_readme_do_not_match(self):
+        write_skill(self.skills, "transition-kit", "视频转场与动效")
+        row = {**repo(), "description": "database utilities", "topics": []}
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "database utilities"},
+                  "release": {"tag": "v2", "body": "Added transition export"}}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        _, result = capture(ad.cmd_auto, self.args())
+        rows = [item for item in result["items"] if item["project_id"] == "transition-kit"]
+        self.assertEqual(len(rows), 1)
+        item = rows[0]
+        self.assertEqual(item["project_id"], "transition-kit")
+        self.assertEqual(item["capability"]["key"], "transition")
+        self.assertEqual(item["capability"]["anchor"], "v2")
+
+    def test_legacy_feedback_still_suppresses_repository_candidate(self):
+        row = repo()
+        profile = self.profiles()[0]
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        ad.atomic_json(self.data / "feedback" / "legacy.json", {
+            "target": {"project_id": profile["project_id"],
+                       "target_revision": profile["target_revision"]},
+            "signal": {"repo": row["full_name"], "repo_id": row["id"],
+                       "repo_revision": ad.repo_revision(row)},
+            "decision": {"status": "rejected"}, "_recorded_at": NOW.isoformat(),
+            "_schema": "opportunity-card/1.0"})
+        _, result = capture(ad.cmd_auto, self.args())
+        self.assertEqual(result["items"], [])
+        self.assertEqual(result["coverage"]["suppressed"], 1)
+        self.assertEqual(result["suppressed"][0]["decision_scope"], "legacy")
+
+    def test_review_queue_persists_and_rotates_unjudged_components(self):
+        for index in range(10):
+            write_skill(self.skills, f"video-{index}", "视频字幕时间轴")
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        seen = set()
+        for day in range(4):
+            with patch.object(ad, "now_utc", return_value=NOW + timedelta(days=day)):
+                _, result = capture(ad.cmd_auto, self.args(
+                write=True, limit=3, per_project=1, per_repo=3,
+                data_dir=self.data))
+            keys = [item["candidate_key"] for item in result["items"]]
+            queue = ad.read_json(self.data / ad.QUEUE_FILE)
+            self.assertEqual(queue["cursor"]["round_seq"], day + 1)
+            self.assertEqual(set(queue["last_run_selected_keys"]), set(keys))
+            seen.update(keys)
+            # Advance persisted times without rewriting source clocks.
+            for entry in queue["entries"].values():
+                entry["last_shown_at"] = (NOW + timedelta(days=day)).isoformat()
+            ad.atomic_json(self.data / ad.QUEUE_FILE, queue)
+        self.assertGreaterEqual(len(seen), 10)
+
+    def test_review_queue_marks_standard_direction_feedback_judged(self):
+        row = repo()
+        cached = {"status": "complete", "head_sha": "head", "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row),
+                  "readme": {"blob_sha": "readme-stable", "text": "demo readme"},
+                  "release": {"tag": "v2", "body": "Added subtitle support"},
+                  "changed_at": (NOW - timedelta(hours=1)).isoformat()}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        _, first = capture(ad.cmd_auto, self.args(write=True))
+        item = first["items"][0]
+        ad.atomic_json(self.data / "feedback" / "decision.json", {
+            "scope": "direction",
+            "target": {"project_id": item["project_id"],
+                       "target_revision": item["target_revision"],
+                       "capability_key": item["capability"]["key"]},
+            "signal": {"repo": row["full_name"], "repo_id": row["id"],
+                       "repo_revision": item["repo_revision"],
+                       "evidence_revision": item["evidence_revision"]},
+            "decision": {"status": "rejected", "reason": "no local gap"},
+            "_recorded_at": NOW.isoformat(), "_schema": "opportunity-card/1.1"})
+        _, second = capture(ad.cmd_auto, self.args(write=True))
+        queue = ad.read_json(self.data / ad.QUEUE_FILE)
+        entry = queue["entries"][item["candidate_key"]]
+        self.assertEqual(entry["state"], "judged")
+        self.assertEqual(entry["judged_ref"], "decision.json")
+        self.assertFalse(second["items"])
+
+    def test_corrupt_review_queue_preserves_original_and_degrades(self):
+        row = repo()
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        path = self.data / ad.QUEUE_FILE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{broken", encoding="utf-8")
+        before = path.read_bytes()
+        _, result = capture(ad.cmd_auto, self.args())
+        self.assertEqual(len(result["items"]), 1)
+        self.assertEqual(result["coverage"]["review_queue"]["queue_state"], "degraded")
+        self.assertTrue(any("review queue" in warning.lower() for warning in result["warnings"]))
+        self.assertEqual(path.read_bytes(), before)
+        self.assertTrue(list(path.parent.glob("review-queue.json.corrupt-*")))
 
     def test_all_stars_and_focus_rotate_beyond_candidate_and_evidence_limits(self):
         rows = [{**repo(f"sample/subtitle{i}"), "id": i} for i in range(6)]

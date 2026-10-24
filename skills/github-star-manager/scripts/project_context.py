@@ -15,6 +15,7 @@ MAX_DOCUMENT_BYTES = 256_000
 IGNORED = {"archive", ".system", "node_modules", "test", "output", ".git"}
 CONCEPTS = (
     ("video", "视频", "成片"), ("animation", "motion", "动画", "动效"),
+    ("transition", "转场"),
     ("subtitle", "caption", "字幕"), ("timeline", "时间轴"),
     ("render", "rendering", "渲染"), ("audio", "音频", "声音"),
     ("voice", "tts", "配音", "语音合成"), ("asr", "transcription", "转录"),
@@ -36,6 +37,23 @@ STOP = {
     "claude", "codex", "code", "open", "source", "text", "read", "run", "task",
     "app", "cli", "install", "plugin", "integration", "windows", "desktop",
     "github", "model", "models", "context", "support", "supports", "based",
+}
+
+CAPABILITY_ALIASES = {
+    "subtitle": ("subtitle", "caption", "字幕"),
+    "timeline": ("timeline", "时间轴"),
+    "render": ("render", "rendering", "渲染"),
+    "animation": ("animation", "motion", "动画", "动效"),
+    "transition": ("transition", "转场"),
+    "audio": ("audio", "音频", "声音"),
+    "voice": ("voice", "tts", "配音", "语音合成"),
+    "asr": ("asr", "transcription", "转录"),
+    "avatar": ("avatar", "character", "角色", "形象", "数字人"),
+    "lipsync": ("lipsync", "lip-sync", "口型"),
+    "cover": ("cover", "thumbnail", "封面", "缩略图"),
+    "layout": ("layout", "typography", "排版"),
+    "image": ("image", "图片", "图像"),
+    "video": ("video", "视频", "成片"),
 }
 
 
@@ -172,6 +190,58 @@ def terms_for(text: str) -> set[str]:
                for a in aliases):
             terms.update(aliases)
     return terms - STOP
+
+
+def capability_slug(text: str) -> str:
+    """A deterministic, file-safe direction slug for bounded upstream hints."""
+    value = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "-", text.lower()).strip("-")
+    return value[:48] or "capability"
+
+
+def capability_hints(readme_text="", release=None, commits=(), readme_blob_sha=None) -> list[dict]:
+    """Extract added-capability lines with immutable upstream anchors.
+
+    Commit subjects intentionally do not create capability directions: they are
+    evidence of recent change, while noisy history must not widen recall.
+    """
+    hints = []
+    release = release or {}
+    anchor = release.get("tag") or release.get("url") or release.get("published_at")
+    if anchor:
+        body = str(release.get("body") or "")
+        lines = [line.strip(" \t-*#>`)(") for line in body.splitlines()]
+        selected = [line for line in lines
+                    if line and re.search(r"added|新增|支持|support|now provides|新增支持", line,
+                                          re.I)]
+        for text in selected[:30]:
+            concepts = sorted({key for key, aliases in CAPABILITY_ALIASES.items()
+                               if any(a.lower() in text.lower() for a in aliases)})
+            if not concepts:
+                continue
+            for identity in concepts:
+                hints.append({
+                    "capability_key": capability_slug(identity),
+                    "capability_label": identity,
+                    "concepts": [identity],
+                    "source": "release", "anchor": anchor, "text": text[:500],
+                })
+    # A README capability line is anchored by its blob SHA. Without that
+    # anchor it cannot be identity-stable and must not become a direction.
+    blob_sha = readme_blob_sha
+    if isinstance(readme_text, str) and blob_sha:
+        lines = [line.strip(" \t-*#>`)(") for line in readme_text.splitlines()]
+        for text in [line for line in lines if line and re.search(
+                r"features|功能|支持|provides|supports", line, re.I)][:30]:
+            concepts = sorted({key for key, aliases in CAPABILITY_ALIASES.items()
+                               if any(a.lower() in text.lower() for a in aliases)})
+            if concepts:
+                for identity in concepts:
+                    hints.append({
+                        "capability_key": capability_slug(identity),
+                        "capability_label": identity, "concepts": [identity],
+                        "source": "readme", "anchor": blob_sha, "text": text[:500],
+                    })
+    return hints
 
 
 def positive_scope(text: str) -> str:
