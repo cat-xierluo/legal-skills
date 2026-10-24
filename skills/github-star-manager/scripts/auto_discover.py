@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from lockutil import write_lock
+import daily_loop
 from project_context import (capability_hints, compare_snapshot_commit, default_roots, digest, discover,
                              match_terms, terms_for, scope_conflicts,
                              shared_evidence_revision, shared_repo_revision)
@@ -305,6 +306,342 @@ def load_review_queue(data_dir, warnings):
                 "state": "degraded", "source_path": str(path)}
 
 
+def judged_decision(entry, feedback, now):
+    """判断队列条目是否已有有效反馈卡（复用 suppression 判定，不另立一套）。
+
+    返回 None 表示本条目尚无有效反馈卡；否则返回判定详情（含 judged_ref）。
+    """
+    project_id, repo_id, repo_name, capability = (entry.get("project_id"),
+                                                   entry.get("repo_id"), entry.get("repo"),
+                                                   entry.get("capability_key"))
+    decisions = []
+    if repo_id is not None:
+        decisions += feedback.get((project_id, f"id:{repo_id}", "direction", capability), [])
+        decisions += feedback.get((project_id, f"id:{repo_id}", "repo", None), [])
+        decisions += feedback.get((project_id, f"id:{repo_id}", "legacy", None), [])
+    decisions += feedback.get((project_id, repo_name, "direction", capability), [])
+    decisions += feedback.get((project_id, repo_name, "repo", None), [])
+    decisions += feedback.get((project_id, repo_name, "legacy", None), [])
+    if not decisions:
+        return None
+    merged = prior_for_direction(list({digest(card): card for card in decisions}.values()), capability)
+    state = suppression({"target_revision": entry.get("last_target_revision"),
+                         "activity": {}},
+                        {"id": repo_id, "full_name": repo_name,
+                         "pushed_at": None, "description": None, "topics": None,
+                         "_evidence_revision": entry.get("last_evidence_revision"),
+                         "_repo_revision": entry.get("last_repo_revision")},
+                        merged, now, requested_direction=capability)
+    if not state:
+        return None
+    latest = max(merged, key=lambda card: card.get("_recorded_at", ""))
+    return {"decision": state.get("decision"), "judged_ref": latest.get("_file"),
+            "recorded_at": latest.get("_recorded_at"),
+            "decision_scope": state.get("decision_scope"),
+            "capability_key": state.get("capability_key")}
+
+
+def judge_entries(entries, feedback, now):
+    """把有有效反馈卡的队列条目更新为 judged；返回本轮变为 judged 的条目。
+
+    没有反馈卡的条目保持原状态——不得因为"被展示过"就标成已处理。
+    """
+    newly = []
+    for key, entry in entries.items():
+        if not isinstance(entry, dict) or entry.get("state") == "stale":
+            continue
+        decision = judged_decision(entry, feedback, now)
+        if not decision:
+            continue
+        previous = entry.get("state")
+        entry["state"] = "judged"
+        entry["judged_ref"] = decision.get("judged_ref")
+        if previous != "judged":
+            entry["judged_at"] = now.isoformat()
+            newly.append({"candidate_key": key, "project_id": entry.get("project_id"),
+                          "repo": entry.get("repo"), "repo_id": entry.get("repo_id"),
+                          "capability_key": entry.get("capability_key"),
+                          "decision": decision.get("decision"),
+                          "judged_ref": decision.get("judged_ref")})
+    return newly
+
+
+def queue_backlog(entries):
+    """未研判积压统计（pending / shown 都算还没写反馈卡）。"""
+    pending = [entry for entry in entries.values()
+               if isinstance(entry, dict) and entry.get("state") in {"pending", "shown"}]
+    oldest = min((entry.get("first_seen_at", "") for entry in pending), default=None)
+    by_project = {}
+    for entry in pending:
+        key = entry.get("project_id") or "unknown"
+        by_project[key] = by_project.get(key, 0) + 1
+    judged = [entry for entry in entries.values()
+              if isinstance(entry, dict) and entry.get("state") == "judged"]
+    return {"pending_total": len(pending),
+            "shown_pending": sum(1 for entry in pending if entry.get("state") == "shown"),
+            "judged_total": len(judged),
+            "stale_total": sum(1 for entry in entries.values()
+                               if isinstance(entry, dict) and entry.get("state") == "stale"),
+            "oldest_pending_first_seen_at": oldest,
+            "pending_by_project": dict(sorted(by_project.items()))}
+
+
+def reconcile_queue(data_dir, now=None, since=None):
+    """离线对账：重读 feedback/ 与 review-queue.json，把有反馈卡的条目置为 judged。
+
+    零联网。返回 (result, exit_code)；队列损坏时显式降级且不写回。
+    """
+    now = now or now_utc()
+    since = parse_dt(since) if isinstance(since, str) else since
+    warnings = []
+    queue = load_review_queue(data_dir, warnings)
+    degraded = queue.get("state") == "degraded"
+    feedback, feedback_warnings = feedback_index(data_dir)
+    warnings += feedback_warnings
+    entries = queue.get("entries") or {}
+    newly = []
+    changed = False
+    if not degraded:
+        before = {key: entry.get("state") for key, entry in entries.items()
+                  if isinstance(entry, dict)}
+        newly = judge_entries(entries, feedback, now)
+        after = {key: entry.get("state") for key, entry in entries.items()
+                 if isinstance(entry, dict)}
+        changed = before != after
+        if changed:
+            value = {**queue, "entries": entries,
+                     "last_reconciled_at": now.isoformat()}
+            path = data_dir / QUEUE_FILE
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with write_lock(path.parent):
+                atomic_json(path, value)
+    backlog = queue_backlog(entries)
+    new_pending = 0
+    new_unjudged = 0
+    if since is not None:
+        for entry in entries.values():
+            if not isinstance(entry, dict) or entry.get("state") not in {"pending", "shown"}:
+                continue
+            first_seen = parse_dt(entry.get("first_seen_at"))
+            if first_seen is not None and first_seen >= since:
+                new_pending += 1
+            last_shown = parse_dt(entry.get("last_shown_at"))
+            if ((first_seen is not None and first_seen >= since)
+                    or (last_shown is not None and last_shown >= since)):
+                new_unjudged += 1
+    backlog["new_pending_since"] = new_pending
+    backlog["new_unjudged_since"] = new_unjudged
+    result = {
+        "schema_version": "reconcile/1.0",
+        "generated_at": now.isoformat(),
+        "data_dir": str(data_dir),
+        "queue_state": queue.get("state", "healthy"),
+        "degraded": degraded,
+        "newly_judged": newly,
+        "newly_judged_count": len(newly),
+        "queue_changed": changed,
+        "new_pending": new_pending,
+        "new_unjudged": new_unjudged,
+        "backlog": backlog,
+        "entries": entries,
+        "include_entries": True,
+        "feedback_cards": sum(len(cards) for cards in feedback.values()),
+        "warnings": warnings,
+        "errors": ([f"研判队列不可读，已保留原文件且未写回：{queue.get('source_path')}"]
+                   if degraded else []),
+    }
+    return result, (1 if degraded else 0)
+
+
+def latest_run_context(data_dir):
+    """读取最近一次准备阶段的运行包（离线），提取候选数与请求预算用量。"""
+    path = daily_loop.latest_run_file(data_dir)
+    context = {"run_path": str(path) if path else None, "run_found": bool(path),
+               "generated_at": None, "candidates": 0, "request_budget": None,
+               "status": None, "warnings": []}
+    if not path:
+        context["warnings"].append("没有找到准备阶段运行包——本轮候选数按 0 计")
+        return context
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        context["warnings"].append(f"运行包不可读（{type(exc).__name__}）——本轮候选数按 0 计")
+        return context
+    if not isinstance(value, dict):
+        context["warnings"].append("运行包格式异常——本轮候选数按 0 计")
+        return context
+    items = value.get("items")
+    context["generated_at"] = value.get("generated_at")
+    context["candidates"] = len(items) if isinstance(items, list) else 0
+    context["status"] = value.get("status")
+    coverage = value.get("coverage") or {}
+    watch = coverage.get("watch_coverage") or {}
+    if isinstance(watch.get("request_budget"), dict):
+        context["request_budget"] = watch["request_budget"]
+    return context
+
+
+def cards_written_since(data_dir, since_iso=None):
+    """统计本轮（准备阶段之后）写入的反馈卡数量。"""
+    since = parse_dt(since_iso) if since_iso else None
+    written = []
+    if since is None:
+        # 没有准备阶段运行包 → 没有"本轮"边界。历史卡片不能算作本轮写入。
+        return written
+    directory = Path(data_dir) / "feedback"
+    if not directory.is_dir():
+        return written
+    for path in sorted(directory.glob("*.json")):
+        try:
+            card = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(card, dict):
+            continue
+        recorded = parse_dt(card.get("_recorded_at"))
+        if since and (recorded is None or recorded < since):
+            continue
+        written.append({"file": path.name,
+                        "decision": (card.get("decision") or {}).get("status"),
+                        "repo": (card.get("signal") or {}).get("repo"),
+                        "project_id": (card.get("target") or {}).get("project_id"),
+                        "recorded_at": card.get("_recorded_at")})
+    return written
+
+
+def build_receipt(data_dir, outcome=None, errors=None, notify=None,
+                  requested=None, now=None):
+    """汇总一次每日闭环的回执事实（离线）。
+
+    outcome:
+    - "judged"：本轮有反馈卡写入或队列条目变为 judged。
+    - "silent"：必须带正向证据（候选数=0、队列无新增待研判、无卡片写入）。
+    - "failed"：Agent 崩溃/未研判/错误——不得记成静默。
+    - None（自动判定）：按上面的事实推导。
+
+    没有准备阶段运行包时，"本轮写入的卡片"无法界定（历史卡片不算本轮），
+    但 reconcile 真实把条目判为 judged 仍是 judged 结局，缺运行包记为显式警告。
+    """
+    now = now or now_utc()
+    run = latest_run_context(data_dir)
+    run_at = parse_dt(run.get("generated_at"))
+    reconcile, reconcile_code = reconcile_queue(data_dir, now=now, since=run_at)
+    written = cards_written_since(data_dir, run.get("generated_at"))
+    backlog = reconcile.get("backlog") or {}
+    new_pending = reconcile.get("new_pending", 0)
+    new_unjudged = reconcile.get("new_unjudged", 0)
+    shown_pending = backlog.get("shown_pending", 0)
+    facts = {
+        "candidates": run.get("candidates", 0),
+        "cards_written": len(written),
+        "newly_judged": reconcile.get("newly_judged_count", 0),
+        "pending_total": backlog.get("pending_total", 0),
+        "new_pending": new_pending,
+        "new_unjudged": new_unjudged,
+        "shown_pending": shown_pending,
+        "backlog_pending_total": backlog.get("pending_total", 0),
+        "run_found": run.get("run_found"),
+        "queue_state": reconcile.get("queue_state"),
+    }
+    actionable = [card for card in written
+                  if card.get("decision") in {"tested", "adopted", "experiment_proposed"}]
+    # 本轮写出的卡片中，已有对应队列条目被判为 judged 的数量。
+    judged_cards = 0
+    for card in written:
+        for key, entry in (reconcile.get("entries") or {}).items():
+            if not isinstance(entry, dict) or entry.get("state") != "judged":
+                continue
+            if (entry.get("project_id") == card.get("project_id")
+                    and entry.get("repo") == card.get("repo")):
+                judged_cards += 1
+                break
+    failures = list(errors or [])
+    if reconcile_code:
+        failures.extend(reconcile.get("errors") or [])
+    resolved = outcome
+    if resolved is None:
+        if failures:
+            resolved = "failed"
+        elif facts["cards_written"] or facts["newly_judged"]:
+            resolved = "judged"
+        elif (facts["run_found"] and facts["candidates"] == 0
+              and facts["new_unjudged"] == 0 and facts["cards_written"] == 0):
+            resolved = "silent"
+        else:
+            resolved = "failed"
+            if not facts["run_found"]:
+                failures.append("没有准备阶段运行包，无法取得候选数=0 的正向证据"
+                                "——不得记为静默")
+            elif facts["candidates"] or facts["new_unjudged"]:
+                failures.append("本轮存在候选或新增未研判条目，却没有写出任何反馈卡"
+                                "——研判未完成，不得记为静默")
+            else:
+                failures.append("本轮有反馈卡写入但无法完成对账——不得记为静默")
+    if resolved == "silent":
+        evidence = {
+            "candidates": facts["candidates"],
+            "queue_new_pending": facts["new_pending"],
+            "queue_new_unjudged": facts["new_unjudged"],
+            "backlog_pending_total": facts["backlog_pending_total"],
+            "cards_written": facts["cards_written"],
+            "statement": "本轮候选数=0 且队列无新增未研判条目 且无卡片写入",
+            "note": "历史积压只披露不阻断——相同未恢复问题不每天重报",
+        }
+        if (not facts["run_found"] or facts["candidates"] != 0
+                or facts["new_unjudged"] != 0 or facts["cards_written"] != 0):
+            return {"ok": False,
+                    "error": "silent 需要正向证据，但本轮事实不支持："
+                             f"run_found={facts['run_found']}, "
+                             f"candidates={facts['candidates']}, "
+                             f"new_unjudged={facts['new_unjudged']}, "
+                             f"backlog_pending_total={facts['backlog_pending_total']}, "
+                             f"cards_written={facts['cards_written']}",
+                    "facts": facts}, 1
+    else:
+        evidence = {
+            "cards_written": facts["cards_written"],
+            "newly_judged": facts["newly_judged"],
+            "actionable_cards": len(actionable),
+            "statement": "本轮写出反馈卡并完成对账" if resolved == "judged"
+                         else "本轮出现失败或未完成——不作为静默处理",
+        }
+    if notify is None:
+        if resolved == "failed":
+            notify = {"recommended": True, "reason": "本轮失败或研判未完成——需要人工介入"}
+        elif resolved == "judged" and actionable:
+            notify = {"recommended": True,
+                      "reason": f"本轮有 {len(actionable)} 张可行动的机会卡（tested/adopted/experiment_proposed）"}
+        elif resolved == "judged":
+            notify = {"recommended": False, "reason": "本轮只有拒绝/暂缓类判断，无需打扰用户"}
+        else:
+            notify = {"recommended": False, "reason": "无变化静默"}
+    receipt = {
+        "schema_version": daily_loop.RECEIPT_SCHEMA,
+        "generated_at": now.isoformat(),
+        "outcome": resolved,
+        "facts": facts,
+        "evidence": evidence,
+        "request_budget": run.get("request_budget"),
+        "candidates": facts["candidates"],
+        "cards_written": facts["cards_written"],
+        "cards": written,
+        "reconcile": {"newly_judged_count": reconcile.get("newly_judged_count"),
+                      "newly_judged": reconcile.get("newly_judged"),
+                      "judged_total": backlog.get("judged_total", 0),
+                      "pending_total": backlog.get("pending_total", 0),
+                      "new_pending": new_pending,
+                      "cards_now_judged": judged_cards,
+                      "backlog": backlog,
+                      "queue_state": reconcile.get("queue_state"),
+                      "degraded": reconcile.get("degraded")},
+        "notification": notify,
+        "errors": failures,
+        "warnings": list(run.get("warnings") or []) + list(reconcile.get("warnings") or []),
+        "requested_outcome": requested,
+    }
+    return {"ok": True, "receipt": receipt}, (1 if resolved == "failed" else 0)
+
+
 def update_review_queue(data_dir, old, selected, all_candidates, snapshot, feedback, now):
     current_ids = {row.get("id") for row in snapshot.get("repos", [])}
     entries = {}
@@ -343,31 +680,7 @@ def update_review_queue(data_dir, old, selected, all_candidates, snapshot, feedb
         entry["last_shown_project"] = candidate["project_id"]
     # Feedback remains the sole source of judged state. Do not mark shown items
     # complete merely because an Agent looked at them.
-    for key, entry in entries.items():
-        if entry.get("state") == "stale":
-            continue
-        project_id, repo_id, repo_name, capability = (entry.get("project_id"),
-                                                       entry.get("repo_id"), entry.get("repo"),
-                                                       entry.get("capability_key"))
-        decisions = []
-        if repo_id is not None:
-            decisions += feedback.get((project_id, f"id:{repo_id}", "direction", capability), [])
-            decisions += feedback.get((project_id, f"id:{repo_id}", "repo", None), [])
-            decisions += feedback.get((project_id, f"id:{repo_id}", "legacy", None), [])
-        decisions += feedback.get((project_id, repo_name, "direction", capability), [])
-        decisions += feedback.get((project_id, repo_name, "repo", None), [])
-        decisions += feedback.get((project_id, repo_name, "legacy", None), [])
-        if decisions:
-            merged = prior_for_direction(list({digest(card): card for card in decisions}.values()), capability)
-            if suppression({"target_revision": entry.get("last_target_revision"),
-                            "activity": {}},
-                           {"id": repo_id, "full_name": repo_name,
-                            "pushed_at": None, "description": None, "topics": None,
-                            "_evidence_revision": entry.get("last_evidence_revision"),
-                            "_repo_revision": entry.get("last_repo_revision")},
-                           merged, now, requested_direction=capability):
-                entry["state"] = "judged"
-                entry["judged_ref"] = max(merged, key=lambda card: card.get("_recorded_at", "")).get("_file")
+    judge_entries(entries, feedback, now)
     value = {"schema_version": QUEUE_SCHEMA, "entries": entries,
              "cursor": {"round_seq": int((old.get("cursor") or {}).get("round_seq", 0)) + 1,
                         "last_round_at": now.isoformat()},
@@ -1129,6 +1442,62 @@ def nonnegative(value):
     return n
 
 
+def cmd_reconcile(args):
+    """离线对账：反馈卡 → 队列 judged 状态。"""
+    data_dir = args.data_dir.expanduser().resolve() if args.data_dir else StarTracker.CACHE_DIR
+    result, code = reconcile_queue(data_dir)
+    # CLI 输出保持精简：队列全量内容留在状态文件里，不回显到 stdout。
+    return emit({key: value for key, value in result.items() if key != "entries"}, code)
+
+
+def cmd_receipt(args):
+    """写一次每日闭环的运行回执（judged / silent / failed）。"""
+    data_dir = args.data_dir.expanduser().resolve() if args.data_dir else StarTracker.CACHE_DIR
+    outcome = args.outcome
+    errors = list(args.error or [])
+    notify = None
+    if args.notify is not None:
+        notify = {"recommended": args.notify == "true",
+                  "reason": args.notify_reason or "调用方显式指定"}
+    payload, code = build_receipt(data_dir, outcome=outcome, errors=errors, notify=notify,
+                                   requested=outcome)
+    if not payload.get("ok"):
+        return emit({"schema_version": "daily-receipt/1.0", "ok": False,
+                     "error": payload.get("error"), "facts": payload.get("facts"),
+                     "errors": [payload.get("error")]}, 1)
+    receipt = payload["receipt"]
+    path = daily_loop.write_receipt(data_dir, receipt)
+    receipt = {**receipt, "receipt_path": str(path)}
+    return emit(receipt, code)
+
+
+def cmd_lease(args):
+    """并发租约：acquire / release / status。"""
+    data_dir = args.data_dir.expanduser().resolve() if args.data_dir else StarTracker.CACHE_DIR
+    if args.lease_action == "acquire":
+        try:
+            lease, notes = daily_loop.acquire_lease(
+                data_dir, args.owner, run_id=args.run_id,
+                ttl_seconds=args.ttl)
+        except daily_loop.LeaseConflict as exc:
+            return emit({"schema_version": "daily-lease/1.0", "acquired": False,
+                         "conflict": True, "error": str(exc),
+                         "status": daily_loop.lease_status(data_dir)}, 1)
+        except daily_loop.LeaseError as exc:
+            return emit({"schema_version": "daily-lease/1.0", "acquired": False,
+                         "error": str(exc)}, 1)
+        return emit({"schema_version": "daily-lease/1.0", "acquired": True,
+                     "lease": lease, "notes": notes,
+                     "status": daily_loop.lease_status(data_dir)}, 0)
+    if args.lease_action == "release":
+        result = daily_loop.release_lease(data_dir, args.owner, run_id=args.run_id)
+        code = 0 if result.get("released") else 1
+        return emit({"schema_version": "daily-lease/1.0", **result,
+                     "status": daily_loop.lease_status(data_dir)}, code)
+    return emit({"schema_version": "daily-lease/1.0",
+                 "status": daily_loop.lease_status(data_dir)}, 0)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Dynamic local targets and evidence for scheduled opportunity review")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1157,6 +1526,29 @@ def main():
             p.add_argument("--focus-limit", type=positive, default=8,
                            help="Maximum focused repositories fetched per run within the shared evidence budget")
             p.add_argument("--write", action="store_true")
+
+    p = sub.add_parser("reconcile",
+                        help="离线对账：把有反馈卡的队列条目置为 judged（不联网）")
+    p.add_argument("--data-dir", type=Path, help="私有运行状态目录")
+    p.set_defaults(func=cmd_reconcile)
+
+    p = sub.add_parser("receipt", help="写每日闭环运行回执（judged/silent/failed）")
+    p.add_argument("--data-dir", type=Path, help="私有运行状态目录")
+    p.add_argument("--outcome", choices=["judged", "silent", "failed"],
+                   help="不指定时按本轮事实自动判定")
+    p.add_argument("--error", action="append", help="失败原因（可重复）")
+    p.add_argument("--notify", choices=["true", "false"], help="通知结论")
+    p.add_argument("--notify-reason", help="通知结论的理由")
+    p.set_defaults(func=cmd_receipt)
+
+    p = sub.add_parser("lease", help="每日闭环并发租约")
+    p.add_argument("--data-dir", type=Path, help="私有运行状态目录")
+    p.add_argument("lease_action", choices=["acquire", "release", "status"])
+    p.add_argument("--owner", default="", help="租约持有者标识")
+    p.add_argument("--run-id", help="本轮运行 ID")
+    p.add_argument("--ttl", type=positive, default=daily_loop.DEFAULT_TTL_SECONDS,
+                   help="租约有效期秒数（默认 1800）")
+    p.set_defaults(func=cmd_lease)
     args = parser.parse_args()
     try:
         return args.func(args)
