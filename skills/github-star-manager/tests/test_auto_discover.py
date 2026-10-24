@@ -1351,5 +1351,246 @@ class CandidateEvidenceTests(unittest.TestCase):
 
 
 
+class EvidenceRankTests(unittest.TestCase):
+    """The evidence tier must reflect what this run knows, not where the
+    digest came from.
+
+    The regression: a run that tried to fetch a repository and failed fell
+    back to the cache, but the rank only rewarded the "this_run" source, so
+    the fallback scored 0 and lost to a plain cache hit of a repository the
+    run had never touched. That inverted the intended priority.
+    """
+
+    def test_failed_attempt_outranks_a_plain_cache_hit(self):
+        fallback = ad.evidence_rank(ad.EVIDENCE_STATUS_CACHED_PARTIAL, "cache")
+        plain_cache = ad.evidence_rank("cached", "cache")
+        self.assertGreater(fallback, plain_cache)
+        self.assertGreater(fallback, ad.EVIDENCE_RANK_NONE)
+
+    def test_budget_skip_outranks_a_plain_cache_hit(self):
+        skipped = ad.evidence_rank(ad.EVIDENCE_STATUS_CACHED_SKIPPED, "cache")
+        self.assertGreater(skipped, ad.evidence_rank("cached", "cache"))
+        self.assertGreater(skipped, ad.EVIDENCE_RANK_NONE)
+
+    def test_stale_cache_is_not_below_a_plain_cache_hit(self):
+        stale = ad.evidence_rank("stale", "cache")
+        plain = ad.evidence_rank("cached", "cache")
+        self.assertGreaterEqual(stale, plain)
+        self.assertGreater(stale, ad.EVIDENCE_RANK_NONE)
+
+    def test_documented_five_tiers_are_monotonic(self):
+        # The documented dimension is five tiers: this-run deep > this-run
+        # cheap > this-run partial > cache hit > no evidence. The cache
+        # fallbacks belong to the "this-run partial" tier, because the run
+        # did try and did not get a complete read.
+        deep = ad.evidence_rank("complete", "this_run")
+        cheap = ad.evidence_rank("complete", "this_run", "cheap")
+        partial = ad.evidence_rank("partial", "this_run")
+        fallback = ad.evidence_rank(ad.EVIDENCE_STATUS_CACHED_PARTIAL, "cache")
+        skipped = ad.evidence_rank(ad.EVIDENCE_STATUS_CACHED_SKIPPED, "cache")
+        cache = ad.evidence_rank("cached", "cache")
+        none = ad.evidence_rank("not_fetched", "none")
+        self.assertGreater(deep, cheap)
+        self.assertGreater(cheap, partial)
+        self.assertGreater(partial, cache)
+        self.assertGreater(cache, none)
+        self.assertEqual(none, ad.EVIDENCE_RANK_NONE)
+        # The fallbacks sit in the partial tier, not below the cache tier.
+        self.assertEqual(fallback, partial)
+        self.assertEqual(skipped, partial)
+        self.assertGreater(fallback, cache)
+        self.assertGreater(skipped, cache)
+
+    def test_the_full_ordering_key_is_strictly_ordered(self):
+        # The queue sorts on (rank, detail). The whole set of real statuses
+        # must come out in a single, non-ambiguous order.
+        states = [
+            ("complete", "this_run", None),
+            ("complete", "this_run", "cheap"),
+            ("partial", "this_run", None),
+            (ad.EVIDENCE_STATUS_CACHED_PARTIAL, "cache", None),
+            (ad.EVIDENCE_STATUS_CACHED_SKIPPED, "cache", None),
+            ("stale", "cache", None),
+            ("cached", "cache", None),
+            ("not_fetched", "none", None),
+        ]
+        keys = [(ad.evidence_rank(s, src, probe),
+                 ad.evidence_detail_rank(s, src)) for s, src, probe in states]
+        self.assertEqual(keys, sorted(keys, reverse=True))
+        self.assertEqual(len(set(keys)), len(keys))
+
+    def test_detail_tier_orders_fresher_evidence_first(self):
+        # Inside the "partial" tier the fresher evidence comes first.
+        self.assertGreater(ad.evidence_detail_rank("partial", "this_run"),
+                           ad.evidence_detail_rank(ad.EVIDENCE_STATUS_CACHED_PARTIAL, "cache"))
+        self.assertGreater(ad.evidence_detail_rank(ad.EVIDENCE_STATUS_CACHED_PARTIAL, "cache"),
+                           ad.evidence_detail_rank(ad.EVIDENCE_STATUS_CACHED_SKIPPED, "cache"))
+        # Inside the cache tier a stale digest outranks a fresh one.
+        self.assertGreater(ad.evidence_detail_rank("stale", "cache"),
+                           ad.evidence_detail_rank("cached", "cache"))
+
+    def test_the_documented_status_table_matches_the_code(self):
+        # The reference documents promise a status list and a rank table.
+        # Both are checked against the code so they cannot drift apart.
+        docs = Path(__file__).resolve().parents[1] / "references" / "daily-opportunities.md"
+        skill = Path(__file__).resolve().parents[1] / "SKILL.md"
+        doc_text = docs.read_text(encoding="utf-8")
+        skill_text = skill.read_text(encoding="utf-8")
+        statuses = ("complete", "partial", "cached_partial", "cached_skipped",
+                    "cached", "stale", "not_fetched")
+        for status in statuses:
+            self.assertIn(f"`{status}`", doc_text,
+                          f"{status} is not documented in daily-opportunities.md")
+            self.assertIn(f"`{status}`", skill_text,
+                          f"{status} is not documented in SKILL.md")
+        # The rank table the reference documents states one number per tier.
+        expected = {"本轮深探测": 4, "本轮廉价探测": 3, "本轮部分失败": 2,
+                    "缓存命中": 1, "无证据": 0}
+        for tier, value in expected.items():
+            self.assertIn(f"| {tier} | {value} |", doc_text,
+                          f"The rank table lost the {tier} tier ({value})")
+
+    def test_the_tier_table_matches_the_documented_one(self):
+        # The exact table the reference documents promise.
+        table = {
+            "complete deep": 4,
+            "complete cheap": 3,
+            "partial this run": 2,
+            "cached_partial": 2,
+            "cached_skipped": 2,
+            "cached": 1,
+            "stale": 1,
+            "not_fetched": 0,
+        }
+        actual = {
+            "complete deep": ad.evidence_rank("complete", "this_run"),
+            "complete cheap": ad.evidence_rank("complete", "this_run", "cheap"),
+            "partial this run": ad.evidence_rank("partial", "this_run"),
+            "cached_partial": ad.evidence_rank(ad.EVIDENCE_STATUS_CACHED_PARTIAL, "cache"),
+            "cached_skipped": ad.evidence_rank(ad.EVIDENCE_STATUS_CACHED_SKIPPED, "cache"),
+            "cached": ad.evidence_rank("cached", "cache"),
+            "stale": ad.evidence_rank("stale", "cache"),
+            "not_fetched": ad.evidence_rank("not_fetched", "none"),
+        }
+        self.assertEqual(actual, table)
+
+    def test_fallback_status_keeps_its_own_tier_and_source(self):
+        fields = ad.candidate_evidence_fields({
+            "_evidence_record": {"readme": {"text": "cached body"},
+                                 "fetched_at": "2026-10-01T00:00:00Z"},
+            "_evidence_source": "cache",
+            "_evidence_status": ad.EVIDENCE_STATUS_CACHED_PARTIAL,
+            "_evidence_fallback_note": "This run's fetch failed."})
+        self.assertEqual(fields["status"], ad.EVIDENCE_STATUS_CACHED_PARTIAL)
+        self.assertEqual(fields["source"], "cache")
+        self.assertEqual(fields["rank"], ad.EVIDENCE_RANK_THIS_RUN_PARTIAL)
+        self.assertIn("failed", fields["summary"]["fallback_note"])
+
+
+class EvidenceFallbackQueueTests(unittest.TestCase):
+    """End-to-end: a repository this run tried must not lose its place to a
+    repository this run never touched, and an old digest must be visibly old.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.skills = self.root / "skills"
+        self.skills.mkdir()
+        self.data = self.root / "data"
+        self.data.mkdir()
+        write_skill(self.skills, "proj0", "视频字幕渲染与时间轴工具")
+
+    def args(self, **overrides):
+        return SimpleNamespace(**dict(dict(project=None, skills_root=[self.skills], repo_root=None,
+            data_dir=self.data, refresh=False, fetch_evidence=True, evidence_limit=4,
+            limit=12, per_project=2, recent_days=14, update_days=7, write=False,
+            show_suppressed=False, focus_limit=8, request_budget=60,
+            cheap_budget=0), **overrides))
+
+    def candidate_repo(self, name, repo_id, description="subtitle timeline renderer"):
+        return {"id": repo_id, "full_name": name, "description": description,
+                "topics": ["video"], "starred_at": "2026-10-20T00:00:00Z",
+                "pushed_at": "2026-10-21T00:00:00Z"}
+
+    def cached_record(self, row, body="cached readme body"):
+        return {"repo": row["full_name"], "repo_id": row["id"],
+                "repo_revision": ad.repo_revision(row), "status": "complete",
+                "head_sha": "head-sha", "release": {"tag": "v1", "body": "old release"},
+                "readme": {"blob_sha": "readme-sha", "text": body},
+                "commits": [{"sha": "c1", "message": "cached commit"}],
+                "fetched_at": "2026-10-01T00:00:00Z",
+                "changed_at": "2026-10-01T00:00:00Z"}
+
+    def test_failed_fetch_is_not_dropped_behind_an_untouched_cache_hit(self):
+        # "own/attempted-failed" was fetched this run and failed, so it falls
+        # back to the cache. "own/untouched" was never touched this run and
+        # only hits the cache. The attempted one must keep the first place.
+        attempted = self.candidate_repo("own/attempted-failed", 11)
+        untouched = self.candidate_repo("own/untouched", 12)
+        ad.atomic_json(ad.evidence_cache(self.data, attempted["full_name"]),
+                       self.cached_record(attempted, "attempted cached body"))
+        ad.atomic_json(ad.evidence_cache(self.data, untouched["full_name"]),
+                       self.cached_record(untouched, "untouched cached body"))
+        ad.atomic_json(self.data / "original_latest.json", snapshot([attempted, untouched]))
+
+        def response(endpoint, **kwargs):
+            raise RuntimeError("network offline")
+
+        with patch.object(ad, "github_get", side_effect=response):
+            _, result = capture(ad.cmd_auto, self.args(evidence_limit=1, limit=1))
+        items = result["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["repo"], "own/attempted-failed")
+        self.assertEqual(items[0]["evidence_status"], ad.EVIDENCE_STATUS_CACHED_PARTIAL)
+        self.assertEqual(items[0]["evidence_source"], "cache")
+        self.assertEqual(items[0]["evidence_rank"], ad.EVIDENCE_RANK_THIS_RUN_PARTIAL)
+
+    def test_cached_digest_is_visibly_old_not_this_run(self):
+        # The Agent must be able to tell an old digest from a fresh one.
+        row = self.candidate_repo("own/old-cache", 21)
+        cached = self.cached_record(row, "old cached body")
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+
+        def response(endpoint, **kwargs):
+            raise RuntimeError("network offline")
+
+        with patch.object(ad, "github_get", side_effect=response):
+            _, result = capture(ad.cmd_auto, self.args(evidence_limit=1))
+        item = result["items"][0]
+        self.assertEqual(item["evidence_status"], ad.EVIDENCE_STATUS_CACHED_PARTIAL)
+        self.assertEqual(item["evidence_source"], "cache")
+        self.assertEqual(item["evidence_summary"]["source"], "cache")
+        self.assertEqual(item["evidence_summary"]["fetched_at"], "2026-10-01T00:00:00Z")
+        self.assertIn("fallback_note", item["evidence_summary"])
+        self.assertIn("cache", item["evidence_summary"]["fallback_note"])
+
+    def test_budget_skip_with_cache_is_labelled_as_a_skipped_fallback(self):
+        row = self.candidate_repo("own/skipped", 31)
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]),
+                       self.cached_record(row, "skipped cached body"))
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        with patch.object(ad, "github_get", side_effect=ad.BudgetExceeded("test")):
+            _, result = capture(ad.cmd_auto, self.args(evidence_limit=1, request_budget=1))
+        item = result["items"][0]
+        self.assertEqual(item["evidence_status"], ad.EVIDENCE_STATUS_CACHED_SKIPPED)
+        self.assertEqual(item["evidence_source"], "cache")
+        self.assertEqual(item["evidence_summary"]["source"], "cache")
+        self.assertEqual(item["evidence_summary"]["fetched_at"], "2026-10-01T00:00:00Z")
+        self.assertIn("fallback_note", item["evidence_summary"])
+
+    def test_not_fetched_means_neither_this_run_nor_the_cache_has_evidence(self):
+        row = self.candidate_repo("own/nothing", 41)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        with patch.object(ad, "github_get", side_effect=ad.BudgetExceeded("test")):
+            _, result = capture(ad.cmd_auto, self.args(evidence_limit=1, request_budget=1))
+        item = result["items"][0]
+        self.assertEqual(item["evidence_status"], "not_fetched")
+        self.assertIsNone(item["evidence_summary"])
+        self.assertEqual(item["evidence_rank"], ad.EVIDENCE_RANK_NONE)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -744,13 +744,27 @@ EVIDENCE_RANK_THIS_RUN_PARTIAL = 2
 EVIDENCE_RANK_CACHE = 1
 EVIDENCE_RANK_NONE = 0
 
+# Statuses for "this run engaged with the repository but did not end up with
+# complete evidence". The digest the Agent reads is then the last complete
+# cache, so the status names why an old digest is being shown.
+EVIDENCE_STATUS_CACHED_PARTIAL = "cached_partial"
+EVIDENCE_STATUS_CACHED_SKIPPED = "cached_skipped"
+
 
 def evidence_rank(status, source, probe=None):
     """The queue ordering dimension of one candidate's evidence.
 
-    Evidence fetched in this run outranks a cache hit, which outranks a
-    candidate with no evidence at all. A cheap probe ranks below a deep
-    fetch of the same run because it only observed the Release.
+    The dimension answers one question: how much does the run know about this
+    repository right now? A deep fetch of this run knows most, a cheap probe
+    of this run knows the Release only, a run that tried and failed knows the
+    repository changed or is worth another look, and a cache hit knows only
+    what was true when the cache was written.
+
+    The "tried this run" part is read from the status, not from the source.
+    A run that fell back to the cache still knows more than a run that never
+    touched the repository, so a fallback must not sink below a plain cache
+    hit. The status carries that history; the source only says where the
+    displayed digest came from.
     """
     if source == "this_run":
         if status == "complete":
@@ -759,9 +773,43 @@ def evidence_rank(status, source, probe=None):
         if status == "partial":
             return EVIDENCE_RANK_THIS_RUN_PARTIAL
         return EVIDENCE_RANK_NONE
-    if status == "cached":
+    # The digest may come from the cache while this run still tried to fetch
+    # the repository. The status says what happened, the source says where
+    # the text came from.
+    if status in ("partial", EVIDENCE_STATUS_CACHED_PARTIAL,
+                  EVIDENCE_STATUS_CACHED_SKIPPED):
+        # This run attempted the fetch and it failed or was skipped. The run
+        # paid for the attempt and knows the repository deserves another
+        # look, so it outranks a repository this run never touched.
+        return EVIDENCE_RANK_THIS_RUN_PARTIAL
+    if status in ("cached", "stale"):
+        # A cache hit the run never touched. "stale" means the repository
+        # metadata changed since the cache was written, so the digest may
+        # already be out of date.
         return EVIDENCE_RANK_CACHE
     return EVIDENCE_RANK_NONE
+
+
+def evidence_detail_rank(status, source):
+    """The order inside one evidence tier.
+
+    The tier (evidence_rank) answers "how much does the run know". This
+    answers "which candidate of the same tier comes first": a partial read
+    of this run is fresher than a cache fallback, a failed fetch tells more
+    than a budget skip, and a stale digest comes before a fresh cache hit
+    because its evidence may already be wrong.
+    """
+    if source == "this_run":
+        return 4 if status == "partial" else 0
+    if status == EVIDENCE_STATUS_CACHED_PARTIAL:
+        return 3
+    if status == EVIDENCE_STATUS_CACHED_SKIPPED:
+        return 2
+    if status == "stale":
+        return 2
+    if status == "cached":
+        return 1
+    return 0
 
 
 def candidate_evidence_fields(repo):
@@ -776,14 +824,19 @@ def candidate_evidence_fields(repo):
     source = repo.get("_evidence_source") or "none"
     status = repo.get("_evidence_status") or "not_fetched"
     if not record:
-        return {"status": "not_fetched", "source": "none",
-                "rank": EVIDENCE_RANK_NONE, "summary": None}
+        # No digest at all. The status still says whether this run tried and
+        # failed, because that is part of what the Agent needs to know.
+        return {"status": status, "source": source,
+                "rank": evidence_rank(status, source),
+                "detail_rank": evidence_detail_rank(status, source),
+                "summary": None}
     summary = evidence_summary(record, source)
     fallback_note = repo.get("_evidence_fallback_note")
     if fallback_note:
         summary["fallback_note"] = fallback_note
     return {"status": status, "source": source,
             "rank": evidence_rank(status, source, record.get("probe")),
+            "detail_rank": evidence_detail_rank(status, source),
             "summary": summary}
 
 
@@ -967,6 +1020,7 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
                     "evidence_status": evidence["status"],
                     "evidence_source": evidence["source"],
                     "evidence_rank": evidence["rank"],
+                    "evidence_detail_rank": evidence["detail_rank"],
                     "evidence_summary": evidence["summary"],
                     "evidence_fetched_at": evidence["summary"].get("fetched_at")
                     if evidence["summary"] else None,
@@ -988,6 +1042,7 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
     candidates.sort(key=lambda c: (
         -int(c["queue_state"]["cooldown_due"]),
         -c.get("evidence_rank", 0),
+        -int(c.get("evidence_detail_rank", 0)),
         -int("recent_star" in c["signals"]), -int("focused_watch" in c["signals"]),
         -min(c["target_activity"]["commits"], 10),
         -len(c["primary_matches"]), -len(c["matched_terms"]),
@@ -1009,6 +1064,7 @@ def select_candidates(candidates, limit, per_project, per_repo=None):
     # apply, and the round-robin over projects is preserved.
     ordered = sorted(candidates, key=lambda c: (
         -c.get("evidence_rank", 0),
+        -int(c.get("evidence_detail_rank", 0)),
         -int(c["queue_state"]["cooldown_due"]), c["queue_state"].get("shown_count", 0),
         c["queue_state"].get("first_seen_at", ""), c["project_id"], c["repo"],
         c.get("capability", {}).get("key") or ""))
@@ -1225,10 +1281,12 @@ def resolve_evidence(run_record, cache_record, repo):
     """Choose the evidence a candidate is actually judged on.
 
     Fresh evidence from this run wins. A failed or skipped run falls back to
-    the last complete cached record, but the status still reports the
-    failure so the Agent is not told the upstream was re-checked
-    successfully. Cached evidence is always labelled with its own source and
-    fetch time, never as this run's work.
+    the last complete cached record. The status then names the fallback
+    ("cached_partial" for a failed fetch, "cached_skipped" for a budget
+    skip) so the Agent is not told the upstream was re-checked successfully,
+    and so "not_fetched" keeps its plain meaning: this run and the cache
+    have no evidence for this repository at all. Cached evidence is always
+    labelled with its own source and fetch time, never as this run's work.
 
     The identity fields (revision, changed_at) always come from a complete
     record. A partial fetch must not renumber the upstream revision, because
@@ -1241,21 +1299,23 @@ def resolve_evidence(run_record, cache_record, repo):
     if run_record and run_record.get("status") == "partial":
         if cache_complete:
             return {"record": cache_record, "identity": cache_record, "source": "cache",
-                    "status": "partial",
+                    "status": EVIDENCE_STATUS_CACHED_PARTIAL,
                     "fallback_note": "This run's fetch failed; the digest is the last complete cache."}
         return {"record": run_record, "identity": None, "source": "this_run",
                 "status": "partial"}
     if run_record:
         if cache_complete:
             return {"record": cache_record, "identity": cache_record, "source": "cache",
-                    "status": "not_fetched",
+                    "status": EVIDENCE_STATUS_CACHED_SKIPPED,
                     "fallback_note": "This run did not complete a fetch; the digest is the last complete cache."}
-        return {"record": None, "identity": None, "source": "none", "status": "not_fetched"}
+        return {"record": None, "identity": None, "source": "none",
+                "status": "not_fetched"}
     if cache_complete:
         matched = cache_record.get("repo_revision") == repo_revision(repo)
         return {"record": cache_record, "identity": cache_record, "source": "cache",
                 "status": "cached" if matched else "stale", "fallback": None}
-    return {"record": None, "identity": None, "source": "none", "status": "not_fetched"}
+    return {"record": None, "identity": None, "source": "none",
+            "status": "not_fetched"}
 
 
 def attach_run_evidence(snapshot, run_records, cache=None, unavailable=()):
@@ -1691,7 +1751,9 @@ def cmd_auto(args):
         "review_required": True,
         "usage_note": "Read current target implementation and upstream evidence; keep at most three valuable opportunities. Record real decisions with target_revision, repo_revision and evidence_revision via opportunity.py. No change can legitimately yield no recommendation.",
     })
-    if warnings or any(c["evidence_status"] in ("partial", "stale") for c in candidates):
+    if warnings or any(c["evidence_status"] in
+                       ("partial", "stale", EVIDENCE_STATUS_CACHED_PARTIAL,
+                        EVIDENCE_STATUS_CACHED_SKIPPED) for c in candidates):
         result["status"] = "partial"
     if args.write:
         directory = data_dir / "auto-opportunities/runs"

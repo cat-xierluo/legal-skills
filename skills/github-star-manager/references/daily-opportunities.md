@@ -61,10 +61,31 @@ python scripts/auto_discover.py auto-discover \
 
 候选不是"待查清单"，而是已经带着证据的研判输入：
 
-- `evidence_status` 取真实值，不再对所有候选恒为 `not_fetched`。`complete` 表示本轮读到完整证据，`partial` 表示本轮取证不完整，`cached` 表示命中既有完整证据缓存且仓库元数据未变，`stale` 表示缓存命中但仓库元数据已变，`not_fetched` 表示本轮与缓存都没有该仓库的证据。
-- `evidence_source` 区分 `this_run`（本轮取证）与 `cache`（复用缓存）。缓存证据始终带上自己的 `fetched_at`，不冒充本轮新取。
+- `evidence_status` 取真实值，不再对所有候选恒为 `not_fetched`：
+
+| 取值 | 含义 | 摘要来源 |
+|---|---|---|
+| `complete` | 本轮读到完整证据 | 本轮 |
+| `partial` | 本轮取证不完整，且没有可回退的完整缓存 | 本轮（残缺） |
+| `cached_partial` | 本轮取证失败，回退到既有完整缓存 | 缓存（旧的） |
+| `cached_skipped` | 本轮因预算等跳过取证，回退到既有完整缓存 | 缓存（旧的） |
+| `cached` | 命中既有完整证据缓存，本轮未尝试，仓库元数据未变 | 缓存（旧的） |
+| `stale` | 命中既有完整证据缓存，本轮未尝试，仓库元数据已变 | 缓存（旧的） |
+| `not_fetched` | 本轮与缓存都没有该仓库的任何证据 | 无 |
+
+- `evidence_source` 区分 `this_run`（本轮取证）与 `cache`（复用缓存）。缓存证据始终带上自己的 `fetched_at`，不冒充本轮新取。回退分支（`cached_partial` / `cached_skipped`）的 `evidence_source` 是 `cache`，`evidence_summary.fallback_note` 明写"本轮取证失败/未完成，摘要是上一份完整缓存"。
 - `evidence_summary` 给出受长度上限约束的 README 正文、最新 Release 正文与最近提交摘要（每段上限 1200 字符），并附 `readme_blob_sha`、`release_tag`、`release_url`、`head_sha` 与 `observed` 标记。Agent 直接读它研判，不必再联网补读同一批仓库。
-- `evidence_rank` 是队列排序维度：本轮深探测 > 本轮廉价探测 > 本轮部分失败 > 缓存命中 > 无证据。
+- `evidence_rank` 是队列排序维度：**本轮深探测 > 本轮廉价探测 > 本轮部分失败（含回退缓存）> 缓存命中 > 无证据**。这一维回答"本轮对这个仓库知道多少"，所以本轮尝试过但取证失败或被跳过的候选不会排在从未尝试过的缓存命中之后。
+
+| 档 | `evidence_rank` | 典型状态 |
+|---|---|---|
+| 本轮深探测 | 4 | `complete`（本轮深度取证） |
+| 本轮廉价探测 | 3 | `complete`（本轮 cheap probe） |
+| 本轮部分失败 | 2 | `partial`、`cached_partial`、`cached_skipped` |
+| 缓存命中 | 1 | `cached`、`stale` |
+| 无证据 | 0 | `not_fetched` |
+
+`stale` 与 `cached` 同为缓存档（1 分），但同档内 `stale` 排前面：它的仓库元数据已经变了，附着的证据可能已经不对。`evidence_detail_rank` 是同档内的次序：本轮残缺（4）> 回退失败（3）> 回退跳过（2）> stale 缓存（2）> 新鲜缓存（1）。回退跳过与 stale 缓存同分但分属不同档（2 分与 1 分），实际先后由档位决定。
 
 排序语义：**本轮已取证是第一优先级维度**，被本轮付费取证的仓库优先进入候选，该优先级不会被 `select_candidates` 内部的字母序重排覆盖。`--limit/--per-project/--per-repo` 上限和轮转公平性保持不变——已取证优先只决定同一上限内的先后，一个仓库仍不能占满名额，一个项目仍不能垄断整轮。
 

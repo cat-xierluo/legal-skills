@@ -24,7 +24,21 @@ python scripts/repository_profile.py focus remove owner/name --data-dir ...
 
 focus 是少量重点仓库的人工清单，不是目标 Skill 登记表，也不会替代动态扫描。添加原因只说明为什么值得反复看。
 
-登记后该仓库在每日 `focus_deltas` 中保留检查汇总，即使没有组件匹配；取证仍按总预算和轮巡分配，未轮到明确显示。focus 只影响优先级，普通收藏同样自动轮巡。具体机会始终绑定组件而非 `"*"`；组件声明的排除条款与该上游实际相关能力冲突时才标 `conflicts_with_stated_scope`，用于阅读预警。字段与覆盖边界见[每日流程](daily-opportunities.md)。
+登记后该仓库在每日 `focus_deltas` 中保留检查汇总，即使没有组件匹配；取证仍按总预算和轮巡分配，未轮到明确显示。focus 只影响优先级，普通收藏同样自动轮巡。具体机会始终绑定组件而非 `"*"`。字段与覆盖边界见[每日流程](daily-opportunities.md)。
+
+## 范围冲突判定
+
+候选的 `scope_status` 只依据组件**自己声明的排除短句**判定，不对整份 SKILL.md 正文做概念命中。三个取值：
+
+| 取值 | 含义 | Agent 处置 |
+|---|---|---|
+| `conflicts_with_stated_scope` | 上游命中组件真实声明的排除短句；`scope_conflicts` 给出命中的短句与概念 | 阅读预警：先读该排除短句再决定是否采纳，命中不代表一定不能借鉴 |
+| `no_stated_scope_conflict` | 组件有可解析的排除短句，本轮未命中 | 本轮未发现冲突，可继续研判 |
+| `stated_scope_unparsed` | 组件没有可读取的排除短句，本轮**未做**范围判定 | **需人工确认**：`scope_note` 注明"排除条款未能结构化解析，请人工确认" |
+
+第三种不是"无冲突"，而是"没有判定依据"。把它与第二种分开，是为了不让一个没写排除句的组件静默获得"已确认不冲突"的结论。
+
+判定依据对 Agent 可见：`exclusion_clauses` 是判定所用的原文短句，`exclusion_source` 标明它来自 `extracted`（自动抽取）还是 `declared`（组件显式声明）。组件可以在自己的 `scope.json`（`{"exclusions": [...]}`）或 `TASKS.md` 的 `declared_exclusions:` 段逐行声明排除句，显式声明优先于自动抽取，默认行为完全离线可跑。
 
 ## 本地已有快照
 

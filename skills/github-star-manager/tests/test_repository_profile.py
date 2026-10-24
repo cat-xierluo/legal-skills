@@ -472,6 +472,28 @@ class ScopeExclusionTests(unittest.TestCase):
         note = pc.scope_note(profile)
         self.assertTrue(note and "人工确认" in note)
 
+    def test_the_scope_status_three_values_are_documented_in_all_three_files(self):
+        # repository-profiles.md used to name only the conflict case. The
+        # three values and the "needs a human" handling must be documented
+        # wherever the status appears.
+        root = Path(__file__).resolve().parents[1]
+        files = {
+            "references/repository-profiles.md": root / "references" / "repository-profiles.md",
+            "references/daily-opportunities.md": root / "references" / "daily-opportunities.md",
+            "SKILL.md": root / "SKILL.md",
+        }
+        values = ("conflicts_with_stated_scope", "no_stated_scope_conflict",
+                  "stated_scope_unparsed")
+        for name, path in files.items():
+            text = path.read_text(encoding="utf-8")
+            for value in values:
+                self.assertIn(value, text,
+                              f"{name} does not document the scope status {value}")
+        # The profile reference must also say what to do about the unparsed
+        # case, not just name it.
+        profile_doc = files["references/repository-profiles.md"].read_text(encoding="utf-8")
+        self.assertIn("人工确认", profile_doc)
+
     def test_explicit_scope_limit_is_read_as_a_stated_boundary(self):
         profile = self.profile(
             "code-livephoto",
