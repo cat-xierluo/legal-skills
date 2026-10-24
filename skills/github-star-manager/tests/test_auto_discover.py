@@ -870,6 +870,41 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(stored["changed_at"], cached["changed_at"])
         self.assertFalse(result["items"][0]["upstream_change"]["changed"] or {})
 
+    def test_observed_field_change_matrix(self):
+        row = repo()
+
+        def record(head="h", release={"tag": "v1"}, readme="r", observed=None, cheap=False):
+            value = {"head_sha": head, "release": release,
+                     "readme": {"blob_sha": readme} if readme is not None else None}
+            if observed:
+                value["observed"] = observed
+            if cheap:
+                value["probe"] = "cheap"
+            return value
+
+        # Deep baseline -> deep unchanged: no change.
+        self.assertFalse(ad.compare_observed(record(), record(), ad.observed_fields(record()))["release_changed"])
+        # Deep v1 -> deep v2: change.
+        self.assertTrue(ad.compare_observed(record(release={"tag": "v2"}), record(),
+                                           ad.observed_fields(record()))["release_changed"])
+        # Cheap baseline v1 -> deep v2: observed Release change.
+        cheap = record(head=None, readme=None, observed={"head": False, "release": True,
+                                                          "readme": False}, cheap=True)
+        self.assertTrue(ad.compare_observed(record(release={"tag": "v2"}), cheap,
+                                           {"head": True, "release": True, "readme": True})["release_changed"])
+        # Cheap baseline with no observed release -> true release appears.
+        no_release = record(head=None, release=None, readme=None,
+                            observed={"head": False, "release": True, "readme": False},
+                            cheap=True)
+        self.assertTrue(ad.compare_observed(record(release={"tag": "v1"}), no_release,
+                                           {"head": True, "release": True, "readme": True})["release_changed"])
+        # Cheap baseline v1 -> deep same v1: HEAD/README unknown, no Release change.
+        same = ad.compare_observed(record(), cheap,
+                                   {"head": True, "release": True, "readme": True})
+        self.assertEqual(same, {"head_changed": None, "release_changed": False,
+                                "readme_changed": None})
+        self.assertFalse(ad.any_change(same))
+
     def test_deep_probe_after_cheap_baseline_treats_missing_fields_as_unknown(self):
         row = repo()
         cached = {"status": "complete", "head_sha": None, "repo_id": row["id"],
