@@ -1149,5 +1149,207 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(invalid.returncode, 2)
 
 
+class CandidateEvidenceTests(unittest.TestCase):
+    """The candidate queue must carry the evidence the run already paid for.
+
+    The real daily run fetched 24 repositories but returned 12 candidates
+    that carried no evidence at all, and none of the deeply checked
+    repositories reached the Agent.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.skills = self.root / "skills"
+        self.skills.mkdir()
+        self.data = self.root / "data"
+        self.data.mkdir()
+        for index in range(4):
+            write_skill(self.skills, f"proj{index}", "视频字幕渲染与时间轴工具")
+
+    def args(self, **overrides):
+        return SimpleNamespace(**dict(dict(project=None, skills_root=[self.skills], repo_root=None,
+            data_dir=self.data, refresh=False, fetch_evidence=True, evidence_limit=4,
+            limit=12, per_project=2, recent_days=14, update_days=7, write=False,
+            show_suppressed=False, focus_limit=8, request_budget=60,
+            cheap_budget=0), **overrides))
+
+    def weak_repos(self, count=24):
+        return [{"id": index + 1, "full_name": f"aaa/weak{index:02d}",
+                 "description": "generic utility toolkit", "topics": [],
+                 "starred_at": "2026-10-20T00:00:00Z", "pushed_at": "2026-10-21T00:00:00Z"}
+                for index in range(count)]
+
+    def strong_repos(self):
+        names = ["zzz/lemomo-opuscar", "zzz/motion-reel", "zzz/claude-anim", "zzz/taste-skill"]
+        return [{"id": 100 + index, "full_name": name,
+                 "description": "video animation motion graphics film",
+                 "topics": ["video", "animation"],
+                 "starred_at": "2026-10-20T00:00:00Z", "pushed_at": "2026-10-21T00:00:00Z"}
+                for index, name in enumerate(names)]
+
+    def evidence_response(self, endpoint, **kwargs):
+        if "/readme" in endpoint:
+            import base64
+            body = base64.b64encode(b"README with subtitle timeline render notes").decode()
+            return {"content": body, "sha": "readme-sha"}
+        if "/releases?" in endpoint:
+            return [{"tag_name": "v2", "body": "New: added support for subtitle captions",
+                     "url": "https://example.test/v2", "published_at": "2026-10-22T00:00:00Z"}]
+        if "/commits?" in endpoint:
+            return [{"sha": "head-sha", "commit": {"message": "add subtitle support"}}]
+        raise AssertionError(endpoint)
+
+    def run_with_evidence(self, repos, **overrides):
+        ad.atomic_json(self.data / "original_latest.json", snapshot(repos))
+        with patch.object(ad, "github_get", side_effect=self.evidence_response):
+            return capture(ad.cmd_auto, self.args(**overrides))
+
+    def test_fetched_repositories_reach_the_candidates_with_complete_evidence(self):
+        # Every repository the run fetched must be visible to the Agent. The
+        # alphabetical weak matches must not push the fetched ones out.
+        rc, result = self.run_with_evidence(self.weak_repos() + self.strong_repos(),
+                                             evidence_limit=4)
+        self.assertEqual(rc, 0)
+        fetched = {row["full_name"] for row in self.strong_repos()}
+        returned = {row["repo"] for row in result["items"]}
+        self.assertTrue(fetched <= returned,
+                        f"Fetched repositories missing from the candidates: {fetched - returned}")
+        for row in result["items"]:
+            if row["repo"] in fetched:
+                self.assertEqual(row["evidence_status"], "complete")
+                self.assertEqual(row["evidence_source"], "this_run")
+                self.assertEqual(row["evidence_rank"], 4)
+
+    def test_candidate_carries_the_readme_release_and_commit_digest(self):
+        _, result = self.run_with_evidence(self.weak_repos() + self.strong_repos(),
+                                           evidence_limit=4)
+        fetched = [row for row in result["items"]
+                   if row["repo"] in {r["full_name"] for r in self.strong_repos()}]
+        self.assertTrue(fetched)
+        summary = fetched[0]["evidence_summary"]
+        self.assertIn("subtitle timeline", summary["readme"])
+        self.assertIn("subtitle captions", summary["release"])
+        self.assertIn("add subtitle support", summary["commits"])
+        self.assertEqual(summary["source"], "this_run")
+        self.assertIsNotNone(summary["fetched_at"])
+
+    def test_evidence_digest_is_bounded(self):
+        long_body = "x" * 5000
+        def huge(endpoint, **kwargs):
+            if "/readme" in endpoint:
+                import base64
+                return {"content": base64.b64encode(long_body.encode()).decode(), "sha": "r"}
+            return self.evidence_response(endpoint, **kwargs)
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.weak_repos() + self.strong_repos()))
+        with patch.object(ad, "github_get", side_effect=huge):
+            _, result = capture(ad.cmd_auto, self.args(evidence_limit=4))
+        summary = next(row["evidence_summary"] for row in result["items"]
+                       if row["repo"] == "zzz/lemomo-opuscar")
+        self.assertLessEqual(len(summary["readme"]), ad.EVIDENCE_SUMMARY_LIMIT)
+        self.assertTrue(summary["readme_truncated"])
+
+    def test_unfetched_candidates_are_marked_not_fetched_and_ordered_last(self):
+        # A repository with no evidence at all is labelled honestly and is
+        # placed after the candidates the run actually fetched.
+        ad.atomic_json(self.data / "original_latest.json",
+                       snapshot(self.weak_repos() + self.strong_repos()))
+        with patch.object(ad, "github_get", side_effect=self.evidence_response):
+            _, result = capture(ad.cmd_auto, self.args(evidence_limit=4, limit=12))
+        rows = result["items"]
+        fetched = [row for row in rows if row["evidence_status"] == "complete"]
+        unfetched = [row for row in rows if row["evidence_status"] == "not_fetched"]
+        self.assertTrue(fetched)
+        for row in unfetched:
+            self.assertEqual(row["evidence_source"], "none")
+            self.assertIsNone(row["evidence_summary"])
+        if unfetched:
+            self.assertGreater(min(row["evidence_rank"] for row in unfetched),
+                               max(row["evidence_rank"] for row in fetched))
+
+    def test_cached_evidence_is_labelled_as_cache_not_as_this_run(self):
+        row = {"id": 5, "full_name": "cached/repo", "description": "subtitle timeline renderer",
+               "starred_at": "2026-10-20T00:00:00Z", "pushed_at": "2026-10-21T00:00:00Z",
+               "topics": ["video"]}
+        cached = {"repo": row["full_name"], "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row), "status": "complete",
+                  "head_sha": "head", "release": {"tag": "v1", "body": "old release body"},
+                  "readme": {"blob_sha": "readme-sha", "text": "cached readme text"},
+                  "commits": [{"sha": "c", "message": "cached commit"}],
+                  "fetched_at": "2026-10-01T00:00:00Z", "changed_at": "2026-10-01T00:00:00Z"}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        rc, result = capture(ad.cmd_auto, self.args(fetch_evidence=False))
+        self.assertEqual(rc, 0)
+        item = result["items"][0]
+        self.assertEqual(item["evidence_status"], "cached")
+        self.assertEqual(item["evidence_source"], "cache")
+        self.assertEqual(item["evidence_summary"]["source"], "cache")
+        self.assertEqual(item["evidence_summary"]["fetched_at"], "2026-10-01T00:00:00Z")
+        self.assertIn("cached readme text", item["evidence_summary"]["readme"])
+
+    def test_per_repo_and_per_project_caps_still_apply_to_fetched_candidates(self):
+        # One repository must not fill the whole round, and one project must
+        # not monopolise it, even when those candidates carry the best
+        # evidence of the run.
+        repos = self.strong_repos()
+        ad.atomic_json(self.data / "original_latest.json", snapshot(repos))
+        with patch.object(ad, "github_get", side_effect=self.evidence_response):
+            _, result = capture(ad.cmd_auto, self.args(evidence_limit=4, limit=8,
+                                                       per_project=2, per_repo=1))
+        rows = result["items"]
+        per_repo = {}
+        per_project = {}
+        for row in rows:
+            per_repo[row["repo"]] = per_repo.get(row["repo"], 0) + 1
+            per_project[row["project_id"]] = per_project.get(row["project_id"], 0) + 1
+        self.assertTrue(all(count <= 1 for count in per_repo.values()), per_repo)
+        self.assertTrue(all(count <= 2 for count in per_project.values()), per_project)
+        self.assertGreater(len(per_project), 1, "A single project monopolised the round")
+
+    def test_new_release_text_recalls_a_new_component_match(self):
+        # The README and Release text fetched in this run must take part in
+        # this run's recall, so a new capability can surface a component that
+        # the stale metadata did not match at all.
+        row = {"id": 9, "full_name": "newcap/tool", "description": "plain utility repo",
+               "topics": [], "starred_at": "2026-10-20T00:00:00Z",
+               "pushed_at": "2026-10-21T00:00:00Z"}
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        _, before = capture(ad.cmd_auto, self.args(fetch_evidence=False))
+        self.assertEqual(before["items"], [],
+                         "The stale metadata must not match on its own")
+        def response(endpoint, **kwargs):
+            if "/readme" in endpoint:
+                import base64
+                body = base64.b64encode(b"Adds subtitle timeline support").decode()
+                return {"content": body, "sha": "readme-sha"}
+            if "/releases?" in endpoint:
+                return [{"tag_name": "v2", "body": "New: added support for subtitle captions",
+                         "url": "u", "published_at": "2026-10-22T00:00:00Z"}]
+            if "/commits?" in endpoint:
+                return [{"sha": "h", "commit": {"message": "add subtitle support"}}]
+            raise AssertionError(endpoint)
+        with patch.object(ad, "github_get", side_effect=response):
+            _, after = capture(ad.cmd_auto, self.args(evidence_limit=2))
+        self.assertTrue(after["items"], "The new Release/README text did not recall the component")
+        self.assertEqual(after["items"][0]["repo"], "newcap/tool")
+        self.assertEqual(after["items"][0]["evidence_status"], "complete")
+
+    def test_coverage_discloses_fetched_but_not_admitted_repositories(self):
+        # "Not in the candidates" must not read as "nothing changed".
+        repos = self.weak_repos() + self.strong_repos()
+        _, result = self.run_with_evidence(repos, evidence_limit=4, limit=2, per_project=1)
+        disclosure = result["coverage"]["watch_coverage"]["evidence_candidates"]
+        self.assertEqual(disclosure["fetched_this_run"], 4)
+        self.assertGreaterEqual(disclosure["fetched_not_in_candidates"], 1)
+        self.assertEqual(disclosure["fetched_this_run"],
+                         disclosure["fetched_in_candidates"] + disclosure["fetched_not_in_candidates"])
+        self.assertEqual(disclosure["candidates_total"], len(result["items"]))
+        self.assertEqual(disclosure["candidates_with_evidence"]
+                         + disclosure["candidates_without_evidence"], len(result["items"]))
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -38,6 +38,21 @@ python scripts/auto_discover.py auto-discover \
 
 `starred_at` 表示关注行为，`pushed_at` 表示上游活跃，目标文档与路径提交表示用户当前投入，三者分别记录。关键词及中英概念映射只用于有界召回；来源太宽、负向限制或历史任务混入时，应定向读取纠偏。输出带候选总量、截断、扫描范围和未取证状态，未覆盖不能称“没有机会”。`watch_coverage` 中的覆盖档位区分 deep/cheap、partial/skipped 与真实 checked；`checked` 只表示本档成功触达，预算跳过或失败只保留待查，不推进检查时间，也不解除既有反馈抑制。
 
+## 候选携带证据
+
+候选不是"待查清单"，而是已经带着证据的研判输入：
+
+- `evidence_status` 取真实值，不再对所有候选恒为 `not_fetched`。`complete` 表示本轮读到完整证据，`partial` 表示本轮取证不完整，`cached` 表示命中既有完整证据缓存且仓库元数据未变，`stale` 表示缓存命中但仓库元数据已变，`not_fetched` 表示本轮与缓存都没有该仓库的证据。
+- `evidence_source` 区分 `this_run`（本轮取证）与 `cache`（复用缓存）。缓存证据始终带上自己的 `fetched_at`，不冒充本轮新取。
+- `evidence_summary` 给出受长度上限约束的 README 正文、最新 Release 正文与最近提交摘要（每段上限 1200 字符），并附 `readme_blob_sha`、`release_tag`、`release_url`、`head_sha` 与 `observed` 标记。Agent 直接读它研判，不必再联网补读同一批仓库。
+- `evidence_rank` 是队列排序维度：本轮深探测 > 本轮廉价探测 > 本轮部分失败 > 缓存命中 > 无证据。
+
+排序语义：**本轮已取证是第一优先级维度**，被本轮付费取证的仓库优先进入候选，该优先级不会被 `select_candidates` 内部的字母序重排覆盖。`--limit/--per-project/--per-repo` 上限和轮转公平性保持不变——已取证优先只决定同一上限内的先后，一个仓库仍不能占满名额，一个项目仍不能垄断整轮。
+
+`coverage.watch_coverage.evidence_candidates` 披露四组事实：`fetched_this_run`（本轮取证的仓库数）、`fetched_in_candidates` 与 `fetched_not_in_candidates`（取证后是否进入候选）、`candidates_with_evidence` / `candidates_without_evidence`（候选里带证据的条数与总数）。**没进候选不等于没变化**：被队列上限挡下的取证仓库会显式列出。
+
+本轮新取的 README 与 Release 正文在生成候选之前就已接入本轮召回，因此"新 Release 带来新能力 → 匹配到新组件"这条链路成立。召回仍然有界：README 正文与 Release 正文各取固定上限，未取证的仓库不会凭空进入候选。
+
 ## Agent 如何消费
 
 1. 读取本轮 JSON，核范围、快照、取证时间与失败项。优先审新增 Star、上游变化以及用户近期投入项目的交集。已有待发现、已实现待接通、值得新增都可以形成机会。
