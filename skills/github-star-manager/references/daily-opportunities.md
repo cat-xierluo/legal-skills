@@ -11,7 +11,7 @@ python scripts/auto_discover.py projects
 python scripts/auto_discover.py projects --skills-root /path/to/suite-a --skills-root /path/to/suite-b
 ```
 
-目标事实取自 `SKILL.md`、`TASKS.md` 的显式当前目标和路径限定 Git 历史。历史/归档/DONE 条目不作为当前需求，description 的“不承担/不要用于”不作为正向召回词。Git 近期投入用于排序；提交多不等于质量好或需求仍有效。非 Git、读取失败和读取预算截断分别保留状态。
+目标事实取自 `SKILL.md`、`TASKS.md` 的显式当前目标、路径限定 Git 历史，以及最多三个入口脚本/参考文档的有界实现摘要。历史/归档/DONE 条目不作为当前需求，description/TASKS 的“不承担/不要用于”按概念从正向召回剔除，但仍保留原文供范围预警。Git 近期投入用于排序；提交多不等于质量好或需求仍有效。非 Git、读取失败、实现摘要截断和无可识别能力分别保留状态。
 
 `research --project <已安装Skill名或目录>` 同样支持动态目标。`output/projects/*.json` 是可选的目标补充与约束，失效的显式引用仍拒绝出包；不会自动写一堆永久 profile。
 

@@ -166,6 +166,20 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotIn("voice", profile["primary_terms"])
         self.assertNotIn("lipsync", profile["primary_terms"])
 
+    def test_implementation_excerpt_adds_real_capability_and_respects_exclusions(self):
+        (self.directory / "scripts").mkdir()
+        (self.directory / "scripts" / "engine.py").write_text(
+            "def transition_timeline(): pass\n", encoding="utf-8")
+        static = write_skill(self.skills, "static-ip", "维护角色静帧素材。不承担配音或口型动画。")
+        (static / "engine.py").write_text(
+            "def render_static_avatar(): pass\n", encoding="utf-8")
+        profiles = {p["project_id"]: p for p in self.profiles()}
+        self.assertIn("transition", profiles["sample-video"]["search_terms"])
+        self.assertTrue(profiles["sample-video"]["implementation_excerpt_refs"])
+        self.assertIn("avatar", profiles["static-ip"]["search_terms"])
+        for term in ("voice", "tts", "配音", "lipsync", "口型"):
+            self.assertNotIn(term, profiles["static-ip"]["search_terms"])
+
     def test_unknown_and_future_star_are_not_recent_interest(self):
         for starred in (None, "nonsense", "2099-01-01T00:00:00Z"):
             selected, _, _ = ad.prepare(snapshot([{**repo(), "starred_at": starred}]), self.profiles(), {}, NOW)

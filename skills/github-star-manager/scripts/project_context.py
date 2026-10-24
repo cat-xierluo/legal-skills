@@ -192,6 +192,43 @@ def terms_for(text: str) -> set[str]:
     return terms - STOP
 
 
+def scope_terms(text: str) -> set[str]:
+    """Concepts that a skill explicitly excludes; they stay out of recall."""
+    return terms_for(" ".join(exclusion_fragments(text)))
+
+
+def implementation_files(profile: dict) -> list[Path]:
+    """Bounded implementation references: entry code, scripts, and local tests."""
+    root = Path(profile.get("skill_path") or "")
+    if not root.is_dir():
+        return []
+    included = []
+    for pattern in ("*.py", "scripts/*.py", "references/*.md", "tests/*.py"):
+        for path in sorted(root.glob(pattern)):
+            if path.is_file() and path.name not in {"SKILL.md", "TASKS.md"}:
+                included.append(path)
+    return included[:40]
+
+
+def read_excerpt(path: Path, limit: int = 12_000) -> tuple[str, bool]:
+    """Read a bounded excerpt for semantic evidence, with truncation visible."""
+    raw = path.read_bytes()[:limit + 1]
+    return raw[:limit].decode("utf-8", "replace"), len(raw) > limit
+
+
+def implementation_excerpts(profile: dict, limit: int = 2_500) -> list[tuple[str, str, bool]]:
+    """Read a few bounded excerpts; names remain anchors for Agent inspection."""
+    result = []
+    for path in implementation_files(profile)[:3]:
+        try:
+            text, truncated = read_excerpt(path, limit)
+            result.append((str(path), text, truncated))
+        except OSError:
+            profile.setdefault("warnings", []).append(
+                f"Implementation excerpt unavailable: {path.name}")
+    return result
+
+
 def capability_slug(text: str) -> str:
     """A deterministic, file-safe direction slug for bounded upstream hints."""
     value = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "-", text.lower()).strip("-")
@@ -378,10 +415,34 @@ def discover(roots=None, project=None) -> tuple[list[dict], list[str]]:
             "files": {Path(p).name: h for p, h in profile["hashes"].items()},
             "implementation": profile["activity"].get("latest_commit"),
         })
+        # Current implementation excerpts can supply real capabilities that a
+        # short description omits. They are bounded and never treated as a need
+        # when their concept is explicitly excluded.
+        implementation_rows = implementation_excerpts({
+            "skill_path": profile["skill_path"], "warnings": profile["warnings"]})
+        implementation_text = [text for _path, text, _truncated in implementation_rows]
+        profile["implementation_excerpt_refs"] = [
+            {**{"path": path}, **({"truncated": True} if truncated else {})}
+            for path, _text, truncated in implementation_rows]
         description = positive_scope(profile["description"])
-        text = profile["name"] + " " + description + " " + " ".join(profile["needs"])
-        profile["search_terms"] = sorted(terms_for(text))
+        text = " ".join([profile["name"], description, *profile["needs"], *implementation_text])
+        positive = terms_for(text)
+        # A statement of exclusion is not a need. Remove excluded concepts from
+        # positive recall while preserving them as inspectable scope warnings.
+        excluded = set()
+        for fragment in profile["exclusions"]:
+            # Concept aliases intentionally expand both sides of the boundary:
+            # "配音" excludes the whole voice concept, not just that spelling.
+            excluded.update(terms_for(fragment))
+            excluded.update(terms_for(" ".join(
+                alias for aliases in CONCEPTS for alias in aliases
+                if alias in fragment)))
+        profile["search_terms"] = sorted(positive - excluded)
         profile["primary_terms"] = sorted(terms_for(profile["name"] + " " + description))
+        profile["implementation_terms"] = sorted(terms_for(" ".join(implementation_text)) - excluded)
+        if implementation_rows and not profile["implementation_terms"]:
+            profile["warnings"].append(
+                "Implementation excerpts yielded no recognized capability concepts")
     profiles.sort(key=lambda p: (-p["activity"]["commits"], p["project_id"]))
     return profiles, warnings
 
