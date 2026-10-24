@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.14.0"
+version: "0.14.1"
 license: MIT
 description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star 和 Dashboard。不要用于单个未知仓库的一次性深度研究。
 ---
@@ -270,6 +270,30 @@ python scripts/auto_discover.py auto-discover \
   --data-dir ~/.local/state/github-star-manager/discovery \
   --refresh --fetch-evidence --write --limit 12 --evidence-limit 4
 ```
+
+**每日闭环三件套**（全部离线，不联网）：`reconcile` 离线对账，`receipt` 写本轮运行回执，`lease` 做并发互斥。
+
+```bash
+# 对账：反馈卡 → 队列 judged 状态
+python scripts/auto_discover.py reconcile \
+  --data-dir ~/.local/state/github-star-manager/discovery
+
+# 回执：--outcome auto 与不传等价，按本轮事实自动判定 judged/silent/failed
+python scripts/auto_discover.py receipt \
+  --data-dir ~/.local/state/github-star-manager/discovery --outcome auto
+
+# 租约：同一状态目录只有一个执行者；不传 --run-id 续租时保留原 run_id
+python scripts/auto_discover.py lease acquire \
+  --data-dir ~/.local/state/github-star-manager/discovery \
+  --owner "<本轮执行者>" --run-id "<本轮运行 ID>" --ttl 1800
+python scripts/auto_discover.py lease release \
+  --data-dir ~/.local/state/github-star-manager/discovery \
+  --owner "<本轮执行者>" --run-id "<本轮运行 ID>"
+```
+
+- **receipt** 的 `--outcome` 取值 `auto`/`judged`/`silent`/`failed`，默认（不传）等价于 `auto`。silent 必须有正向证据；显式 `judged` 也必须有正向证据（本轮写出反馈卡或队列条目真实变为 judged）且无队列损坏等失败事实，否则降级为 failed；显式 `failed` 始终保留。回执字段含 `facts`（候选数、写入卡片、新增研判、队列状态、`stale_run`、`run_age_hours`、`max_run_age_hours`）、`evidence`、`errors`、`warnings`、`notification`、`requested_outcome`；结局 failed 时退出码 1。
+- **运行包新鲜度**：准备阶段运行包 `generated_at` 超过 `--max-run-age-hours`（默认 24）即视为没有有效运行包——候选数按 0 计、不作为本轮边界，并给出显式警告；长时间停机不得记成静默成功。
+- **lease**：未过期且属于其他 owner 的租约明确拒绝（退出码 1）；损坏租约被隔离备份后显式降级，**隔离失败时拒绝获取租约并把损坏原文原样留在原位**；同 owner 续租未显式给 `--run-id` 时保留原 run_id。
 
 ### 重点项目画像与复用判断
 

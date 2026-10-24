@@ -24,6 +24,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -367,9 +368,13 @@ class DailyLoopTests(unittest.TestCase):
         self.assertEqual(receipt["facts"]["candidates"], 1)
 
     def test_receipt_file_is_written_under_runs(self):
-        self.write_run(candidates=0, generated_at=NOW)
+        # 运行包必须是"本轮"的：cmd_receipt 用真实当前时间判定新鲜度，
+        # 固定在 NOW（2026-10-22）的运行包在新鲜度规则下已过期。
+        fresh = datetime.now(timezone.utc)
+        self.write_run(candidates=0, generated_at=fresh)
         args = SimpleNamespace(data_dir=self.data, outcome=None, error=None,
-                               notify=None, notify_reason=None)
+                               notify=None, notify_reason=None,
+                               max_run_age_hours=ad.DEFAULT_MAX_RUN_AGE_HOURS)
         code, result = capture(ad.cmd_receipt, args)
         self.assertEqual(code, 0)
         path = Path(result["receipt_path"])
@@ -385,6 +390,322 @@ class DailyLoopTests(unittest.TestCase):
                              capture_output=True, text=True)
         self.assertEqual(run.returncode, 1)
         self.assertEqual(json.loads(run.stdout)["outcome"], "failed")
+
+
+class ReviewFixRegressionTests(unittest.TestCase):
+    """PR #341 独立审查 5 项缺陷的回归覆盖（P1-1/P1-2/P1-3/P2-1/P2-2）。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.data = Path(self.tmp.name) / "data"
+        self.data.mkdir(parents=True)
+
+    def write_run(self, candidates=0, generated_at=None, budget=None, items=None):
+        generated_at = generated_at or datetime.now(timezone.utc)
+        directory = self.data / "auto-opportunities" / "runs"
+        directory.mkdir(parents=True, exist_ok=True)
+        rows = items if items is not None else [{"x": i} for i in range(candidates)]
+        payload = {"schema_version": "1.0", "generated_at": generated_at.isoformat(),
+                   "status": "ok", "items": rows,
+                   "coverage": {"watch_coverage": {"request_budget": budget}}}
+        path = directory / (generated_at.strftime("%Y%m%dT%H%M%S.%fZ") + ".json")
+        ad.atomic_json(path, payload)
+        return path
+
+    def write_queue(self, entries):
+        value = {"schema_version": ad.QUEUE_SCHEMA,
+                 "entries": {entry["candidate_key"]: entry for entry in entries},
+                 "cursor": {"round_seq": 1, "last_round_at": NOW.isoformat()}}
+        ad.atomic_json(self.data / ad.QUEUE_FILE, value)
+        return value
+
+    def write_card(self, card, name="decision.json"):
+        ad.atomic_json(self.data / "feedback" / name, card)
+
+    def card(self, recorded_at=None, status="rejected"):
+        recorded_at = recorded_at or datetime.now(timezone.utc)
+        return {
+            "scope": "direction",
+            "target": {"project_id": "demo-video", "target_revision": "t1",
+                       "capability_key": "subtitle"},
+            "signal": {"repo": "sample/subtitle", "repo_id": 7,
+                       "repo_revision": "r1", "evidence_revision": "e1"},
+            "decision": {"status": status, "reason": "not now"},
+            "_recorded_at": recorded_at.isoformat(),
+            "_schema": "opportunity-card/1.1",
+        }
+
+    def entry(self, state="shown", first_seen_at=None):
+        first_seen_at = first_seen_at or datetime.now(timezone.utc)
+        return {
+            "candidate_key": "k1", "project_id": "demo-video", "repo_id": 7,
+            "repo": "sample/subtitle", "capability_key": "subtitle",
+            "capability_label": "subtitle", "scope": "direction", "state": state,
+            "first_seen_at": first_seen_at.isoformat(),
+            "last_shown_at": first_seen_at.isoformat(), "shown_count": 1,
+            "last_target_revision": "t1", "last_repo_revision": "r1",
+            "last_evidence_revision": "e1",
+        }
+
+    # ---------- P1-1：--outcome auto 必须可用（不是 argparse 退出码 2）----------
+
+    def test_p1_1_receipt_cli_accepts_outcome_auto(self):
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data),
+                              "--outcome", "auto"],
+                             capture_output=True, text=True)
+        # 不得是 argparse 的 invalid choice（退出码 2）
+        self.assertNotEqual(run.returncode, 2, run.stderr)
+        payload = json.loads(run.stdout)
+        self.assertEqual(payload["requested_outcome"], "auto")
+        # 没有准备阶段运行包 → 事实不支持任何结论 → failed（退出码 1）
+        self.assertEqual(payload["outcome"], "failed")
+        self.assertEqual(run.returncode, 1)
+
+    def test_p1_1_receipt_cli_without_outcome_matches_auto(self):
+        self.write_run(candidates=0)
+        args = [sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                "receipt", "--data-dir", str(self.data)]
+        plain = subprocess.run(args, capture_output=True, text=True)
+        auto = subprocess.run(args + ["--outcome", "auto"], capture_output=True, text=True)
+        self.assertEqual(plain.returncode, 0)
+        self.assertEqual(auto.returncode, 0)
+        self.assertEqual(json.loads(plain.stdout)["outcome"],
+                         json.loads(auto.stdout)["outcome"])
+        self.assertEqual(json.loads(auto.stdout)["outcome"], "silent")
+
+    def test_p1_1_receipt_outcome_auto_is_documented_behaviour(self):
+        # auto 与不传等价：显式 judged 仍须有证据，auto 走事实判定
+        self.write_run(candidates=0)
+        payload, code = ad.build_receipt(self.data, outcome=None, requested="auto",
+                                         now=datetime.now(timezone.utc))
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["receipt"]["outcome"], "silent")
+
+    # ---------- P1-2：显式 judged 也必须过事实校验 ----------
+
+    def test_p1_2_explicit_judged_without_evidence_is_downgraded(self):
+        # 复现 A：空数据目录 + receipt --outcome judged
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data),
+                              "--outcome", "judged"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1)
+        payload = json.loads(run.stdout)
+        self.assertEqual(payload["outcome"], "failed")
+        self.assertEqual(payload["facts"]["cards_written"], 0)
+        self.assertEqual(payload["facts"]["newly_judged"], 0)
+        self.assertTrue(payload["errors"])
+        # 不得写出与事实矛盾的 statement
+        self.assertNotIn("写出反馈卡并完成对账",
+                         payload["evidence"]["statement"])
+
+    def test_p1_2_explicit_judged_with_corrupt_queue_is_downgraded(self):
+        # 复现 B：损坏的研判队列 + receipt --outcome judged
+        path = self.data / ad.QUEUE_FILE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{broken", encoding="utf-8")
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data),
+                              "--outcome", "judged"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1)
+        payload = json.loads(run.stdout)
+        self.assertEqual(payload["outcome"], "failed")
+        self.assertEqual(payload["facts"]["queue_state"], "degraded")
+        self.assertTrue(any("队列" in error for error in payload["errors"]))
+
+    def test_p1_2_explicit_judged_with_real_evidence_is_kept(self):
+        self.write_run(candidates=1)
+        self.write_queue([self.entry()])
+        self.write_card(self.card())
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data),
+                              "--outcome", "judged"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0)
+        payload = json.loads(run.stdout)
+        self.assertEqual(payload["outcome"], "judged")
+        self.assertEqual(payload["facts"]["cards_written"], 1)
+
+    def test_p1_2_explicit_failed_is_preserved(self):
+        # Agent 主动报错是合法意图，显式 failed 必须保留
+        self.write_run(candidates=0)
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data),
+                              "--outcome", "failed", "--error", "Agent 崩溃"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1)
+        payload = json.loads(run.stdout)
+        self.assertEqual(payload["outcome"], "failed")
+        self.assertIn("Agent 崩溃", payload["errors"])
+
+    def test_p1_2_explicit_silent_still_requires_positive_evidence(self):
+        self.write_run(candidates=3)
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data),
+                              "--outcome", "silent"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1)
+        payload = json.loads(run.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertIn("silent", payload["error"])
+
+    # ---------- P1-3：运行包新鲜度 ----------
+
+    def test_p1_3_stale_run_package_is_not_silent(self):
+        # 复现：昨天（或任意旧日期）的运行包 + 今天跑 receipt
+        old = datetime.now(timezone.utc) - timedelta(days=2)
+        self.write_run(candidates=1, generated_at=old)
+        self.write_queue([self.entry(first_seen_at=old)])
+        self.write_card(self.card(recorded_at=old), name="old.json")
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data)],
+                             capture_output=True, text=True)
+        payload = json.loads(run.stdout)
+        # 长时间停机不得被记成"本轮无变化"的零警告静默成功
+        self.assertNotEqual(payload["outcome"], "silent")
+        self.assertTrue(payload["warnings"])
+        self.assertTrue(payload["facts"]["stale_run"])
+        # 旧运行包之后的卡片不计入本轮
+        self.assertEqual(payload["facts"]["cards_written"], 0)
+        self.assertEqual(payload["facts"]["candidates"], 0)
+
+    def test_p1_3_stale_run_package_with_no_judged_evidence_fails(self):
+        # 过期运行包 + 无任何研判证据 → failed（不得静默）
+        old = datetime.now(timezone.utc) - timedelta(days=2)
+        self.write_run(candidates=0, generated_at=old)
+        run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                              "receipt", "--data-dir", str(self.data)],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1)
+        payload = json.loads(run.stdout)
+        self.assertEqual(payload["outcome"], "failed")
+        self.assertTrue(payload["errors"])
+        self.assertTrue(any("过期" in warning for warning in payload["warnings"]))
+
+    def test_p1_3_stale_run_package_not_counted_as_candidates(self):
+        old = datetime.now(timezone.utc) - timedelta(hours=30)
+        self.write_run(candidates=5, generated_at=old)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        self.assertEqual(code, 1)
+        receipt = payload["receipt"]
+        self.assertEqual(receipt["facts"]["candidates"], 0)
+        self.assertTrue(receipt["facts"]["stale_run"])
+        self.assertEqual(receipt["outcome"], "failed")
+
+    def test_p1_3_max_run_age_hours_override(self):
+        # 阈值可覆盖：把阈值调大后旧运行包重新有效
+        old = datetime.now(timezone.utc) - timedelta(hours=30)
+        self.write_run(candidates=0, generated_at=old)
+        payload, code = ad.build_receipt(self.data, max_run_age_hours=48,
+                                         now=datetime.now(timezone.utc))
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["receipt"]["outcome"], "silent")
+        self.assertFalse(payload["receipt"]["facts"]["stale_run"])
+
+    def test_p1_3_fresh_run_package_still_allows_silent(self):
+        self.write_run(candidates=0)
+        payload, code = ad.build_receipt(self.data, now=datetime.now(timezone.utc))
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["receipt"]["outcome"], "silent")
+        self.assertFalse(payload["receipt"]["facts"]["stale_run"])
+
+    # ---------- P2-1：隔离失败不得销毁原始损坏内容 ----------
+
+    def test_p2_1_quarantine_failure_preserves_original_content(self):
+        path = dl.lease_path(self.data)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{broken original", encoding="utf-8")
+        before = path.read_bytes()
+        with mock.patch.object(dl, "_quarantine", return_value=None):
+            with self.assertRaises(dl.LeaseError) as caught:
+                dl.acquire_lease(self.data, "owner-a", run_id="r1")
+        self.assertIn("隔离失败", str(caught.exception))
+        # 原始损坏内容必须一字未改
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(path.read_text(encoding="utf-8"), "{broken original")
+
+    def test_p2_1_quarantine_failure_via_cli_reports_error(self):
+        path = dl.lease_path(self.data)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{broken original", encoding="utf-8")
+        before = path.read_bytes()
+        script = ("import sys, runpy\n"
+                  "sys.path.insert(0, %r)\n"
+                  "import daily_loop as dl\n"
+                  "dl._quarantine = lambda path: None\n"
+                  "sys.argv = ['auto_discover.py', 'lease', 'acquire', "
+                  "'--data-dir', %r, '--owner', 'owner-a']\n"
+                  "runpy.run_path(%r, run_name='__main__')\n")
+        run = subprocess.run([sys.executable, "-B", "-c",
+                              script % (str(SCRIPTS), str(self.data),
+                                        str(SCRIPTS / "auto_discover.py"))],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1)
+        payload = json.loads(run.stdout)
+        self.assertFalse(payload["acquired"])
+        self.assertTrue(payload["error"])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_p2_1_successful_quarantine_still_preserves_content(self):
+        path = dl.lease_path(self.data)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{broken original", encoding="utf-8")
+        lease, notes = dl.acquire_lease(self.data, "owner-a", run_id="r1")
+        self.assertEqual(lease["owner"], "owner-a")
+        self.assertTrue(any("隔离" in note for note in notes))
+        backups = list(path.parent.glob("lease.json.corrupt-*"))
+        self.assertTrue(backups)
+        self.assertEqual(backups[0].read_text(encoding="utf-8"), "{broken original")
+
+    # ---------- P2-2：同 owner 续租保留 run_id ----------
+
+    def test_p2_2_same_owner_renew_keeps_run_id(self):
+        lease, _ = dl.acquire_lease(self.data, "owner-a", run_id="r1",
+                                     ttl_seconds=600)
+        self.assertEqual(lease["run_id"], "r1")
+        renewed, notes = dl.acquire_lease(self.data, "owner-a")
+        self.assertEqual(renewed["run_id"], "r1")
+        self.assertTrue(any("保留原运行 ID" in note for note in notes))
+        # 原 run_id 仍可用于释放
+        released = dl.release_lease(self.data, "owner-a", run_id="r1")
+        self.assertTrue(released["released"])
+        self.assertFalse(dl.lease_path(self.data).exists())
+
+    def test_p2_2_explicit_new_run_id_switches_and_is_documented(self):
+        dl.acquire_lease(self.data, "owner-a", run_id="r1", ttl_seconds=600)
+        renewed, notes = dl.acquire_lease(self.data, "owner-a", run_id="r2")
+        self.assertEqual(renewed["run_id"], "r2")
+        self.assertTrue(any("运行 ID 切换" in note for note in notes))
+
+    def test_p2_2_takeover_of_expired_lease_gets_new_run_id(self):
+        now = datetime.now(timezone.utc)
+        dl.acquire_lease(self.data, "owner-a", run_id="r1", ttl_seconds=60, now=now)
+        lease, _ = dl.acquire_lease(self.data, "owner-b", ttl_seconds=600,
+                                     now=now + timedelta(seconds=120))
+        self.assertNotEqual(lease["run_id"], "r1")
+        self.assertEqual(lease["owner"], "owner-b")
+
+    def test_p2_2_cli_renew_keeps_run_id(self):
+        acquire = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                                  "lease", "acquire", "--data-dir", str(self.data),
+                                  "--owner", "owner-a", "--run-id", "r1"],
+                                 capture_output=True, text=True)
+        self.assertEqual(acquire.returncode, 0)
+        renew = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                                "lease", "acquire", "--data-dir", str(self.data),
+                                "--owner", "owner-a"],
+                               capture_output=True, text=True)
+        self.assertEqual(renew.returncode, 0)
+        self.assertEqual(json.loads(renew.stdout)["lease"]["run_id"], "r1")
+        release = subprocess.run([sys.executable, "-B", str(SCRIPTS / "auto_discover.py"),
+                                  "lease", "release", "--data-dir", str(self.data),
+                                  "--owner", "owner-a", "--run-id", "r1"],
+                                 capture_output=True, text=True)
+        self.assertEqual(release.returncode, 0)
+        self.assertTrue(json.loads(release.stdout)["released"])
 
 
 if __name__ == "__main__":

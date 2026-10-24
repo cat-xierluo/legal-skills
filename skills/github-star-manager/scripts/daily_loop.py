@@ -80,19 +80,51 @@ def lease_dir(data_dir) -> Path:
     return Path(data_dir) / "auto-opportunities"
 
 
-def _quarantine(path: Path) -> Optional[str]:
-    """把不可解析的文件改名保留（不删除），返回备份路径。"""
+def _quarantine(path: Path) -> Dict:
+    """把不可解析的文件改名或复制保留（不销毁原内容），返回隔离结果。
+
+    返回 {"preserved": bool, "backup": Optional[str], "method": str, "detail": str}。
+    preserved=True 表示原始损坏内容已完整保留在 backup 中；preserved=False 表示
+    无法保留——调用方必须拒绝覆盖原文件，不得销毁现场。
+    """
     stamp = now_utc().strftime("%Y%m%dT%H%M%S.%fZ")
     backup = path.with_name(f"{path.name}.corrupt-{stamp}")
     try:
         os.replace(path, backup)
+        return {"preserved": True, "backup": str(backup), "method": "rename", "detail": ""}
+    except OSError as exc:
+        detail = f"改名失败（{type(exc).__name__}）"
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        return {"preserved": False, "backup": None, "method": "failed",
+                "detail": f"{detail}；读取原始内容失败（{type(exc).__name__}）"}
+    try:
+        backup.write_bytes(data)
+    except OSError as exc:
+        return {"preserved": False, "backup": None, "method": "failed",
+                "detail": f"{detail}；写入备份失败（{type(exc).__name__}）"}
+    method = "copy"
+    try:
+        path.unlink()
+        method = "copy+remove"
     except OSError:
-        try:
-            backup.write_bytes(path.read_bytes())
-            path.unlink(missing_ok=True)
-        except OSError:
-            return None
-    return str(backup)
+        # 原件仍在原位，但副本已保存——原始内容不会丢失。
+        pass
+    return {"preserved": True, "backup": str(backup), "method": method, "detail": detail}
+
+
+def _quarantine_result(result) -> Dict:
+    """把 _quarantine 的返回值规整成隔离结果字典。
+
+    兼容 None（隔离完全失败）和旧版字符串返回值，避免调用方误把失败当成功。
+    """
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, str) and result:
+        return {"preserved": True, "backup": result, "method": "rename", "detail": ""}
+    return {"preserved": False, "backup": None, "method": "failed",
+            "detail": "隔离失败"}
 
 
 def read_lease(data_dir) -> Dict:
@@ -135,6 +167,7 @@ def acquire_lease(data_dir, owner: str, run_id: Optional[str] = None,
     - 现有租约未过期且 owner 相同 → 续租（同一 owner 可重入）。
     - 现有租约已过期 → 接管，并记录被接管的旧 owner。
     - 现有租约文件损坏 → 隔离备份后接管，并在 notes 中显式降级告警。
+      隔离失败时拒绝获取租约（LeaseError），损坏原文保留在原位不被覆盖。
     """
     if not owner:
         raise LeaseError("owner 不能为空")
@@ -146,13 +179,21 @@ def acquire_lease(data_dir, owner: str, run_id: Optional[str] = None,
         path = lease_path(data_dir)
         current = read_lease(data_dir)
         if current.get("corrupt"):
-            backup = _quarantine(path)
+            quarantine = _quarantine_result(_quarantine(path))
+            if not quarantine["preserved"]:
+                # 隔离失败意味着原始损坏内容无法安全保留。绝不能继续写入：
+                # atomic_json 会直接覆盖原文件，把现场毁掉。
+                raise LeaseError(
+                    "损坏租约文件隔离失败——原始内容无法保留，拒绝获取租约，"
+                    f"原文件保持原样未改动：{path}（{quarantine['detail']}）")
             notes.append(
-                "损坏租约文件已隔离" + (f"至 {backup}" if backup else "（备份失败，文件保持原样）")
+                f"损坏租约文件已隔离至 {quarantine['backup']}"
+                f"（{quarantine['method']}）"
+                + (f"；{quarantine['detail']}" if quarantine.get("detail") else "")
                 + "——本轮按无可用租约继续，属显式降级")
             current = {}
+        expired = bool(current) and lease_expired(current, now)
         if current:
-            expired = lease_expired(current, now)
             if not expired and current.get("owner") != owner:
                 raise LeaseConflict(
                     f"租约被占用：owner={current.get('owner')} "
@@ -163,6 +204,14 @@ def acquire_lease(data_dir, owner: str, run_id: Optional[str] = None,
                              f"expires_at={current.get('expires_at')}")
             else:
                 notes.append(f"同一 owner 续租：owner={owner}")
+        if run_id and current.get("run_id") and current.get("run_id") != run_id:
+            notes.append(f"运行 ID 切换：{current.get('run_id')} → {run_id}")
+        elif (not run_id and current
+              and current.get("owner") == owner and current.get("run_id")):
+            # 同 owner 续租且调用方未给新 run_id → 保留原 run_id，
+            # 否则原 run_id 将永远无法用于释放租约。
+            run_id = current["run_id"]
+            notes.append(f"保留原运行 ID：{run_id}（同 owner 续租，未指定新的 --run-id）")
         lease = {
             "schema_version": LEASE_SCHEMA,
             "owner": owner,
@@ -237,6 +286,23 @@ def write_receipt(data_dir, receipt: Dict,
     with write_lock(directory):
         atomic_json(path, receipt)
     return path
+
+
+def run_age_hours(path: Path, generated_at=None,
+                  now: Optional[datetime] = None) -> Optional[float]:
+    """\u8fd0\u884c\u5305\u751f\u6210\u65f6\u95f4\u8ddd\u73b0\u5728\u7684\u5c0f\u65f6\u6570\u3002
+
+    \u4f18\u5148\u7528\u8fd0\u884c\u5305\u81ea\u5e26\u7684 generated_at\uff1b\u7f3a\u5931\u6216\u4e0d\u53ef\u89e3\u6790\u65f6\u56de\u9000\u5230\u6587\u4ef6 mtime\u3002
+    \u65e0\u6cd5\u5224\u5b9a\u65f6\u8fd4\u56de None\uff08\u4e0d\u505a\u65b0\u9c9c\u5ea6\u5224\u5b9a\uff09\u3002
+    """
+    now = now or now_utc()
+    stamp = parse_dt(generated_at)
+    if stamp is None:
+        try:
+            stamp = datetime.fromtimestamp(Path(path).stat().st_mtime, timezone.utc)
+        except (OSError, TypeError, ValueError):
+            return None
+    return (now - stamp).total_seconds() / 3600
 
 
 def latest_run_file(data_dir) -> Optional[Path]:

@@ -263,6 +263,8 @@ def valid_recent(date, cutoff, now):
 FOCUS_FILE = "repository-profiles/focus.json"
 QUEUE_FILE = "auto-opportunities/review-queue.json"
 QUEUE_SCHEMA = "review-queue/1.0"
+# 准备阶段运行包的新鲜度阈值：超过该时长的运行包不再代表"本轮准备"。
+DEFAULT_MAX_RUN_AGE_HOURS = 24
 
 
 def focus_repositories(data_dir, warnings=None):
@@ -453,12 +455,20 @@ def reconcile_queue(data_dir, now=None, since=None):
     return result, (1 if degraded else 0)
 
 
-def latest_run_context(data_dir):
-    """读取最近一次准备阶段的运行包（离线），提取候选数与请求预算用量。"""
+def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=None):
+    """读取最近一次准备阶段的运行包（离线），提取候选数与请求预算用量。
+
+    新鲜度：运行包 generated_at 距今超过 max_age_hours 时，本轮视为"没有有效
+    运行包"——候选数按 0 计、该运行包不作为"本轮"的边界，事实里给出
+    stale_run=True 与显式警告，避免长时间停机被记成"本轮无变化"的静默成功。
+    """
+    now = now or now_utc()
     path = daily_loop.latest_run_file(data_dir)
     context = {"run_path": str(path) if path else None, "run_found": bool(path),
                "generated_at": None, "candidates": 0, "request_budget": None,
-               "status": None, "warnings": []}
+               "status": None, "warnings": [], "stale_run": False,
+               "run_age_hours": None, "max_run_age_hours": max_age_hours,
+               "run_stale_reason": None}
     if not path:
         context["warnings"].append("没有找到准备阶段运行包——本轮候选数按 0 计")
         return context
@@ -478,6 +488,18 @@ def latest_run_context(data_dir):
     watch = coverage.get("watch_coverage") or {}
     if isinstance(watch.get("request_budget"), dict):
         context["request_budget"] = watch["request_budget"]
+    age = daily_loop.run_age_hours(path, context["generated_at"], now)
+    context["run_age_hours"] = round(age, 2) if age is not None else None
+    if age is not None and age > max_age_hours:
+        context["stale_run"] = True
+        context["run_stale_reason"] = (
+            f"\u51c6\u5907\u9636\u6bb5\u8fd0\u884c\u5305\u5df2\u8fc7\u671f\uff08\u751f\u6210\u4e8e {age:.1f} \u5c0f\u65f6\u524d\uff0c\u8d85\u8fc7\u9608\u503c "
+            f"{max_age_hours} \u5c0f\u65f6\uff09")
+        context["warnings"].append(
+            context["run_stale_reason"]
+            + "\u2014\u2014\u672c\u8f6e\u6309\u6ca1\u6709\u6709\u6548\u8fd0\u884c\u5305\u5904\u7406\uff1a\u5019\u9009\u6570\u6309 0 \u8ba1\uff0c"
+            "\u4e14\u8be5\u8fd0\u884c\u5305\u4e0d\u4f5c\u4e3a\u672c\u8f6e\u8fb9\u754c")
+        context["candidates"] = 0
     return context
 
 
@@ -510,23 +532,37 @@ def cards_written_since(data_dir, since_iso=None):
 
 
 def build_receipt(data_dir, outcome=None, errors=None, notify=None,
-                  requested=None, now=None):
+                  requested=None, now=None,
+                  max_run_age_hours=DEFAULT_MAX_RUN_AGE_HOURS):
     """汇总一次每日闭环的回执事实（离线）。
 
     outcome:
     - "judged"：本轮有反馈卡写入或队列条目变为 judged。
     - "silent"：必须带正向证据（候选数=0、队列无新增待研判、无卡片写入）。
     - "failed"：Agent 崩溃/未研判/错误——不得记成静默。
-    - None（自动判定）：按上面的事实推导。
+    - None（自动判定）：按下面的事实推导。
+
+    显式覆盖同样受事实约束：
+    - "failed" 始终保留——Agent 主动报错是合法意图。
+    - "silent" 必须能通过正向证据校验，否则被拒绝。
+    - "judged" 必须有正向证据（本轮写出反馈卡或队列条目真实变为 judged），
+      且队列损坏等失败事实存在时降级为 failed。
+
+    运行包新鲜度：generated_at 距今超过 max_run_age_hours 的运行包不代表
+    "本轮准备"——本轮按没有有效运行包处理（候选数按 0 计、不作为本轮边界），
+    并给出显式警告，绝不记成零警告的 silent。
 
     没有准备阶段运行包时，"本轮写入的卡片"无法界定（历史卡片不算本轮），
     但 reconcile 真实把条目判为 judged 仍是 judged 结局，缺运行包记为显式警告。
     """
     now = now or now_utc()
-    run = latest_run_context(data_dir)
-    run_at = parse_dt(run.get("generated_at"))
+    run = latest_run_context(data_dir, max_age_hours=max_run_age_hours, now=now)
+    stale_run = bool(run.get("stale_run"))
+    # 过期运行包不能作为"本轮"边界：卡片不能按它的生成时间起算。
+    run_at = None if stale_run else parse_dt(run.get("generated_at"))
     reconcile, reconcile_code = reconcile_queue(data_dir, now=now, since=run_at)
-    written = cards_written_since(data_dir, run.get("generated_at"))
+    written = cards_written_since(data_dir, run.get("generated_at")
+                                  if not stale_run else None)
     backlog = reconcile.get("backlog") or {}
     new_pending = reconcile.get("new_pending", 0)
     new_unjudged = reconcile.get("new_unjudged", 0)
@@ -542,6 +578,9 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
         "backlog_pending_total": backlog.get("pending_total", 0),
         "run_found": run.get("run_found"),
         "queue_state": reconcile.get("queue_state"),
+        "stale_run": stale_run,
+        "run_age_hours": run.get("run_age_hours"),
+        "max_run_age_hours": max_run_age_hours,
     }
     actionable = [card for card in written
                   if card.get("decision") in {"tested", "adopted", "experiment_proposed"}]
@@ -558,18 +597,26 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
     failures = list(errors or [])
     if reconcile_code:
         failures.extend(reconcile.get("errors") or [])
+    stale_reason = run.get("run_stale_reason") if stale_run else None
+    # judged 的正向证据：本轮写出反馈卡，或队列条目真实变为 judged。
+    judged_evidence = bool(facts["cards_written"] or facts["newly_judged"])
     resolved = outcome
     if resolved is None:
         if failures:
             resolved = "failed"
-        elif facts["cards_written"] or facts["newly_judged"]:
+        elif judged_evidence:
+            # 与"缺运行包"同口径：reconcile 真实判为 judged 仍是 judged 结局，
+            # 但运行包过期/缺失必须留显式警告。
             resolved = "judged"
-        elif (facts["run_found"] and facts["candidates"] == 0
+        elif (facts["run_found"] and not stale_run and facts["candidates"] == 0
               and facts["new_unjudged"] == 0 and facts["cards_written"] == 0):
             resolved = "silent"
         else:
             resolved = "failed"
-            if not facts["run_found"]:
+            if stale_run:
+                failures.append(str(stale_reason) + "，本轮按没有有效准备处理"
+                                "——无法取得候选数=0 的正向证据，不得记为静默")
+            elif not facts["run_found"]:
                 failures.append("没有准备阶段运行包，无法取得候选数=0 的正向证据"
                                 "——不得记为静默")
             elif facts["candidates"] or facts["new_unjudged"]:
@@ -577,6 +624,16 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
                                 "——研判未完成，不得记为静默")
             else:
                 failures.append("本轮有反馈卡写入但无法完成对账——不得记为静默")
+    elif resolved == "judged":
+        # 显式 judged 也必须过事实校验：有失败事实或没有正向证据时降级为 failed。
+        if failures:
+            resolved = "failed"
+            failures.append("显式声明 judged，但本轮存在失败事实——已降级为 failed")
+        elif not judged_evidence:
+            resolved = "failed"
+            failures.append(
+                "显式声明 judged，但本轮没有正向证据"
+                "（既未写出反馈卡，队列也没有条目变为 judged）——已降级为 failed")
     if resolved == "silent":
         evidence = {
             "candidates": facts["candidates"],
@@ -585,25 +642,34 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
             "backlog_pending_total": facts["backlog_pending_total"],
             "cards_written": facts["cards_written"],
             "statement": "本轮候选数=0 且队列无新增未研判条目 且无卡片写入",
+            "run_age_hours": facts["run_age_hours"],
+            "max_run_age_hours": max_run_age_hours,
             "note": "历史积压只披露不阻断——相同未恢复问题不每天重报",
         }
-        if (not facts["run_found"] or facts["candidates"] != 0
-                or facts["new_unjudged"] != 0 or facts["cards_written"] != 0):
+        if (not facts["run_found"] or stale_run or facts["candidates"] != 0
+                or facts["new_unjudged"] != 0 or facts["cards_written"] != 0
+                or failures):
             return {"ok": False,
                     "error": "silent 需要正向证据，但本轮事实不支持："
                              f"run_found={facts['run_found']}, "
+                             f"stale_run={stale_run}, "
                              f"candidates={facts['candidates']}, "
                              f"new_unjudged={facts['new_unjudged']}, "
                              f"backlog_pending_total={facts['backlog_pending_total']}, "
-                             f"cards_written={facts['cards_written']}",
-                    "facts": facts}, 1
+                             f"cards_written={facts['cards_written']}, "
+                             f"failures={len(failures)}",
+                    "facts": facts,
+                    "errors": failures}, 1
     else:
         evidence = {
             "cards_written": facts["cards_written"],
             "newly_judged": facts["newly_judged"],
             "actionable_cards": len(actionable),
-            "statement": "本轮写出反馈卡并完成对账" if resolved == "judged"
-                         else "本轮出现失败或未完成——不作为静默处理",
+            "statement": ("本轮写出反馈卡并完成对账"
+                          if resolved == "judged" and facts["cards_written"]
+                          else "本轮队列条目被研判为 judged 并完成对账"
+                          if resolved == "judged"
+                          else "本轮出现失败或未完成——不作为静默处理"),
         }
     if notify is None:
         if resolved == "failed":
@@ -1502,14 +1568,19 @@ def cmd_reconcile(args):
 def cmd_receipt(args):
     """写一次每日闭环的运行回执（judged / silent / failed）。"""
     data_dir = args.data_dir.expanduser().resolve() if args.data_dir else StarTracker.CACHE_DIR
-    outcome = args.outcome
+    requested = args.outcome
+    # "auto" 与不传 --outcome 等价：按本轮事实自动判定。
+    outcome = None if requested in (None, "auto") else requested
     errors = list(args.error or [])
     notify = None
     if args.notify is not None:
         notify = {"recommended": args.notify == "true",
                   "reason": args.notify_reason or "调用方显式指定"}
     payload, code = build_receipt(data_dir, outcome=outcome, errors=errors, notify=notify,
-                                   requested=outcome)
+                                   requested=requested,
+                                   max_run_age_hours=getattr(
+                                       args, "max_run_age_hours",
+                                       DEFAULT_MAX_RUN_AGE_HOURS))
     if not payload.get("ok"):
         return emit({"schema_version": "daily-receipt/1.0", "ok": False,
                      "error": payload.get("error"), "facts": payload.get("facts"),
@@ -1583,11 +1654,15 @@ def main():
 
     p = sub.add_parser("receipt", help="写每日闭环运行回执（judged/silent/failed）")
     p.add_argument("--data-dir", type=Path, help="私有运行状态目录")
-    p.add_argument("--outcome", choices=["judged", "silent", "failed"],
-                   help="不指定时按本轮事实自动判定")
+    p.add_argument("--outcome", choices=["judged", "silent", "failed", "auto"],
+                   help="不指定或写 auto 时按本轮事实自动判定；"
+                        "显式 judged/silent 仍须通过事实校验")
     p.add_argument("--error", action="append", help="失败原因（可重复）")
     p.add_argument("--notify", choices=["true", "false"], help="通知结论")
     p.add_argument("--notify-reason", help="通知结论的理由")
+    p.add_argument("--max-run-age-hours", type=positive, default=DEFAULT_MAX_RUN_AGE_HOURS,
+                   help="准备阶段运行包的新鲜度阈值小时数（默认 24）；"
+                        "超过则本轮按没有有效运行包处理")
     p.set_defaults(func=cmd_receipt)
 
     p = sub.add_parser("lease", help="每日闭环并发租约")
