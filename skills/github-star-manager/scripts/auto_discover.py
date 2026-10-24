@@ -335,12 +335,12 @@ def update_review_queue(data_dir, old, selected, all_candidates, snapshot, feedb
         }
         entries[key] = entry
     selected_keys = {row["candidate_key"] for row in selected}
-    for candidate in selected:
-        entry = entries[candidate["candidate_key"]]
+    for key in selected_keys:
+        entry = entries[key]
         entry["state"] = "shown"
         entry["last_shown_at"] = now.isoformat()
         entry["shown_count"] = entry.get("shown_count", 0) + 1
-        entry["last_shown_project"] = candidate["project_id"]
+        entry["last_shown_project"] = entry["project_id"]
     # Feedback remains the sole source of judged state. Do not mark shown items
     # complete merely because an Agent looked at them.
     for key, entry in entries.items():
@@ -409,7 +409,7 @@ def field_value(record, field):
 
 def compare_observed(current, prior, current_observed):
     """Compare only fields both sides observed; unknown stays None."""
-    prior_seen = observed_fields(prior)
+    prior_seen = (prior or {}).get("cache_available") or observed_fields(prior)
     result = {}
     for field in OBSERVED_FIELDS:
         if prior_seen[field] and current_observed.get(field):
@@ -569,6 +569,7 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
                     "scope_conflicts": conflicts,
                     "scope_status": "conflicts_with_stated_scope" if conflicts else "no_stated_scope_conflict",
                 })
+    candidates = coalesce_candidates(candidates)
     candidates.sort(key=lambda c: (
         -int(c["queue_state"]["cooldown_due"]),
         -int("recent_star" in c["signals"]), -int("focused_watch" in c["signals"]),
@@ -579,7 +580,24 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
     return select_candidates(candidates, limit, per_project), suppressed, len(candidates)
 
 
+def coalesce_candidates(candidates):
+    """One decision identity consumes one slot; retain every evidence anchor."""
+    merged = {}
+    for candidate in candidates:
+        key = candidate["candidate_key"]
+        if key not in merged:
+            merged[key] = {**candidate, "capability": {**candidate["capability"], "evidence": []}}
+        capability = candidate["capability"]
+        evidence = capability.get("evidence") or [{field: capability.get(field)
+                    for field in ("source", "anchor", "text")}]
+        for anchor in evidence:
+            if anchor not in merged[key]["capability"]["evidence"]:
+                merged[key]["capability"]["evidence"].append(dict(anchor))
+    return list(merged.values())
+
+
 def select_candidates(candidates, limit, per_project, per_repo=None):
+    candidates = coalesce_candidates(candidates)
     selected, counts, repo_counts = [], {}, {}
     # Cooled-down pending items get the first slice, then one item per project
     # in round-robin order, then remaining capacity by score. This prevents a
@@ -726,7 +744,10 @@ def fetch_cheap_evidence(candidate, data_dir, prior=None, budget=None):
                   "repo_revision": record["repo_revision"], "status": "complete",
                   "errors": [], "probe": "cheap",
                   "cheap_revision": record["cheap_revision"]}
-        merged["observed"] = {**observed_fields(prior), "release": True}
+        merged["cache_available"] = {**(prior.get("cache_available") or observed_fields(prior)),
+                                     "release": True}
+        merged["observed"] = record["observed"]
+        merged["scope"] = record["scope"]
         merged["changed_at"] = (record["fetched_at"]
                                 if release_changed
                                 else prior.get("changed_at", record["fetched_at"]))
@@ -1011,13 +1032,15 @@ def cmd_auto(args):
     inspected = set(unique) | {row["repo"] for row in candidates} | set(focused)
     for name in inspected:
         snapshots = local_reference_snapshots(name, roots_for(args))
-        head = (cache.get(name) or {}).get("head_sha")
+        current_head_observed = bool(name in unique and unique[name]["status"] == "complete"
+                                     and observed_fields(unique[name])["head"])
+        head = (cache.get(name) or {}).get("head_sha") if current_head_observed else None
         for local in snapshots:
             local["project_id"] = projects_by_path.get(local["skill_path"])
             local["upstream_head"] = head
             local["upstream_commit_comparison"] = compare_snapshot_commit(local.get("commit"), head)
         snapshots_by_repo[name] = snapshots
-        if name in unique and unique[name]["status"] == "complete":
+        if current_head_observed and unique[name]["status"] == "complete":
             observed_base = (prior.get(name) or {}).get("head_sha")
             observation_comparisons[name] = (fetch_comparison(name, observed_base, head, request_budget)
                                              if observed_base and observed_base != head else None)
