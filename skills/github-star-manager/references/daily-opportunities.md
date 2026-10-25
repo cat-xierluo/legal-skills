@@ -87,9 +87,13 @@ python scripts/auto_discover.py auto-discover \
 
 `stale` 与 `cached` 同为缓存档（1 分），但同档内 `stale` 排前面：它的仓库元数据已经变了，附着的证据可能已经不对。`evidence_detail_rank` 是同档内的次序：本轮残缺（4）> 回退失败（3）> 回退跳过（2）> stale 缓存（2）> 新鲜缓存（1）。回退跳过与 stale 缓存同分但分属不同档（2 分与 1 分），实际先后由档位决定。
 
-排序语义：**本轮已取证是第一优先级维度**，被本轮付费取证的仓库优先进入候选，该优先级不会被 `select_candidates` 内部的字母序重排覆盖。`--limit/--per-project/--per-repo` 上限和轮转公平性保持不变——已取证优先只决定同一上限内的先后，一个仓库仍不能占满名额，一个项目仍不能垄断整轮。
+排序语义：**本轮已取证是证据通道的第一优先级维度**，被本轮付费取证的仓库在证据通道内优先进入候选，该优先级不会被 `select_candidates` 内部的字母序重排覆盖。**但证据通道不能占满整轮**：`select_candidates` 每轮为 review 队列里存活的 pending 保留固定名额（`--backlog-reserve`，默认 2，`0` 关闭），保留名额严格按等待时间最久优先——从未展示过的候选从 `first_seen_at` 起算，展示过但未研判的从 `last_shown_at` 起算。没有保留名额时，12748 条 pending 的真实队列在 2026-10-25 的宿主轮次中让 12/12 候选全部是本轮取证，历史积压永远没有展示份额；保留名额保证最老的 pending 候选按固定周期出现在 Agent 面前。`--limit/--per-project/--per-repo` 上限和轮转公平性保持不变——保留名额同样受这些上限约束，一个仓库仍不能占满名额，一个项目仍不能垄断整轮。保留名额没有可服务的积压时回落给证据通道，不浪费容量；`--backlog-reserve 0` 完整恢复旧的证据优先行为。
 
 `coverage.watch_coverage.evidence_candidates` 披露四组事实：`fetched_this_run`（本轮取证的仓库数）、`fetched_in_candidates` 与 `fetched_not_in_candidates`（取证后是否进入候选）、`candidates_with_evidence` / `candidates_without_evidence`（候选里带证据的条数与总数）。**没进候选不等于没变化**：被队列上限挡下的取证仓库会显式列出。
+
+`coverage.review_queue.quota` 披露本轮候选的来源：`backlog_reserve`（保留名额配置）、`backlog_reserved_slots`（保留名额实际服务的候选数）、`evidence_slots`（证据通道进入的候选数）、`sources_by_count`（`backlog` = 由保留名额进入的最久未展示 pending；`evidence` = 本轮已取证；`other` = 既无本轮证据也不在积压通道的候选，如缓存命中优先轮转；`backlog+evidence` = 同时属于两个通道的候选）与逐候选 `sources`。回执的 `queue_quota` 字段带同一份数据，闭环核来源不必重读运行包。
+
+`coverage.review_queue.coverage_cycle` 把覆盖周期摊开为可核算的数字：`never_shown_pending`（从未展示的积压量）、`backlog_slots_per_round`（每轮实际服务积压的宽度）、`estimated_rounds_to_cover`（按当前宽度覆盖全部积压所需轮数）、`observed_rounds_per_day`（从真实运行包历史测得的每日轮次）与 `estimated_days_to_cover`。回执的 `coverage_cycle` 字段带同一份数据。周期只针对本状态目录已知的 pending 队列；**未覆盖的仓库与未取证的仓库都不等于没有机会**——没进候选可能只是还没轮到，不能声称没有变化。
 
 本轮新取的 README 与 Release 正文在生成候选之前就已接入本轮召回，因此"新 Release 带来新能力 → 匹配到新组件"这条链路成立。召回仍然有界：README 正文与 Release 正文各取固定上限，未取证的仓库不会凭空进入候选。
 

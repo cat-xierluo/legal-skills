@@ -1592,5 +1592,217 @@ class EvidenceFallbackQueueTests(unittest.TestCase):
         self.assertEqual(item["evidence_rank"], ad.EVIDENCE_RANK_NONE)
 
 
+class QueueFairnessTests(unittest.TestCase):
+    """Cross-round fairness: the evidence channel must not starve the backlog.
+
+    The real defect: with a large pending backlog, every round filled its
+    slots with candidates whose repository was fetched this run
+    (``evidence_rank`` high), so the historical pending candidates never
+    became visible. These tests pin the anti-starvation guarantee across
+    real consecutive rounds.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.skills = self.root / "skills"
+        self.skills.mkdir()
+        self.data = self.root / "data"
+        self.data.mkdir()
+        for index in range(3):
+            write_skill(self.skills, f"proj{index}", "视频字幕渲染与时间轴工具")
+
+    def args(self, **overrides):
+        return SimpleNamespace(**dict(dict(project=None, skills_root=[self.skills], repo_root=None,
+            data_dir=self.data, refresh=False, fetch_evidence=True, evidence_limit=4,
+            limit=12, per_project=2, recent_days=14, update_days=7, write=False,
+            show_suppressed=False, focus_limit=8, request_budget=60,
+            cheap_budget=0, backlog_reserve=ad.DEFAULT_BACKLOG_RESERVE), **overrides))
+
+    def candidate_repo(self, name, repo_id, description="subtitle timeline renderer"):
+        return {"id": repo_id, "full_name": name, "description": description,
+                "topics": ["video"], "starred_at": "2026-10-20T00:00:00Z",
+                "pushed_at": "2026-10-21T00:00:00Z"}
+
+    def repos(self, count=6):
+        return [self.candidate_repo(f"own/repo{index:02d}", 500 + index)
+                for index in range(count)]
+
+    def evidence_response(self, endpoint, **kwargs):
+        if "/readme" in endpoint:
+            import base64
+            return {"content": base64.b64encode(b"README subtitle timeline render").decode(),
+                    "sha": "readme-sha"}
+        if "/releases?" in endpoint:
+            # A release body without capability wording: a capability hint
+            # would give the candidate a direction key, and the candidate key
+            # would then differ between the round it was first seen and the
+            # round it is judged - a different defect, not the one under test.
+            return [{"tag_name": "v2", "body": "",
+                     "url": "https://example.test/v2", "published_at": "2026-10-22T00:00:00Z"}]
+        if "/commits?" in endpoint:
+            return [{"sha": "head-sha", "commit": {"message": "update"}}]
+        raise AssertionError(endpoint)
+
+    def pool(self):
+        """The candidate pool the preparation step derives for these repos."""
+        profiles, _ = ad.discover([self.skills], None)
+        rows, _, _ = ad.prepare(snapshot(self.repos()), profiles, {}, NOW)
+        return rows
+
+    def seed_backlog(self, ages=None):
+        """Write a review queue that already holds a pending backlog.
+
+        The entries use the candidate keys the preparation step derives, so the
+        queue and the candidate pool really refer to the same candidates. This
+        is the real state: a queue that has been accumulating pending items
+        since earlier rounds.
+        """
+        ages = ages or {}
+        entries = {}
+        for candidate in self.pool():
+            key = candidate["candidate_key"]
+            entries[key] = {"candidate_key": key, "project_id": candidate["project_id"],
+                            "repo_id": candidate.get("repo_id"), "repo": candidate["repo"],
+                            "capability_key": candidate["capability"]["key"],
+                            "scope": candidate["decision_scope"], "state": "pending",
+                            "first_seen_at": ages.get(key, "2026-10-01T00:00:00+00:00"),
+                            "last_shown_at": None, "shown_count": 0}
+        ad.atomic_json(self.data / ad.QUEUE_FILE,
+                       {"schema_version": ad.QUEUE_SCHEMA, "entries": entries,
+                        "cursor": {"round_seq": 3, "last_round_at": "2026-10-20T00:00:00+00:00"}})
+        return entries
+
+    def run_round(self, day, **overrides):
+        """Run one real round with --write, at a fixed clock."""
+        clock = patch.object(ad, "now_utc", return_value=NOW + timedelta(days=day))
+        network = patch.object(ad, "github_get", side_effect=self.evidence_response)
+        with clock, network:
+            return capture(ad.cmd_auto, self.args(write=True, **overrides))
+
+    def test_backlog_candidates_appear_while_this_run_evidence_keeps_filling_the_round(self):
+        # The starvation scenario. Every round fetches repositories and those
+        # candidates always rank first, so without a reserved share the
+        # historical pending candidates would never become visible.
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        self.seed_backlog()
+        seen_pending = set()
+        for day in range(1, 6):
+            _, result = self.run_round(day, limit=3, per_project=1, evidence_limit=3)
+            self.assertTrue(result["items"], f"round {day} produced no candidates")
+            for row in result["items"]:
+                if row.get("admission_source") in {"backlog", "backlog+evidence"}:
+                    seen_pending.add(row["repo"])
+        self.assertTrue(seen_pending,
+                        "no backlog candidate reached the Agent in five rounds")
+        # The this-run evidence kept its own slots in the same rounds.
+        _, result = self.run_round(6, limit=3, per_project=1, evidence_limit=3)
+        sources = [row.get("admission_source") for row in result["items"]]
+        self.assertTrue(any(source in {"evidence", "backlog+evidence"} for source in sources),
+                        sources)
+
+    def test_oldest_pending_is_served_before_a_newer_pending(self):
+        # The reserved slots follow the waiting time, not the project order.
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        rows = self.pool()
+        # One candidate has been waiting much longer than the others.
+        oldest = min(rows, key=lambda c: c["repo"])
+        ages = {oldest["candidate_key"]: "2026-08-01T00:00:00+00:00"}
+        self.seed_backlog(ages)
+        _, result = self.run_round(1, limit=3, per_project=1, evidence_limit=3)
+        backlog_rows = [row for row in result["items"]
+                        if row.get("admission_source") in {"backlog", "backlog+evidence"}]
+        self.assertTrue(backlog_rows)
+        self.assertEqual(backlog_rows[0]["repo"], oldest["repo"])
+
+    def test_reserve_of_zero_restores_the_previous_ordering(self):
+        # An operator can turn the reserve off; the old evidence-first
+        # behaviour comes back exactly.
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        self.seed_backlog()
+        _, result = self.run_round(1, limit=3, per_project=1, evidence_limit=3,
+                                   backlog_reserve=0)
+        sources = [row.get("admission_source") for row in result["items"]]
+        self.assertNotIn("backlog", sources)
+        self.assertNotIn("backlog+evidence", sources)
+        # And the evidence channel really got the slots.
+        self.assertTrue(result["items"])
+        self.assertTrue(all(row["evidence_rank"] > 0 for row in result["items"]),
+                        [row["evidence_rank"] for row in result["items"]])
+
+    def test_reserved_slots_fall_back_to_evidence_when_the_backlog_is_empty(self):
+        # A fresh state directory has no backlog. The reserved slots must not
+        # waste capacity - the whole round goes to the evidence channel.
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        _, result = self.run_round(1, limit=3, per_project=1, evidence_limit=3)
+        quota = result["coverage"]["review_queue"]["quota"]
+        self.assertEqual(quota["backlog_reserved_slots"], 0)
+        self.assertEqual(quota["sources_by_count"].get("evidence", 0), len(result["items"]))
+
+    def test_per_repo_and_per_project_caps_still_apply_to_the_backlog_channel(self):
+        # The reserved slots obey the same caps as the evidence channel: a
+        # single repository and a single project cannot take the whole round.
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        self.seed_backlog()
+        for day in range(1, 4):
+            _, result = self.run_round(day, limit=6, per_project=1, per_repo=1,
+                                       evidence_limit=3)
+            items = result["items"]
+            self.assertEqual(len({row["repo"] for row in items}), len(items))
+            for row in items:
+                same_repo = [other for other in items if other["repo"] == row["repo"]]
+                self.assertLessEqual(len(same_repo), 1)
+                same_project = [other for other in items
+                                if other["project_id"] == row["project_id"]]
+                self.assertLessEqual(len(same_project), 1)
+
+    def test_a_written_feedback_card_suppresses_and_advances_the_next_candidate(self):
+        # One round of feedback pushes the queue forward: the judged candidate
+        # leaves the backlog and no longer takes a reserved slot.
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        self.seed_backlog()
+        _, first = self.run_round(1, limit=3, per_project=1, evidence_limit=3)
+        backlog_rows = [row for row in first["items"]
+                        if row.get("admission_source") in {"backlog", "backlog+evidence"}]
+        self.assertTrue(backlog_rows, "no backlog candidate in the first round")
+        judged = backlog_rows[0]
+        # The card scope must match the candidate's own decision scope: a
+        # candidate without a capability direction is judged repository-wide.
+        ad.atomic_json(self.data / "feedback" / "decision.json", {
+            "scope": judged["decision_scope"],
+            "target": {"project_id": judged["project_id"],
+                       "target_revision": judged["target_revision"],
+                       "capability_key": judged["capability"]["key"]},
+            "signal": {"repo": judged["repo"], "repo_id": judged.get("repo_id"),
+                       "repo_revision": judged["repo_revision"],
+                       "evidence_revision": judged.get("evidence_revision")},
+            "decision": {"status": "rejected", "reason": "no local gap"},
+            "_recorded_at": (NOW + timedelta(days=1)).isoformat(),
+            "_schema": "opportunity-card/1.1"})
+        _, second = self.run_round(2, limit=3, per_project=1, evidence_limit=3)
+        self.assertNotIn(judged["repo"], [row["repo"] for row in second["items"]])
+        queue = ad.read_json(self.data / ad.QUEUE_FILE)
+        entry = queue["entries"].get(judged["candidate_key"])
+        self.assertEqual(entry["state"], "judged")
+
+    def test_coverage_discloses_the_quota_sources_and_the_coverage_cycle(self):
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        self.seed_backlog()
+        _, result = self.run_round(1, limit=3, per_project=1, evidence_limit=3)
+        coverage = result["coverage"]["review_queue"]
+        quota = coverage["quota"]
+        self.assertEqual(quota["backlog_reserve"], ad.DEFAULT_BACKLOG_RESERVE)
+        self.assertIn("sources_by_count", quota)
+        self.assertTrue(quota["sources_by_count"])
+        cycle = coverage["coverage_cycle"]
+        self.assertIn("estimated_rounds_to_cover", cycle)
+        self.assertIn("estimated_days_to_cover", cycle)
+        # The disclosure must not claim that uncovered repositories have no
+        # opportunity.
+        self.assertIn("未覆盖", cycle["note"] + cycle["scope"])
+        self.assertIn("没有机会", cycle["note"] + cycle["scope"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
