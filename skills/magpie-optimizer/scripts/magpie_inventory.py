@@ -456,6 +456,11 @@ def profile_expensive_models(profile):
     if not isinstance(profile, dict):
         return []
     found = []
+    constraints = profile.get("constraints")
+    if isinstance(constraints, dict):
+        value = constraints.get("expensive_models")
+        if isinstance(value, list):
+            found += [item for item in value if isinstance(item, str)]
     for key in ("expensive_models", "expensiveModels", "costly_models", "high_cost_models",
                 "premium_models", "expensive"):
         value = profile.get(key)

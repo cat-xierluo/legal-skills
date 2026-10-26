@@ -145,6 +145,7 @@ intent: project-wide kickoff, major direction reset, or final acceptance across 
 | `roles.*.models` | 留空表示待 Agent 根据当前模型目录和任务验收补全；显式值表示用户确认选择 |
 | `roles.*.sources_per_tier` | 用户期望的每层来源数，实际独立容量另核 |
 | `constraints.expensive_models_explicit_only` | 是否允许高成本模型进入自动链 |
+| `constraints.expensive_models` | 用户确认的高成本模型清单；为空时只输出未评估，不推断模型等级 |
 | `constraints.personal_account_before_team` | 账号归属优先级 |
 | `auxiliary_routes.*` | 辅助调用的独立目标 |
 

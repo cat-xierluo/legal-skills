@@ -177,6 +177,15 @@ SKILL_DIR_SAMPLE = _join(("<skill", "-dir>", "/references/guide.md"))
 TILDE_SAMPLE = _join(("~", "/Library/Application Support/example"))
 
 
+class ProfileRiskTests(unittest.TestCase):
+    def test_profile_expensive_models_reads_current_and_legacy_fields(self):
+        current = {"constraints": {"expensive_models": ["example/strong", "other/strong"]}}
+        legacy = {"expensive_models": ["legacy/strong"], "cost": {"premium": ["legacy/premium"]}}
+        self.assertEqual(inventory.profile_expensive_models(current),
+                         ["example/strong", "other/strong"])
+        self.assertEqual(inventory.profile_expensive_models(legacy),
+                         ["legacy/strong", "legacy/premium"])
+
 class MaskAccountTests(unittest.TestCase):
     """Neither account aliases nor email fragments belong in the report."""
 

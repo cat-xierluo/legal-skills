@@ -104,6 +104,13 @@
           "type": "boolean",
           "description": "高成本模型不进入自动回退链，只在显式指定时使用。"
         },
+        "expensive_models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "用户确认的高成本模型清单；空数组表示尚未标记，盘点只能输出未评估。"
+        },
         "personal_account_before_team": {
           "type": "boolean",
           "description": "同一 provider 下个人账号优先于团队账号。"

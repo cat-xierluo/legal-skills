@@ -77,6 +77,47 @@ class RouteDesignTests(unittest.TestCase):
         free["members"] = ["example/a", "example/b"]
         self.assertIn("role_provider_diversity_insufficient", d.validate_design(design)[1])
 
+    def test_duplicate_json_keys_are_refused_without_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "design.local.json"
+            target.write_text('{"schema": "x", "schema": "y"}', encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(SCRIPTS / "magpie_route_design.py"), "validate",
+                 "--design", str(target), "--strict"],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertEqual(result.stderr.strip(), '{"status": "REFUSED", "reason": "InputError"}')
+
+    def test_eight_nested_group_levels_are_allowed(self):
+        design = shipped()
+        entry = next(g for g in design["groups"] if g["role"] == "entry")
+        entry["members"] = ["group/example-level-1"]
+        entry["selection_rules"] = []
+        entry["pause_rules"] = []
+        design["groups"] = [entry]
+        parent = "group/example-main"
+        for level in range(1, 9):
+            gid = "group/example-level-%d" % level
+            design["groups"].append({
+                "id": gid, "role": "nested", "members": [], "routing": "order",
+                "stays": "turn", "effort": "agent", "classifier": None,
+                "selection_rules": [], "pause_rules": [],
+            })
+            if level == 1:
+                entry["members"] = [gid]
+            else:
+                previous = "group/example-level-%d" % (level - 1)
+                parent_group = next(g for g in design["groups"] if g["id"] == previous)
+                parent_group["members"] = [gid]
+        leaf = "group/example-level-8"
+        leaf_group = next(g for g in design["groups"] if g["id"] == leaf)
+        leaf_group["members"] = ["example/model", "other-example/model"]
+        errors, warnings = d.validate_design(design)
+        self.assertEqual((errors, warnings), ([], []))
+        leaf_group["members"] = ["group/example-level-1"]
+        self.assertIn("nested_group_depth", d.validate_design(design)[0])
+
     def test_cli_reports_without_local_identifiers(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "design.local.json"

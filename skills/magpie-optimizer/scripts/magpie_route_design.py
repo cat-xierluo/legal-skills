@@ -28,9 +28,10 @@ class DesignError(Exception):
 def load_json(path):
     target = Path(path)
     try:
-        return json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise DesignError(type(error).__name__) from error
+        return validate_examples.load_json_file(target)
+    except Exception as error:
+        # The shared loader maps I/O, JSON and budget failures to InputError.
+        raise DesignError("InputError") from error
 
 
 def _is_group_ref(value):
@@ -115,11 +116,8 @@ def validate_design(design):
             else:
                 referenced_targets.add(member)
 
-    # A nested path must terminate and stay within the documented depth.
+    # A nested path must terminate and stay within eight group references.
     def visit(member, chain, depth):
-        if depth > 8:
-            errors.append("nested_group_depth")
-            return
         if not _is_group_ref(member):
             return
         if member in chain:
@@ -130,10 +128,13 @@ def validate_design(design):
             return
         for child in group.get("members", []):
             if isinstance(child, str):
-                visit(child, chain | {member}, depth + 1)
+                if _is_group_ref(child) and depth >= 8:
+                    errors.append("nested_group_depth")
+                    continue
+                visit(child, chain | {member}, depth + (1 if _is_group_ref(child) else 0))
 
     for gid in groups_by_id:
-        visit(gid, frozenset(), 1)
+        visit(gid, frozenset(), 0)
 
     for group in groups_by_id.values():
         gid = group.get("id")
