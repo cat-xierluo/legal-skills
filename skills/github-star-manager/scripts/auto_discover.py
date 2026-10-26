@@ -158,11 +158,25 @@ def repo_revision(repo):
     return shared_repo_revision(repo)
 
 
+class FeedbackIndex(dict):
+    """Valid lookup keys plus invalid new-card filenames for reopening judged items."""
+    def __init__(self):
+        super().__init__()
+        self.invalid_reuse_files = set()
+
+
 def feedback_index(data_dir):
-    result, warnings = {}, []
+    result, warnings = FeedbackIndex(), []
     for path in sorted((data_dir / "feedback").glob("*.json")):
         try:
             card = read_json(path)
+            if "reuse_assessment" in card:
+                from opportunity import validate_card
+                ok, errors, _ = validate_card(card, base_dir=path.parent)
+                if not ok:
+                    result.invalid_reuse_files.add(path.name)
+                    warnings.append(f"Invalid reuse_assessment feedback: {path.name}: " + "; ".join(errors))
+                    continue
             card["_file"] = path.name
             project_id = card.get("target", {}).get("project_id")
             repo = card.get("signal", {}).get("repo")
@@ -366,6 +380,11 @@ def judge_entries(entries, feedback, now):
             continue
         decision = judged_decision(entry, feedback, now)
         if not decision:
+            if (entry.get("state") == "judged" and entry.get("judged_ref") in
+                    getattr(feedback, "invalid_reuse_files", set())):
+                entry["state"] = "shown" if entry.get("last_shown_at") else "pending"
+                entry.pop("judged_ref", None)
+                entry.pop("judged_at", None)
             continue
         previous = entry.get("state")
         entry["state"] = "judged"
@@ -947,12 +966,12 @@ def update_review_queue(data_dir, old, selected, all_candidates, snapshot, feedb
         }
         entries[key] = entry
     selected_keys = {row["candidate_key"] for row in selected}
-    for candidate in selected:
-        entry = entries[candidate["candidate_key"]]
+    for key in selected_keys:
+        entry = entries[key]
         entry["state"] = "shown"
         entry["last_shown_at"] = now.isoformat()
         entry["shown_count"] = entry.get("shown_count", 0) + 1
-        entry["last_shown_project"] = candidate["project_id"]
+        entry["last_shown_project"] = entry["project_id"]
     # Feedback remains the sole source of judged state. Do not mark shown items
     # complete merely because an Agent looked at them.
     judge_entries(entries, feedback, now)
@@ -1141,10 +1160,10 @@ def field_value(record, field):
 
 def compare_observed(current, prior, current_observed):
     """Compare only fields both sides observed; unknown stays None."""
-    prior_seen = observed_fields(prior)
+    prior_seen = (prior or {}).get("cache_available") or observed_fields(prior)
     result = {}
     for field in OBSERVED_FIELDS:
-        if prior_seen[field] and current_observed.get(field):
+        if prior_seen.get(field) and current_observed.get(field):
             result[field + "_changed"] = field_value(current, field) != field_value(prior, field)
         else:
             result[field + "_changed"] = None
@@ -1315,6 +1334,7 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
                     "exclusion_clauses": list(profile.get("exclusion_clauses") or []),
                     "exclusion_source": profile.get("exclusion_source"),
                 })
+    candidates = coalesce_candidates(candidates)
     candidates.sort(key=lambda c: (
         -int(c["queue_state"]["cooldown_due"]),
         -c.get("evidence_rank", 0),
@@ -1327,6 +1347,22 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
     return (select_candidates(candidates, limit, per_project, per_repo,
                               backlog_reserve, report=report),
             suppressed, len(candidates))
+
+
+def coalesce_candidates(candidates):
+    """One candidate identity consumes one slot, retaining every upstream anchor."""
+    merged = {}
+    for candidate in candidates:
+        key = candidate["candidate_key"]
+        capability = candidate.get("capability") or {}
+        if key not in merged:
+            merged[key] = {**candidate, "capability": {**capability, "evidence": []}}
+        evidence = capability.get("evidence") or [{field: capability.get(field)
+                    for field in ("source", "anchor", "text")}]
+        for anchor in evidence:
+            if anchor not in merged[key]["capability"]["evidence"]:
+                merged[key]["capability"]["evidence"].append(dict(anchor))
+    return list(merged.values())
 
 
 def _candidate_order_key(candidate):
@@ -1450,6 +1486,7 @@ def select_candidates(candidates, limit, per_project, per_repo=None, backlog_res
     When ``report`` is a dict it receives the per-channel admission record
     used by the coverage disclosure.
     """
+    candidates = coalesce_candidates(candidates)
     reserve = DEFAULT_BACKLOG_RESERVE if backlog_reserve is None else max(0, int(backlog_reserve))
     if limit is not None:
         reserve = min(reserve, limit)
@@ -1680,7 +1717,10 @@ def fetch_cheap_evidence(candidate, data_dir, prior=None, budget=None):
                   "repo_revision": record["repo_revision"], "status": "complete",
                   "errors": [], "probe": "cheap",
                   "cheap_revision": record["cheap_revision"]}
-        merged["observed"] = {**observed_fields(prior), "release": True}
+        merged["cache_available"] = {**(prior.get("cache_available") or observed_fields(prior)),
+                                     "release": True}
+        merged["observed"] = record["observed"]
+        merged["scope"] = record["scope"]
         merged["changed_at"] = (record["fetched_at"]
                                 if release_changed
                                 else prior.get("changed_at", record["fetched_at"]))
@@ -2067,13 +2107,16 @@ def cmd_auto(args):
     inspected = set(unique) | {row["repo"] for row in candidates} | set(focused)
     for name in inspected:
         snapshots = local_reference_snapshots(name, roots_for(args))
-        head = (cache.get(name) or {}).get("head_sha")
+        current_head_observed = bool(name in unique and unique[name]["status"] == "complete"
+                                     and observed_fields(unique[name])["head"]
+                                     and unique[name].get("head_sha"))
+        head = unique[name].get("head_sha") if current_head_observed else None
         for local in snapshots:
             local["project_id"] = projects_by_path.get(local["skill_path"])
             local["upstream_head"] = head
             local["upstream_commit_comparison"] = compare_snapshot_commit(local.get("commit"), head)
         snapshots_by_repo[name] = snapshots
-        if name in unique and unique[name]["status"] == "complete":
+        if current_head_observed:
             observed_base = (prior.get(name) or {}).get("head_sha")
             observation_comparisons[name] = (fetch_comparison(name, observed_base, head, request_budget)
                                              if observed_base and observed_base != head else None)

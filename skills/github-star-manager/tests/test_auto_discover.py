@@ -1149,6 +1149,137 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(invalid.returncode, 2)
 
 
+    def test_deep_then_cheap_keeps_cache_but_not_current_observations(self):
+        row = repo()
+        head = "a" * 40
+        cached = {"status": "complete", "head_sha": head, "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row), "release": None,
+                  "observed": {"head": True, "release": True, "readme": True},
+                  "readme": {"blob_sha": "r1", "text": "stable readme"}}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        library = self.directory / "reference-library"
+        (library / "sources/sample--subtitle").mkdir(parents=True)
+        (library / "manifests").mkdir()
+        ad.atomic_json(library / "manifests/sample--subtitle.json",
+                       {"repo": row["full_name"], "commit": head})
+        with patch.object(ad, "github_get", return_value=[]) as get:
+            _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True,
+                evidence_limit=0, cheap_budget=1, request_budget=1))
+        self.assertEqual(get.call_count, 1)
+        item = result["items"][0]
+        self.assertIsNone(item["upstream_change"]["changed"]["head_changed"])
+        self.assertIsNone(item["upstream_change"]["changed"]["readme_changed"])
+        self.assertFalse(item["upstream_change"]["changed"]["release_changed"])
+        self.assertIsNone(item["source_comparison"])
+        stored = ad.read_json(ad.evidence_cache(self.data, row["full_name"]))
+        self.assertEqual(stored["head_sha"], head)
+        self.assertEqual(stored["readme"]["blob_sha"], "r1")
+        self.assertFalse(stored["observed"]["head"])
+        self.assertTrue(stored["cache_available"]["head"])
+        # A subsequent deep observation can still compare to the retained baseline.
+        self.assertTrue(ad.compare_observed({**cached, "head_sha": "b" * 40}, stored,
+                                           cached["observed"])["head_changed"])
+
+    def test_partial_deep_does_not_present_retained_head_as_current(self):
+        row = repo()
+        head = "a" * 40
+        cached = {"status": "complete", "head_sha": head, "repo_id": row["id"],
+                  "repo_revision": ad.repo_revision(row), "release": None,
+                  "readme": {"blob_sha": "r1", "text": "stable readme"}}
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), cached)
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        library = self.directory / "reference-library"
+        (library / "sources/sample--subtitle").mkdir(parents=True)
+        (library / "manifests").mkdir()
+        ad.atomic_json(library / "manifests/sample--subtitle.json",
+                       {"repo": row["full_name"], "commit": head})
+        def github(endpoint, **kwargs):
+            if "/readme" in endpoint:
+                raise RuntimeError("synthetic README failure")
+            if "/commits?" in endpoint:
+                return [{"sha": "b" * 40, "commit": {"message": "new"}}]
+            return []
+        with patch.object(ad, "github_get", side_effect=github):
+            _, result = capture(ad.cmd_auto, self.args(fetch_evidence=True))
+        item = result["items"][0]
+        self.assertIsNone(item["source_comparison"])
+        self.assertIsNone(item["local_snapshots"][0]["upstream_head"])
+        self.assertEqual(ad.read_json(ad.evidence_cache(self.data, row["full_name"]))["head_sha"], head)
+
+    def test_same_capability_hints_share_one_budget_and_queue_slot(self):
+        row = repo()
+        row["_capability_hints"] = pc.capability_hints(
+            "Features: subtitle support", {"tag": "v1", "body": "Added subtitle support"},
+            readme_blob_sha="r1")
+        rows, _, count = ad.prepare(snapshot([row]), self.profiles(), {}, NOW,
+                                    limit=2, per_project=2)
+        self.assertEqual(count, 1)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual({r["source"] for r in rows[0]["capability"]["evidence"]},
+                         {"release", "readme"})
+        queue = ad.update_review_queue(self.data, {}, rows, rows, snapshot([row]), {}, NOW)
+        self.assertEqual(queue["entries"][rows[0]["candidate_key"]]["shown_count"], 1)
+
+    def test_duplicate_capability_does_not_displace_another_direction(self):
+        (self.directory / "SKILL.md").write_text(
+            "---\nname: sample-video\ndescription: 视频字幕与转场\n---\n# Demo\n")
+        row = repo()
+        row["_capability_hints"] = pc.capability_hints(
+            "Features: subtitle support", {"tag": "v1", "body":
+             "Added subtitle support\nAdded transition support"}, readme_blob_sha="r1")
+        rows, _, count = ad.prepare(snapshot([row]), self.profiles(), {}, NOW,
+                                    limit=2, per_project=2)
+        self.assertEqual(count, 2)
+        self.assertEqual({r["capability"]["key"] for r in rows}, {"subtitle", "transition"})
+        self.assertEqual(len(rows), 2)
+        # Even a caller handing repeated selected rows to the persistence layer
+        # cannot inflate a decision's shown_count within the same round.
+        queue = ad.update_review_queue(self.data, {}, rows + rows, rows,
+                                       snapshot([row]), {}, NOW)
+        self.assertEqual({e["shown_count"] for e in queue["entries"].values()}, {1})
+
+    def test_cache_only_snapshot_comparison_is_unknown(self):
+        row = repo()
+        head = "a" * 40
+        ad.atomic_json(ad.evidence_cache(self.data, row["full_name"]), {
+            "status": "complete", "head_sha": head, "repo_id": row["id"],
+            "repo_revision": ad.repo_revision(row), "release": None,
+            "readme": {"blob_sha": "r1", "text": "stable readme"}})
+        ad.atomic_json(self.data / "original_latest.json", snapshot([row]))
+        library = self.directory / "reference-library"
+        (library / "sources/sample--subtitle").mkdir(parents=True)
+        (library / "manifests").mkdir()
+        ad.atomic_json(library / "manifests/sample--subtitle.json", {"repo": row["full_name"], "commit": head})
+        with patch.object(ad, "github_get", side_effect=AssertionError("offline")):
+            _, result = capture(ad.cmd_auto, self.args())
+        item = result["items"][0]
+        self.assertIsNone(item["source_comparison"])
+        self.assertIsNone(item["upstream_change"]["observation_comparison"])
+        self.assertIsNone(item["local_snapshots"][0]["upstream_head"])
+        self.assertEqual(item["local_snapshots"][0]["upstream_commit_comparison"], "unknown")
+
+    def test_duplicate_identity_unique_in_all_selection_modes(self):
+        (self.directory / "SKILL.md").write_text("---\nname: sample-video\ndescription: 视频字幕与转场\n---\n# Demo\n")
+        row = repo()
+        row["_capability_hints"] = pc.capability_hints("Features: subtitle support", {
+            "tag": "v1", "body": "Added subtitle support\nAdded transition support"}, readme_blob_sha="r1")
+        for mode, limit, reserve in (("default", 2, 2), ("reserve0", 2, 0), ("unlimited", None, 2)):
+            with self.subTest(mode=mode):
+                rows, _, count = ad.prepare(snapshot([row]), self.profiles(), {}, NOW,
+                    limit=limit, per_project=2, backlog_reserve=reserve)
+                self.assertEqual(count, 2)
+                self.assertEqual({r["capability"]["key"] for r in rows}, {"subtitle", "transition"})
+                self.assertEqual(len(rows), 2)
+                subtitle = next(r for r in rows if r["capability"]["key"] == "subtitle")
+                self.assertEqual({e["source"] for e in subtitle["capability"]["evidence"]}, {"release", "readme"})
+                # Exercise the selection boundary independently from prepare.
+                selected = ad.select_candidates(rows + rows, limit, 2, backlog_reserve=reserve)
+                self.assertEqual(len(selected), 2)
+                queue = ad.update_review_queue(self.data, {}, selected + selected, rows, snapshot([row]), {}, NOW)
+                self.assertEqual({e["shown_count"] for e in queue["entries"].values()}, {1})
+
+
 class CandidateEvidenceTests(unittest.TestCase):
     """The candidate queue must carry the evidence the run already paid for.
 

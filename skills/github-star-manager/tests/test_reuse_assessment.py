@@ -183,6 +183,97 @@ class ReuseTests(unittest.TestCase):
         card["decision"]["status"] = "tested"
         self.assertFalse(validate_card(card, self.root)[0])
 
+    def test_recorded_relative_report_survives_directory_move(self):
+        card = self.card()
+        source = self.root / "card.json"
+        source.write_text(json.dumps(card))
+        state = self.root / "state"
+        command = [sys.executable, str(SCRIPTS / "opportunity.py")]
+        recorded = subprocess.run(command + ["record", "--input", str(source), "--data-dir", str(state)], capture_output=True, text=True)
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+        saved = Path(json.loads(recorded.stdout)["path"])
+        validated = subprocess.run(command + ["validate", "--input", str(saved)], cwd=state, capture_output=True, text=True)
+        self.assertEqual(validated.returncode, 0, validated.stdout)
+        self.assertTrue(Path(json.loads(saved.read_text())["reuse_assessment"]["path"]).is_absolute())
+
+    def test_invalid_report_feedback_is_not_consumed_and_reopens_judged(self):
+        import auto_discover as ad
+        from datetime import datetime, timezone
+        for invalidation in ("missing", "hash", "recompute"):
+            with self.subTest(invalidation=invalidation):
+                card = self.card()
+                card["reuse_assessment"]["path"] = str(self.root / "report.json")
+                source = self.root / "card.json"
+                source.write_text(json.dumps(card))
+                state = self.root / invalidation
+                recorded = subprocess.run([sys.executable, str(SCRIPTS / "opportunity.py"), "record", "--input", str(source), "--data-dir", str(state)], capture_output=True, text=True)
+                self.assertEqual(recorded.returncode, 0, recorded.stderr)
+                saved = Path(json.loads(recorded.stdout)["path"])
+                b = self.packet["binding"]
+                entry = {"project_id": b["project_id"], "repo_id": b["repo_id"], "repo": b["repo"], "capability_key": b["capability_key"],
+                         "last_repo_revision": b["repo_revision"], "last_evidence_revision": b["evidence_revision"], "last_target_revision": b["target_revision"],
+                         "state": "shown", "last_shown_at": "2026-10-26T00:00:00Z", "shown_count": 1}
+                candidate_snapshot = {"repos": [{"id": b["repo_id"], "full_name": b["repo"],
+                    "description": "video scene validation", "_repo_revision": b["repo_revision"],
+                    "_evidence_revision": b["evidence_revision"], "_capability_hints": [{
+                        "capability_key": b["capability_key"], "concepts": ["video"],
+                        "source": "readme", "anchor": "e1", "text": "video"}]}]}
+                profiles = [{"project_id": b["project_id"], "skill_path": b["skill_path"],
+                    "target_revision": b["target_revision"], "activity": {"commits": 0},
+                    "description": "video validation", "search_terms": ["video"], "primary_terms": ["video"]}]
+                feedback, warnings = ad.feedback_index(state)
+                self.assertTrue(feedback)
+                rows, _, _ = ad.prepare(candidate_snapshot, profiles, feedback, datetime.now(timezone.utc))
+                self.assertEqual(rows, [])
+                entries = {b["candidate_key"]: entry}
+                ad.judge_entries(entries, feedback, datetime.now(timezone.utc))
+                self.assertEqual(entry["state"], "judged")
+                report_path = self.root / "report.json"
+                if invalidation == "missing": report_path.unlink()
+                elif invalidation == "hash": report_path.write_text(report_path.read_text() + " ")
+                else:
+                    report = json.loads(report_path.read_text())
+                    report["result"]["proposals"][0]["category"] = "capability_package"
+                    report_path.write_text(json.dumps(report))
+                    stored = json.loads(saved.read_text())
+                    stored["reuse_assessment"]["sha256"] = reuse.sha(report_path.read_bytes())
+                    saved.write_text(json.dumps(stored))
+                feedback, warnings = ad.feedback_index(state)
+                self.assertFalse(feedback)
+                self.assertTrue(any("reuse_assessment" in warning for warning in warnings))
+                ad.atomic_json(state / ad.QUEUE_FILE, {"schema_version": ad.QUEUE_SCHEMA, "entries": entries, "cursor": {}})
+                reconciled = subprocess.run([sys.executable, str(SCRIPTS / "auto_discover.py"), "reconcile", "--data-dir", str(state)], capture_output=True, text=True)
+                self.assertEqual(reconciled.returncode, 0, reconciled.stderr)
+                result = json.loads(reconciled.stdout)
+                self.assertEqual(result["newly_judged_count"], 0)
+                self.assertEqual(ad.read_json(state / ad.QUEUE_FILE)["entries"][b["candidate_key"]]["state"], "shown")
+                self.assertTrue(result["warnings"])
+                rows, _, _ = ad.prepare(candidate_snapshot, profiles, feedback, datetime.now(timezone.utc))
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["capability"]["key"], b["capability_key"])
+                never_shown = {**entry, "state": "judged", "judged_ref": saved.name, "last_shown_at": None}
+                ad.judge_entries({"unshown": never_shown}, feedback, datetime.now(timezone.utc))
+                self.assertEqual(never_shown["state"], "pending")
+                # An independent valid legacy decision still covers the entry.
+                legacy = json.loads(saved.read_text())
+                legacy.pop("reuse_assessment")
+                ad.atomic_json(state / "feedback" / "legacy.json", legacy)
+                covered, _ = ad.feedback_index(state)
+                ad.judge_entries(entries, covered, datetime.now(timezone.utc))
+                self.assertEqual(entry["state"], "judged")
+                self.assertEqual(entry["judged_ref"], "legacy.json")
+
+    def test_oversized_report_is_rejected_before_hash_read(self):
+        from unittest.mock import patch
+        card = self.card()
+        path = self.root / "report.json"
+        with path.open("wb") as stream:
+            stream.truncate(reuse.MAX_BYTES + 1)
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("unbounded hash read")):
+            ok, errors, _ = validate_card(card, self.root)
+        self.assertFalse(ok)
+        self.assertTrue(any("budget" in error for error in errors))
+
     def test_cli_prepare_daily_and_evaluate_and_controlled_failure(self):
         run = self.root / "run.json"
         run.write_text(json.dumps({"items": [self.candidate]}))

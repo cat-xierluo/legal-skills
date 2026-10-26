@@ -52,4 +52,4 @@ Agent 读原文后创建 review：复制输入的 `binding` 和 `packet_sha256`�
 {"reuse_assessment": {"path": "reuse-report.json", "sha256": "报告文件SHA256", "proposal_id": "invariant-validation"}}
 ```
 
-相对报告路径以卡文件所在目录解析。`validate_card` 核文件存在与 SHA、完整候选/组件/能力及修订绑定，重算报告的当前规则，并核类别、gap 和 decision；修改 result、缺文件、错摘要或跨候选嫁接均拒绝。报告需随卡保留，引用失效将拒收，不把一次校验当永久授权。报告没有签名，无法证明 Agent 语义结论或上游真实性；真实数据来源、输入选择和最终采用仍由消费者审核。
+相对报告路径以输入卡文件所在目录解析；record 保存前转换成已验证报告的规范绝对路径，保存后回读校验，调用者仍须保留该报告。报告大小在哈希前核预算，并对同一份有界字节核 SHA 与 JSON。`validate_card` 核文件存在与 SHA、完整候选/组件/能力及修订绑定，重算报告的当前规则，并核类别、gap 和 decision；修改 result、缺文件、错摘要或跨候选嫁接均拒绝。报告需随卡保留。每日共享 feedback_index 对带 reuse_assessment 的卡重新验证；报告缺失、摘要或规则不符会明确告警且不参与 suppression/reconcile。若队列此前由该失效卡置为 judged 且没有其他有效覆盖反馈，将恢复 shown/pending；旧卡保留原兼容路径。报告没有签名，无法证明 Agent 语义结论或上游真实性；真实数据来源、输入选择和最终采用仍由消费者审核。

@@ -321,7 +321,7 @@ Agent 再核对目标现有实现与 README/Release/提交摘要，按需读取�
 
 **可选目标补充**：`output/projects/<project_id>.json` 支持 `project_id/capabilities/needs/constraints`。动态发现优先提供实时上下文，显式 profile 可补充需求或仓库外项目；失效引用仍拒绝。`--data-dir` 可将查询和反馈放在同一私有状态目录。
 
-有价值的复用提案先读[动态复用审查](references/reuse-assessment.md)，用 `reuse_assessment.py prepare/evaluate` 将每日候选、动态目标原文、三修订与来源摘录绑定；Agent 判断语义，脚本核字段及证据义务，正向结果仅到实验提案。缺据记 deferred 并列下一步，不批量拒绝整个仓库。
+有价值的复用提案先读[动态复用审查](references/reuse-assessment.md)，用 `reuse_assessment.py prepare/evaluate` 将每日候选、动态目标原文、三修订与来源摘录绑定；Agent 判断语义，脚本核字段及证据义务，正向结果仅到实验提案。缺据记 deferred 并列下一步，不批量拒绝整个仓库。报告引用保存后仍可回读，反馈消费时持续重验；同方向多来源锚点归并为一项，缓存文字不冒充本轮观察。
 
 **机会卡与采用反馈**（`scripts/opportunity.py`）：research 产出的候选经当前 Agent 分析后，用机会卡记录判断（signal/target/evidence/gap/hypothesis/experiment/decision 七字段必答）。decision 状态机强制：`tested` 必须带 `run_evidence`（运行产物+验证日志），`adopted` 必须再有 `adoption_evidence`（目标项目产物/提交+验收回执）——没有证据时只允许 `researched`/`experiment_proposed`，写下"已测试/已采用"不能关单。
 

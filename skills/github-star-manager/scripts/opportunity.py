@@ -369,15 +369,21 @@ def validate_card(card: Dict, base_dir: Optional[Path] = None) -> Tuple[bool, Li
 
 def _verify_reuse_assessment(card: Dict, base_dir: Path, errors: List[str]) -> None:
     """Optional new contract; legacy cards keep their existing state machine."""
-    from reuse_assessment import read_json, sha, validate_report
+    from reuse_assessment import MAX_BYTES, sha, validate_report
     try:
         ref = card["reuse_assessment"]
         if not isinstance(ref, dict):
             raise ValueError("reference must be object")
         path = _resolve_evidence_path(ref["path"], base_dir)
-        if not path.is_file() or sha(path.read_bytes()) != ref.get("sha256"):
+        if not path.is_file() or path.stat().st_size > MAX_BYTES:
+            raise ValueError("report missing or exceeds input budget")
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_BYTES + 1)
+        if len(raw) > MAX_BYTES:
+            raise ValueError("report exceeds input budget")
+        if sha(raw) != ref.get("sha256"):
             raise ValueError("report missing or SHA mismatch")
-        report = read_json(path)
+        report = json.loads(raw)
         result = validate_report(report)
         bound = result["binding"]
         signal, target = card["signal"], card["target"]
@@ -517,7 +523,18 @@ def cmd_record(args) -> int:
         warnings.append(f"该候选此前被拒绝过 {len(rejected_before)} 次；"
                         f"请确认本次携带了新的实质证据（repo revision / 目标需求变化）")
 
+    if "reuse_assessment" in card:
+        # Preserve the already-validated report identity when the card moves.
+        card["reuse_assessment"]["path"] = str(_resolve_evidence_path(
+            card["reuse_assessment"]["path"], Path(args.input).resolve().parent))
     path = save_card(card)
+    if "reuse_assessment" in card:
+        saved = load_card(str(path))
+        ok, errors, saved_warnings = validate_card(saved, base_dir=path.parent)
+        if not ok:
+            print(json.dumps({"recorded": False, "path": str(path), "errors": errors,
+                              "warnings": warnings + saved_warnings}, ensure_ascii=False, indent=2))
+            return 1
     print(json.dumps({
         "recorded": True,
         "path": str(path),
