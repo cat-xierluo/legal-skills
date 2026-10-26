@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.16.0"
+version: "0.17.0"
 license: MIT
 description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star 和 Dashboard。不要用于单个未知仓库的一次性深度研究。
 ---
@@ -320,6 +320,8 @@ Agent 再核对目标现有实现与 README/Release/提交摘要，按需读取�
 **分类匹配统一**：`common.match_categories` 是唯一评分实现（关键词命中×3 + 语言精确 +2 + topic 精确 +2）——在线导出（单分类=多标签首个）与 quick_export（多标签）共用（收敛审计「分类/导出分叉」）。
 
 **可选目标补充**：`output/projects/<project_id>.json` 支持 `project_id/capabilities/needs/constraints`。动态发现优先提供实时上下文，显式 profile 可补充需求或仓库外项目；失效引用仍拒绝。`--data-dir` 可将查询和反馈放在同一私有状态目录。
+
+有价值的复用提案先读[动态复用审查](references/reuse-assessment.md)，用 `reuse_assessment.py prepare/evaluate` 将每日候选、动态目标原文、三修订与来源摘录绑定；Agent 判断语义，脚本核字段及证据义务，正向结果仅到实验提案。缺据记 deferred 并列下一步，不批量拒绝整个仓库。
 
 **机会卡与采用反馈**（`scripts/opportunity.py`）：research 产出的候选经当前 Agent 分析后，用机会卡记录判断（signal/target/evidence/gap/hypothesis/experiment/decision 七字段必答）。decision 状态机强制：`tested` 必须带 `run_evidence`（运行产物+验证日志），`adopted` 必须再有 `adoption_evidence`（目标项目产物/提交+验收回执）——没有证据时只允许 `researched`/`experiment_proposed`，写下"已测试/已采用"不能关单。
 

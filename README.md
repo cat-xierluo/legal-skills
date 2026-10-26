@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.0 | 新增离线动态复用审查：每日候选直接绑定目标原文与三修订，核来源摘录、方法转移和生产能力提案义务；缺据暂缓，机会卡可引用报告并重算绑定。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.16.0 | 修复每日候选队列积压饥饿：每轮为最久未展示 pending 保留固定名额（`--backlog-reserve`，默认 2），本轮取证候选保持证据通道内第一优先级但不再占满整轮；coverage 与回执披露候选来源与按真实轮次估算的积压覆盖周期。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.2 | 回执校验准备包结构，缺失候选列表不再误判静默；准备错误保留为失败事实，格式异常受控降级；保留合法 partial 与旧包时间回退。 |
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.1 | 修复证据排序反转：本轮取证失败或预算跳过回退缓存的候选不再被从未尝试过的缓存命中挤掉（回退分支记 `cached_partial` / `cached_skipped`，排序按 status 而非 source）；范围冲突三值在 repository-profiles 补齐。 |
@@ -41,7 +42,6 @@
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.2 | 修复运行包不可读时的零警告静默成功：新鲜度判定前置到可读性检查之前（用文件 mtime），损坏或格式异常的运行包按“没有有效运行包”处理（显式警告、不得 silent、无证据判 failed），本轮边界回退到 mtime 避免新增未研判条目漏计；同时对齐 CHANGELOG 的 run_id 表述。 |
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.1 | 修复每日闭环回执与租约：`--outcome auto` 可用、显式 judged 须有正向证据、运行包新鲜度校验（默认 24 小时）、租约隔离失败不销毁原文、同 owner 续租保留 run_id。 |
 | 2026-10-24 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.0 | 新增每日闭环：离线对账 reconcile、judged/silent/failed 运行回执与并发租约 lease，全程离线且静默需正向证据。 |
-| 2026-10-24 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.13.2 | 新增单轮 GitHub GET 硬预算与廉价 Release 探测档，按请求计价披露用量与耗尽状态，支撑大收藏量的可核算覆盖周期。 |
 
 </details>
 
@@ -736,9 +736,9 @@
 <td>工具·Star管理</td>
 <td style="word-break:break-word">GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.16.0</td>
+<td style="text-align:center">v0.17.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/github-star-manager-0.6.6.zip">下载 v0.6.6</a></td>
-<td>源码 v0.16.0 待发布；下载为已发布 v0.6.6。</td>
+<td>源码 v0.17.0 待发布；下载为已发布 v0.6.6。</td>
 </tr>
 <tr>
 <td><a href="skills/skill-publish-sync/"><strong>skill-publish-sync</strong></a></td>
