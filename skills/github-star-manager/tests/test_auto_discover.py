@@ -1692,14 +1692,14 @@ class QueueFairnessTests(unittest.TestCase):
             _, result = self.run_round(day, limit=3, per_project=1, evidence_limit=3)
             self.assertTrue(result["items"], f"round {day} produced no candidates")
             for row in result["items"]:
-                if row.get("admission_source") in {"backlog", "backlog+evidence"}:
+                if row.get("admission_source") == "backlog":
                     seen_pending.add(row["repo"])
         self.assertTrue(seen_pending,
                         "no backlog candidate reached the Agent in five rounds")
         # The this-run evidence kept its own slots in the same rounds.
         _, result = self.run_round(6, limit=3, per_project=1, evidence_limit=3)
         sources = [row.get("admission_source") for row in result["items"]]
-        self.assertTrue(any(source in {"evidence", "backlog+evidence"} for source in sources),
+        self.assertIn("evidence", sources,
                         sources)
 
     def test_oldest_pending_is_served_before_a_newer_pending(self):
@@ -1712,7 +1712,7 @@ class QueueFairnessTests(unittest.TestCase):
         self.seed_backlog(ages)
         _, result = self.run_round(1, limit=3, per_project=1, evidence_limit=3)
         backlog_rows = [row for row in result["items"]
-                        if row.get("admission_source") in {"backlog", "backlog+evidence"}]
+                        if row.get("admission_source") == "backlog"]
         self.assertTrue(backlog_rows)
         self.assertEqual(backlog_rows[0]["repo"], oldest["repo"])
 
@@ -1725,11 +1725,36 @@ class QueueFairnessTests(unittest.TestCase):
                                    backlog_reserve=0)
         sources = [row.get("admission_source") for row in result["items"]]
         self.assertNotIn("backlog", sources)
-        self.assertNotIn("backlog+evidence", sources)
         # And the evidence channel really got the slots.
         self.assertTrue(result["items"])
         self.assertTrue(all(row["evidence_rank"] > 0 for row in result["items"]),
                         [row["evidence_rank"] for row in result["items"]])
+
+    def test_zero_reserve_labels_non_evidence_candidates_honestly(self):
+        # Legacy mode does not create an evidence-only pool. A candidate with
+        # no evidence must be labelled "other"; "evidence" means membership in
+        # the evidence pool, not merely "selected while the reserve is off".
+        repos = self.repos(6)
+        # The first repository is fetched; the other five only provide recall
+        # candidates and carry no evidence.
+        repos[0]["description"] = "subtitle timeline renderer with unique alpha"
+        repos[1]["description"] = "subtitle timeline renderer with unique beta"
+        repos[2]["description"] = "subtitle timeline renderer with unique gamma"
+        repos[3]["description"] = "subtitle timeline renderer with unique delta"
+        repos[4]["description"] = "subtitle timeline renderer with unique epsilon"
+        repos[5]["description"] = "subtitle timeline renderer with unique zeta"
+        ad.atomic_json(self.data / "original_latest.json", snapshot(repos))
+        _, result = self.run_round(1, limit=6, per_project=2, evidence_limit=1,
+                                   backlog_reserve=0)
+        quota = result["coverage"]["review_queue"]["quota"]
+        rows = {(row["project_id"], row["repo"]): row for row in result["items"]}
+        self.assertTrue(rows)
+        self.assertIn("other", quota["sources_by_count"])
+        self.assertEqual(quota["with_evidence"],
+                         sum(row.get("evidence_rank", 0) > 0 for row in rows.values()))
+        for row in rows.values():
+            expected = "evidence" if row.get("evidence_rank", 0) > 0 else "other"
+            self.assertEqual(row["admission_source"], expected)
 
     def test_reserved_slots_fall_back_to_evidence_when_the_backlog_is_empty(self):
         # A fresh state directory has no backlog. The reserved slots must not
@@ -1764,7 +1789,7 @@ class QueueFairnessTests(unittest.TestCase):
         self.seed_backlog()
         _, first = self.run_round(1, limit=3, per_project=1, evidence_limit=3)
         backlog_rows = [row for row in first["items"]
-                        if row.get("admission_source") in {"backlog", "backlog+evidence"}]
+                        if row.get("admission_source") == "backlog"]
         self.assertTrue(backlog_rows, "no backlog candidate in the first round")
         judged = backlog_rows[0]
         # The card scope must match the candidate's own decision scope: a
@@ -1795,6 +1820,10 @@ class QueueFairnessTests(unittest.TestCase):
         self.assertEqual(quota["backlog_reserve"], ad.DEFAULT_BACKLOG_RESERVE)
         self.assertIn("sources_by_count", quota)
         self.assertTrue(quota["sources_by_count"])
+        self.assertLessEqual(quota["backlog_reserved_slots"],
+                             quota["sources_by_count"].get("backlog", 0))
+        self.assertIn("with_evidence", quota)
+        self.assertLessEqual(quota["with_evidence"], len(result["items"]))
         cycle = coverage["coverage_cycle"]
         self.assertIn("estimated_rounds_to_cover", cycle)
         self.assertIn("estimated_days_to_cover", cycle)
@@ -1802,6 +1831,16 @@ class QueueFairnessTests(unittest.TestCase):
         # opportunity.
         self.assertIn("未覆盖", cycle["note"] + cycle["scope"])
         self.assertIn("没有机会", cycle["note"] + cycle["scope"])
+
+    def test_unlimited_report_still_discloses_evidence_membership(self):
+        rows = self.pool()
+        report = {}
+        selected = ad.select_candidates(rows, limit=None, per_project=2,
+                                        backlog_reserve=2, report=report)
+        self.assertEqual(len(selected), len(rows))
+        self.assertEqual(report["with_evidence"],
+                         sum(row.get("evidence_rank", 0) > 0 for row in selected))
+        self.assertEqual(report["evidence_pool_size"], report["with_evidence"])
 
 
 if __name__ == "__main__":

@@ -1427,19 +1427,28 @@ def select_candidates(candidates, limit, per_project, per_repo=None, backlog_res
         # split only matters when the round has to choose.
         ordered = sorted(candidates, key=_candidate_order_key)
         if isinstance(report, dict):
+            evidence_keys = {row["candidate_key"] for row in ordered
+                             if row.get("evidence_rank", 0) > 0}
             report.update({"backlog_reserve": reserve, "backlog_reserved_slots": 0,
                            "evidence_slots": 0, "backlog_served": 0, "evidence_served": 0,
-                           "backlog_pool_size": 0, "evidence_pool_size": 0,
+                           "backlog_pool_size": 0,
+                           "evidence_pool_size": len(evidence_keys),
+                           "with_evidence": len(evidence_keys),
                            "sources": {row["candidate_key"]: "unlimited" for row in ordered}})
         return ordered
     if reserve <= 0:
         selected = _legacy_select(candidates, limit, per_project, per_repo)
         if isinstance(report, dict):
+            evidence_keys = {row["candidate_key"] for row in selected
+                             if row.get("evidence_rank", 0) > 0}
             report.update({"backlog_reserve": 0, "backlog_reserved_slots": 0,
                            "evidence_slots": None, "backlog_served": 0,
-                           "evidence_served": len(selected),
+                           "evidence_served": len(evidence_keys),
                            "backlog_pool_size": 0, "evidence_pool_size": 0,
-                           "sources": {row["candidate_key"]: "evidence" for row in selected}})
+                           "with_evidence": len(evidence_keys),
+                           "sources": {row["candidate_key"]:
+                                       "evidence" if row["candidate_key"] in evidence_keys
+                                       else "other" for row in selected}})
         return selected
 
     selected, counts, repo_counts = [], {}, {}
@@ -1465,15 +1474,7 @@ def select_candidates(candidates, limit, per_project, per_repo=None, backlog_res
     def take(candidate, source):
         selected.append(candidate)
         chosen.add(candidate["candidate_key"])
-        # A candidate can belong to both channels. The label says so instead
-        # of hiding one of the two facts behind the admission channel.
-        if (source == "backlog" and candidate["candidate_key"] in evidence_keys):
-            label = "backlog+evidence"
-        elif (source == "evidence" and candidate["candidate_key"] in backlog_keys):
-            label = "backlog+evidence"
-        else:
-            label = source
-        sources[candidate["candidate_key"]] = label
+        sources[candidate["candidate_key"]] = source
         counts[candidate["project_id"]] = counts.get(candidate["project_id"], 0) + 1
         repo_counts[candidate["repo"]] = repo_counts.get(candidate["repo"], 0) + 1
 
@@ -1515,6 +1516,11 @@ def select_candidates(candidates, limit, per_project, per_repo=None, backlog_res
     evidence_taken = fill(evidence_ordered, limit - len(selected), "evidence")
     ordinary_taken = fill(ordinary_ordered, limit - len(selected), "other")
     leftover = fill(backlog_ordered, limit - len(selected), "backlog", round_robin=False)
+    # Membership and admission are different questions. ``sources`` records
+    # the channel that admitted a candidate; ``with_evidence`` separately
+    # reports how many selected candidates also carry evidence.
+    with_evidence = sum(1 for row in selected
+                        if row["candidate_key"] in evidence_keys)
     if isinstance(report, dict):
         report.update({
             "backlog_reserve": reserve,
@@ -1523,6 +1529,7 @@ def select_candidates(candidates, limit, per_project, per_repo=None, backlog_res
             "other_slots": ordinary_taken,
             "backlog_served": backlog_taken + leftover,
             "evidence_served": evidence_taken,
+            "with_evidence": with_evidence,
             "backlog_pool_size": len(backlog_pool),
             "evidence_pool_size": len(evidence_pool),
             "ordinary_pool_size": len(ordinary_pool),
@@ -2191,12 +2198,14 @@ def cmd_auto(args):
             "backlog_reserved_slots": quota_report.get("backlog_reserved_slots", 0),
             "evidence_slots": quota_report.get("evidence_slots", 0),
             "sources_by_count": source_counts,
+            "with_evidence": quota_report.get("with_evidence", 0),
             "sources": {row["candidate_key"]: row["admission_source"] for row in candidates},
             "backlog_pool_size": quota_report.get("backlog_pool_size", 0),
             "evidence_pool_size": quota_report.get("evidence_pool_size", 0),
-            "channel_note": ("backlog = 本轮由保留名额进入的最久未展示 pending；"
-                             "evidence = 本轮已取证证据通道；其他来源（如新变化）按本轮"
-                             "证据状态归入 evidence 通道"),
+            "channel_note": ("backlog = 由本轮保留名额进入的最久等待 pending；"
+                             "evidence = 由证据池进入（包含本轮取证与缓存证据）；"
+                             "other = 两个池之外；with_evidence 单独统计同时属于"
+                             "证据池的入选候选"),
         },
         "coverage_cycle": {
             "never_shown_pending": len(never_shown_pending),
