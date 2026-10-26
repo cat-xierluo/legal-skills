@@ -610,8 +610,9 @@ def build_providers(cli_path, providers_json, accounts_json, cli_rows, settings,
             "account_labels": labels,
             "multi_account": count >= 2,
             "enabled": not off,
-            "account_order_set": bool(isinstance(provider.get("accountOrder"), list)
-                                      and provider.get("accountOrder")),
+            "account_order_set": (bool(provider.get("accountOrder"))
+                                  if isinstance(provider.get("accountOrder"), list)
+                                  else None),
             "capabilities": {
                 "vision": provider_supports_vision(pid, settings, group_index),
                 "reasoning_efforts": [],

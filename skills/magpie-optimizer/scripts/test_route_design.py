@@ -118,6 +118,35 @@ class RouteDesignTests(unittest.TestCase):
         leaf_group["members"] = ["group/example-level-1"]
         self.assertIn("nested_group_depth", d.validate_design(design)[0])
 
+    def test_non_string_members_and_pause_targets_fail_closed(self):
+        for field, value in (("members", {"x": 1}), ("members", [1]), ("pause", {"x": 1})):
+            with self.subTest(field=field, value=type(value).__name__):
+                design = shipped()
+                entry = next(g for g in design["groups"] if g["role"] == "entry")
+                if field == "members":
+                    entry["members"][0] = value
+                else:
+                    entry["pause_rules"].append({"pause": value, "time": "01:00-02:00"})
+                errors, _ = d.validate_design(design)
+                expected = "group_member_invalid" if field == "members" else "pause_rule_target_missing"
+                self.assertIn(expected, errors)
+
+    def test_cli_invalid_member_types_do_not_print_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "design.local.json"
+            design = shipped()
+            design["groups"][0]["members"][0] = {"x": 1}
+            target.write_text(json.dumps(design), encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(SCRIPTS / "magpie_route_design.py"), "validate",
+                 "--design", str(target), "--strict"],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertNotIn("Traceback", result.stderr + result.stdout)
+            report = json.loads(result.stdout)
+            self.assertIn("group_member_invalid", report["errors"])
+
     def test_cli_reports_without_local_identifiers(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "design.local.json"

@@ -100,7 +100,10 @@ def validate_design(design):
         if not isinstance(members, list) or not members:
             errors.append("group_members_required")
             continue
-        if len(members) != len(set(members)):
+        string_members = [member for member in members if isinstance(member, str)]
+        if len(string_members) != len(members):
+            errors.append("group_member_invalid")
+        if len(string_members) != len(set(string_members)):
             errors.append("group_members_duplicate")
         for member in members:
             if not isinstance(member, str) or not member:
@@ -138,7 +141,8 @@ def validate_design(design):
 
     for group in groups_by_id.values():
         gid = group.get("id")
-        members = set(group.get("members", []))
+        raw_members = group.get("members", [])
+        members = {member for member in raw_members if isinstance(member, str)}
         if group.get("routing") != "order" and gid in referenced_targets:
             warnings.append("nested_role_routing_not_order")
         if group.get("effort") == "auto" and not group.get("classifier"):
@@ -165,7 +169,7 @@ def validate_design(design):
             if "intent" in rule and "not " not in str(rule.get("intent", "")).lower():
                 warnings.append("intent_rule_negation_missing")
         for rule in pauses:
-            if not isinstance(rule, dict) or rule.get("pause") not in members:
+            if not isinstance(rule, dict) or not isinstance(rule.get("pause"), str) or rule.get("pause") not in members:
                 errors.append("pause_rule_target_missing")
                 continue
             if not isinstance(rule.get("time"), str) or not TIME_RE.fullmatch(rule["time"]):

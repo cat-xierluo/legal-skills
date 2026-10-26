@@ -42,8 +42,6 @@
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.2 | 修复运行包不可读时的零警告静默成功：新鲜度判定前置到可读性检查之前（用文件 mtime），损坏或格式异常的运行包按“没有有效运行包”处理（显式警告、不得 silent、无证据判 failed），本轮边界回退到 mtime 避免新增未研判条目漏计；同时对齐 CHANGELOG 的 run_id 表述。 |
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.1 | 修复每日闭环回执与租约：`--outcome auto` 可用、显式 judged 须有正向证据、运行包新鲜度校验（默认 24 小时）、租约隔离失败不销毁原文、同 owner 续租保留 run_id。 |
 | 2026-10-24 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.0 | 新增每日闭环：离线对账 reconcile、judged/silent/failed 运行回执与并发租约 lease，全程离线且静默需正向证据。 |
-| 2026-10-24 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.13.2 | 新增单轮 GitHub GET 硬预算与廉价 Release 探测档，按请求计价披露用量与耗尽状态，支撑大收藏量的可核算覆盖周期。 |
-| 2026-10-24 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.13.1 | 动态目标画像有界读取实现摘要，补足仅在脚本中出现的真实能力；排除条款按概念从正向召回剔除，降低同词误配。 |
 
 </details>
 
@@ -92,13 +90,13 @@
 | [诉讼案件前期研判](expert-suites/litigation-assessment/) | 新案建档、事实证据分析、法律检索、策略和客户交付 | 9 | v0.1.1 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-assessment-0.1.0.zip) |
 | [诉讼文书与案件推进](expert-suites/litigation-documents-operations/) | 起诉文书、裁判分析、上诉再审和案件沟通 | 9 | v0.1.1 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-documents-operations-0.1.0.zip) |
 | [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.1.1 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-skill-development-quality-0.1.0.zip) |
-| [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 8 | v0.1.1 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-skill-release-distribution-0.1.0.zip) |
+| [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 9 | v0.1.3 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-skill-release-distribution-0.1.0.zip) |
 | [合同审查与小微企业顾问](expert-suites/contract-business-counsel/) | 合同起草审查、OPC / 小微企业经营分诊和顾问交付 | 6 | v0.1.0 | [待发布](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-contract-business-counsel-0.1.0.zip) |
 | [法律研究与客户洞察](expert-suites/legal-research-client-insight/) | 客户增量简报、月季行业研究、来源核验与文本规范 | 5 | v0.1.0 | [待发布](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-legal-research-client-insight-0.1.0.zip) |
 | [知识产权实务](expert-suites/intellectual-property-practice/) | 专利下载及初步分析、商标申请辅助；双入口分流 | 5 | v0.1.0 | [待发布](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-intellectual-property-practice-0.1.0.zip) |
 | [法律 Skill 对齐与评测](expert-suites/legal-skill-design-evaluation/) | 法律经验 Brief、通用质量门及法律领域产出评测 | 3 | v0.1.0 | [待发布](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-legal-skill-design-evaluation-0.1.0.zip) |
 
-新增四套的“待发布”链接为下一次 Release 预留，发布前可下载对应 PR 通过 CI 后生成的 Preview 产物。现有五套源码为 v0.1.1，表内仍保留已发布 v0.1.0 下载；新版入口见各套 README。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
+新增四套的“待发布”链接为下一次 Release 预留，发布前可下载对应 PR 通过 CI 后生成的 Preview 产物。现有五套中前四套源码为 v0.1.1，Skill 发布与分发源码为 v0.1.3，表内仍保留已发布 v0.1.0 下载；新版入口见各套 README。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
 
 ## 🛠️ 技能列表
 

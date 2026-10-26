@@ -250,6 +250,15 @@ class MaskAccountTests(unittest.TestCase):
         self.assertEqual(providers[0]["account_labels"], ["account-1"])
         self.assertNotIn("SYNTHETIC_FALLBACK_ALIAS", json.dumps(providers))
 
+    def test_account_order_set_is_three_state(self):
+        def provider(order):
+            return {"id": "example", "models": [], "accountOrder": order}
+        for order, expected in ((None, None), ([], False), (["account-a"], True)):
+            with self.subTest(order=order):
+                providers, _ = inventory.build_providers(
+                    None, {"providers": [provider(order)]}, [], [], {}, {}, [])
+                self.assertEqual(providers[0]["account_order_set"], expected)
+
 
 class SingleSourceTierTests(unittest.TestCase):
     """A tier with more than one servable source is not single-source."""
@@ -1028,6 +1037,12 @@ class TaskDocumentPrivacyTests(unittest.TestCase):
                 {item["file"] for item in findings},
                 {"TASKS.md", "DECISIONS.md"},
             )
+
+    def test_private_state_rule_passes_in_repo_root_mode(self):
+        self.assertFalse(release._is_private_state_path(
+            "skills/magpie-optimizer/state/.gitignore"))
+        self.assertTrue(release._is_private_state_path(
+            "skills/magpie-optimizer/state/plan.json"))
 
     def test_untracked_maintenance_records_do_not_fail(self):
         with tempfile.TemporaryDirectory() as tmp:

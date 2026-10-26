@@ -897,10 +897,18 @@ def _is_private_state_path(rel_path, prefix=""):
     `state/nested/.gitignore` is evidence of its own and must not pass.
     """
     parts = rel_path.split("/")
+    if len(parts) > 1 and parts[-2:] == ["state", ".gitignore"]:
+        # The allowlist is position-relative: a repo-root path such as
+        # skills/<skill>/state/.gitignore still resolves to the same rule.
+        parts = parts[-2:]
     if prefix:
         scope = prefix.split("/")
         if parts[:len(scope)] == scope:
             parts = parts[len(scope):]
+        elif len(parts) > 1 and parts[-2:] == ["state", ".gitignore"]:
+            # Repo-root mode sees a Skill-prefixed state rule; treat the
+            # last two components as its private-state scope.
+            parts = parts[-2:]
     if "state" not in parts[:-1]:
         return False
     if parts[-1] != ".gitignore":
