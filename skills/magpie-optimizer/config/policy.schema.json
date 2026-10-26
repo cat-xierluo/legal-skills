@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/magpie-route-policy.v1",
+  "title": "magpie-route-policy.v1",
+  "description": "可执行路由策略的结构约束，对齐 scripts/magpie_route.py 的 validate() 合同。本 schema 只覆盖结构与取值域，不覆盖跨字段关系：use 与 pause 互斥、规则目标必须在本组 members 内、成员必须是当前已启用 provider 的真实模型、组 ID 不重复且不与既有组冲突、规则不得无条件、pause 规则只允许 pause 与 time 两个字段、时段起止不得相同。这些关系约束由 magpie_route.validate() 对真实库存判定，本 schema 不做也无法替代该判定；通过本 schema 不等于该策略可生成计划。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "groups"],
+  "properties": {
+    "schema": {
+      "const": "magpie-route-policy.v1"
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "members", "routing", "stays", "rules"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^mpr-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "新建组 ID，必须使用 mpr- 前缀且只含小写字母、数字与连字符分段；是否与既有组 ID 冲突由 magpie_route.validate() 对真实库存判定。"
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "string"
+          },
+          "description": "成员顺序，第一项为默认落点。成员必须是当前已启用 provider 暴露的真实模型；成员不重复、成员是否真实可用由 magpie_route.validate() 对真实库存判定，本 schema 不做成员存在性校验。"
+        },
+        "routing": {
+          "type": "string",
+          "enum": ["order", "smart", "usage", "pace"],
+          "description": "组内路由模式，取值与 magpie_route.validate() 允许集合一致。"
+        },
+        "stays": {
+          "type": "string",
+          "enum": ["auto", "session", "turn"],
+          "description": "会话保持语义，取值与 magpie_route.validate() 允许集合一致。"
+        },
+        "rules": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/rule"
+          },
+          "description": "组内规则，最多 20 条。每条规则必须恰好给出 use 或 pause 其中一个动作（互斥），且除动作外至少还有一个条件字段（不允许无条件规则）；这两项关系约束由 magpie_route.validate() 判定，本 schema 不做互斥与条件完整性校验。"
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "use": {
+          "type": "string",
+          "description": "命中条件时提到前面的成员；与 pause 互斥，且必须存在于本组 members 内。两项均由 magpie_route.validate() 判定。"
+        },
+        "pause": {
+          "type": "string",
+          "description": "在该条件下被排除的成员；与 use 互斥，必须存在于本组 members 内，且该条规则只允许 pause 与 time 两个字段（time-only 暂停）。均由 magpie_route.validate() 判定。"
+        },
+        "time": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "description": "时段窗口，HH:MM-HH:MM（24 小时制）。起止相同的空窗口由 magpie_route.validate() 拒绝，本 schema 只校验格式。"
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["on", "low", "medium", "high", "xhigh", "max"],
+          "description": "该规则下的推理档位，取值与 magpie_route.validate() 允许集合一致。"
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "触发阈值，必须为正整数。"
+        },
+        "images": {
+          "const": true,
+          "description": "含图像请求时命中该规则；只能为 true。"
+        },
+        "compact": {
+          "const": true,
+          "description": "上下文压缩请求时命中该规则；只能为 true。"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/magpie-profile.v1",
+  "title": "magpie-profile.v1",
+  "description": "本机用户画像：入口组、能力层角色、约束、账号优先级与辅助调用归属。示例文件只使用占位符；真实取值只写在 profile.local.json。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "gateway",
+    "entry",
+    "roles",
+    "constraints",
+    "account_priority",
+    "auxiliary_routes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "magpie-profile.v1"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "verify_tls": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["main_group"],
+      "properties": {
+        "main_group": {
+          "type": "string",
+          "description": "主会话入口组 ID。"
+        },
+        "subagent_group": {
+          "type": ["string", "null"],
+          "description": "子 Agent 专用组 ID；null 表示未单独指定。"
+        },
+        "main_effort": {
+          "type": "string",
+          "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+        },
+        "subagent_effort": {
+          "type": "string",
+          "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+        }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planning",
+        "complex_implementation",
+        "execution",
+        "light_task",
+        "free"
+      ],
+      "properties": {
+        "planning": {
+          "$ref": "#/$defs/role"
+        },
+        "complex_implementation": {
+          "$ref": "#/$defs/role"
+        },
+        "execution": {
+          "$ref": "#/$defs/role"
+        },
+        "light_task": {
+          "$ref": "#/$defs/role"
+        },
+        "free": {
+          "$ref": "#/$defs/role"
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expensive_models_explicit_only",
+        "personal_account_before_team",
+        "require_apply_confirmation",
+        "never_log_secrets",
+        "auto_rotate_accounts"
+      ],
+      "properties": {
+        "expensive_models_explicit_only": {
+          "type": "boolean",
+          "description": "高成本模型不进入自动回退链，只在显式指定时使用。"
+        },
+        "expensive_models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "用户确认的高成本模型清单；空数组表示尚未标记，盘点只能输出未评估。"
+        },
+        "personal_account_before_team": {
+          "type": "boolean",
+          "description": "同一 provider 下个人账号优先于团队账号。"
+        },
+        "require_apply_confirmation": {
+          "type": "boolean",
+          "description": "写配置前必须先展示计划并获得确认。"
+        },
+        "never_log_secrets": {
+          "type": "boolean",
+          "default": true
+        },
+        "auto_rotate_accounts": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "account_priority": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "order"],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "order": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "账号标识顺序，第一项优先。"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "auxiliary_routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "web_search": {
+          "type": "string",
+          "description": "独立网页搜索等辅助调用使用的模型或组。"
+        },
+        "compaction": {
+          "type": "string",
+          "description": "上下文压缩使用的模型或组。"
+        },
+        "thread_metadata": {
+          "type": "string",
+          "description": "会话标题、描述、摘要等元数据调用使用的模型或组。"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability", "models", "sources_per_tier"],
+      "properties": {
+        "capability": {
+          "type": "string",
+          "description": "该能力层的任务描述。"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "provider/model 或 group/id；空数组表示待 Agent 结合当前模型目录和任务验收选择。"
+        },
+        "sources_per_tier": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2,
+          "description": "该层建议的可服务来源数。"
+        }
+      }
+    }
+  }
+}

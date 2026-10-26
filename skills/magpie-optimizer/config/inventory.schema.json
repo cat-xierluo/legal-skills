@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/magpie-inventory.v1",
+  "title": "magpie-inventory.v1",
+  "description": "只读盘点快照的输出格式。对齐 scripts/magpie_inventory.py 的实际字段：严重度固定为 info / warn / high 三档；account_order_set 只表示是否显式配置了账号顺序，读不到时为 null；agents 与 providers 的部分字段在 CLI 未暴露时为 null（未知），不写 0 或 false 冒充。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "generated_at",
+    "magpie_version",
+    "agents",
+    "providers",
+    "groups",
+    "risks",
+    "notes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "magpie-inventory.v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "本次盘点生成时刻（ISO 8601，UTC）。"
+    },
+    "magpie_version": {
+      "type": "string",
+      "description": "产出本次盘点的 Magpie 版本；读不到时写 unknown，不写空串。"
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/agent"
+      }
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/provider"
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/risk"
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "model",
+        "subagent_model",
+        "subagent_effort",
+        "gateway_routed",
+        "visible_models"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "model": {
+          "type": ["string", "null"],
+          "description": "客户端当前主模型；不是具体模型时为 null（未知）。"
+        },
+        "effort": {
+          "type": ["string", "null"],
+          "description": "客户端当前推理档位；盘点脚本可能输出该字段，示例未列出，因此不列为必填。"
+        },
+        "subagent_model": {
+          "type": ["string", "null"],
+          "description": "子 Agent 模型；未单独指定时为 null。"
+        },
+        "subagent_effort": {
+          "type": ["string", "null"]
+        },
+        "gateway_routed": {
+          "type": "boolean"
+        },
+        "visible_models": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "客户端可见模型数量；读不到时为 null，不写 0。"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "models",
+        "accounts",
+        "account_labels",
+        "multi_account",
+        "enabled",
+        "account_order_set",
+        "capabilities"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "models": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "accounts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "account_labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "脱敏账号标签；不写真实账号名、邮箱或 token。"
+        },
+        "multi_account": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "account_order_set": {
+          "type": ["boolean", "null"],
+          "description": "是否显式配置了账号顺序。null 表示未知（未读取到该字段）；该字段不表示账号是否启用，也不由账号并发配置推断顺序。"
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["vision", "reasoning_efforts"],
+          "properties": {
+            "vision": {
+              "type": "boolean",
+              "description": "该 provider 是否支持图像输入；配置里没有视觉模型时为 false。"
+            },
+            "reasoning_efforts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "routing",
+        "stays",
+        "members",
+        "rules",
+        "single_source_tiers"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "routing": {
+          "type": ["string", "null"],
+          "description": "路由模式；读不到时为 null，不臆测默认值。"
+        },
+        "stays": {
+          "type": ["string", "null"],
+          "description": "会话保持语义；配置里存为 affinity，读不到时为 null。"
+        },
+        "members": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rules": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "single_source_tiers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "detail", "where"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "风险类别标识；取值与 references/inventory.md 的风险码表一致。"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warn", "high"],
+          "description": "严重度固定三档，与盘点脚本一致；具体判定由盘点者按当次成本边界给出。"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "where": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

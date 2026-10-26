@@ -1,0 +1,12 @@
+{
+  "schema": "magpie-route-policy.v1",
+  "groups": [
+    {
+      "id": "mpr-example",
+      "members": ["example/strong", "example/efficient"],
+      "routing": "order",
+      "stays": "auto",
+      "rules": [{"pause": "example/efficient", "time": "14:00-18:00"}]
+    }
+  ]
+}

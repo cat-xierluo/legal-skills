@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/magpie-route-design.v1",
+  "title": "magpie-route-design.v1",
+  "description": "高层路由设计格式（设计意图，不是可执行策略）。与可执行策略 magpie-route-policy.v1 分开：可执行 plan 只接受 schema 为 magpie-route-policy.v1 的文件，本格式不能直接喂给 plan。选择规则与暂停规则分列两组，不在同一规则混用 use 与 pause。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "template", "groups", "accounts", "notes"],
+  "properties": {
+    "schema": {
+      "const": "magpie-route-design.v1"
+    },
+    "template": {
+      "type": "string",
+      "enum": [
+        "one-group",
+        "tiered",
+        "subagent-exec",
+        "budget-first",
+        "personal-first-team-fallback",
+        "explicit-strong",
+        "compact-cheap"
+      ],
+      "description": "高层模板名；只描述设计形状，不决定是否已落地。"
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    },
+    "accounts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/account"
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "members",
+        "routing",
+        "stays",
+        "effort",
+        "classifier",
+        "selection_rules",
+        "pause_rules"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "设计阶段的组 ID。落地新建组时须换成 mpr- 前缀的 ID。"
+        },
+        "role": {
+          "type": "string",
+          "description": "该组在设计中的能力层角色，例如 planning、execution。"
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "成员顺序；第一项为默认落点。"
+        },
+        "routing": {
+          "type": "string",
+          "enum": ["smart", "order", "rotate", "usage", "pace", "weight", "manual"]
+        },
+        "stays": {
+          "type": "string",
+          "enum": ["auto", "session", "turn", "off", "strict"]
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["agent", "auto"]
+        },
+        "classifier": {
+          "type": ["string", "null"],
+          "description": "意图分流用的分类模型；不设时为 null。"
+        },
+        "selection_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/selection_rule"
+          }
+        },
+        "pause_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pause_rule"
+          }
+        }
+      }
+    },
+    "selection_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["use"],
+      "properties": {
+        "use": {
+          "type": "string",
+          "description": "命中该规则时提到前面的成员。"
+        },
+        "intent": {
+          "type": "string",
+          "description": "人类可读的意图说明；不是 CLI 可执行条件。"
+        },
+        "use_effort": {
+          "type": "string",
+          "enum": ["on", "low", "medium", "high", "xhigh", "max"],
+          "description": "该规则下的推理档位。"
+        },
+        "compact": {
+          "const": true,
+          "description": "上下文压缩请求时优先使用目标成员。"
+        }
+      }
+    },
+    "pause_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pause", "time"],
+      "properties": {
+        "pause": {
+          "type": "string",
+          "description": "在该时段内被排除的成员。"
+        },
+        "time": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "description": "时段窗口，HH:MM-HH:MM（24 小时制）。"
+        },
+        "days": {
+          "type": "string",
+          "description": "生效星期区间的设计标注；不是 CLI 可执行条件。"
+        }
+      }
+    },
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "account_order", "routing", "cap_percent"],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "account_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "设计声明的账号优先顺序；不代表已生效配置。"
+        },
+        "routing": {
+          "type": "string",
+          "enum": ["smart", "order", "rotate", "usage", "pace", "weight", "manual"]
+        },
+        "cap_percent": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "账号级用量上限百分比；未设为 null。"
+        }
+      }
+    }
+  }
+}

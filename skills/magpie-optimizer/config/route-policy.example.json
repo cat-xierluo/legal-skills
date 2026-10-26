@@ -1,0 +1,150 @@
+{
+  "schema": "magpie-route-design.v1",
+  "template": "tiered",
+  "groups": [
+    {
+      "id": "group/example-main",
+      "role": "entry",
+      "members": [
+        "group/example-planning",
+        "group/example-implementation",
+        "other-example/classifier-model",
+        "group/example-light",
+        "group/example-free",
+        "example/strong-model",
+        "other-example/strong-alt-model"
+      ],
+      "routing": "order",
+      "stays": "turn",
+      "effort": "auto",
+      "classifier": "other-example/classifier-model",
+      "selection_rules": [
+        {
+          "use": "other-example/classifier-model",
+          "compact": true
+        },
+        {
+          "use": "group/example-free",
+          "intent": "a lightweight task: extract a field, reformat existing text, or look up a simple fact; not a routine implementation task"
+        },
+        {
+          "use": "group/example-planning",
+          "intent": "ordinary analysis, explanations, routine design or debugging, comparing options, or planning next steps; no explicit escalation, project-wide kickoff or final acceptance; not compacting"
+        },
+        {
+          "use": "other-example/strong-alt-model",
+          "use_effort": "xhigh",
+          "intent": "a genuinely difficult unresolved problem escalated after same-tier models failed, or an explicit deep investigation request; not routine design, debugging or implementation"
+        },
+        {
+          "use": "example/strong-model",
+          "use_effort": "xhigh",
+          "intent": "a project-wide kickoff, a major direction reset, or final acceptance and audit across multiple completed deliverables; not routine task planning or ordinary code review"
+        }
+      ],
+      "pause_rules": [
+        {
+          "pause": "other-example/strong-alt-model",
+          "time": "14:00-18:00",
+          "days": "mon-fri"
+        }
+      ]
+    },
+    {
+      "id": "group/example-subagent",
+      "role": "execution",
+      "members": [
+        "example/fast-model",
+        "other-example/cheap-model"
+      ],
+      "routing": "order",
+      "stays": "turn",
+      "effort": "agent",
+      "classifier": null,
+      "selection_rules": [],
+      "pause_rules": []
+    },
+    {
+      "id": "group/example-planning",
+      "role": "planning",
+      "members": [
+        "example/strong-model",
+        "other-example/balanced-model"
+      ],
+      "routing": "order",
+      "stays": "turn",
+      "effort": "agent",
+      "classifier": null,
+      "selection_rules": [],
+      "pause_rules": []
+    },
+    {
+      "id": "group/example-implementation",
+      "role": "implementation",
+      "members": [
+        "example/balanced-model",
+        "other-example/fast-model"
+      ],
+      "routing": "order",
+      "stays": "turn",
+      "effort": "agent",
+      "classifier": null,
+      "selection_rules": [],
+      "pause_rules": []
+    },
+    {
+      "id": "group/example-light",
+      "role": "light",
+      "members": [
+        "example/light-model",
+        "other-example/fast-model"
+      ],
+      "routing": "order",
+      "stays": "turn",
+      "effort": "agent",
+      "classifier": null,
+      "selection_rules": [],
+      "pause_rules": []
+    },
+    {
+      "id": "group/example-free",
+      "role": "free",
+      "members": [
+        "example/free-model",
+        "other-example/free-alt-model"
+      ],
+      "routing": "order",
+      "stays": "turn",
+      "effort": "agent",
+      "classifier": null,
+      "selection_rules": [],
+      "pause_rules": []
+    }
+  ],
+  "accounts": [
+    {
+      "provider": "example-provider",
+      "account_order": [
+        "example-account-a",
+        "example-account-b"
+      ],
+      "routing": "order",
+      "cap_percent": null
+    }
+  ],
+  "notes": [
+    "本文件是路由设计示例，所有组、成员、账号均为占位。",
+    "本文件的 schema 是 magpie-route-design.v1（高层设计），不是可执行策略。可执行 plan 只接受 schema 为 magpie-route-policy.v1 的文件，即 config/policy.example.json 那一类。",
+    "本文件不能直接喂给 plan：字段集与结构都不同（规则拆成 selection_rules 与 pause_rules，含 intent、use_effort、days 等设计标注字段，组 ID 未强制 mpr- 前缀）。要生成计划，先把它落成 policy 形态并由专用校验器核对。",
+    "use 与 pause 不在同一规则混用：选择规则放在 selection_rules，只写 use；暂停规则放在 pause_rules，只写 pause 与 time，且 pause 条件不含 intent 语义。",
+    "语义校验边界：规则目标是否在本组 members 内、规则是否缺少条件而成为无条件规则、账号是否启用、当前安装版 CLI 是否支持该 routing 与 stays 取值，这些由原生 CLI 或专用校验器判定，本 schema 的关键字子集不覆盖。",
+    "template 可选值：one-group（一组走天下）、tiered（能力分层）、subagent-exec（主会话与子 Agent 分离）、budget-first（低价优先）、personal-first-team-fallback（个人账号优先、团队兜底）、explicit-strong（高成本模型只显式调用）、compact-cheap（辅助任务走低成本模型）。",
+    "routing 可选值：smart、order、rotate、usage、pace、weight、manual；stays 可选值：auto、session、turn、off、strict；effort 可选值：agent、auto。",
+    "cap_percent 为 null 表示未设账号级用量上限。",
+    "account_order 是设计声明的账号优先顺序，不代表已经生效的配置；写入前须按当次盘点结果核对。",
+    "单一入口用 role=entry 表达：members 可按角色顺序引用嵌套 group/*，外层只负责编排层间顺序；内层组保持自身 routing/stays/rules。",
+    "嵌套结构判据：按用户画像决定每层期望来源数；只有一个合格来源时保留单来源层并说明风险，不为凑数量合并能力不等价的层。真实账号容量仍需单独核对。",
+    "规则顺序建议：compact 最先，其次轻任务、普通任务、困难升级、项目级终审；每条 intent 写清“不是什么”，避免重叠命中。",
+    "子 Agent 不假定继承主入口；需要分离时另设 subagent-exec 组并核客户端配置与实际 served。"
+  ]
+}
