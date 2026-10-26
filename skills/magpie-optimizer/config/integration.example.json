@@ -1,0 +1,49 @@
+{
+  "schema": "magpie-integration.v1",
+  "providers": [
+    {
+      "id": "example-provider-a",
+      "method": "api",
+      "models": ["example/strong-model", "example/light-model"],
+      "visible_to": ["example-agent-a"],
+      "enabled": true,
+      "notes": "占位示例，不代表任何真实供应商。"
+    }
+  ],
+  "accounts": [
+    {
+      "provider": "example-provider-a",
+      "label": "example-account-a",
+      "plan": "example-plan",
+      "windows": [
+        {
+          "name": "example-window",
+          "used": 0,
+          "resets_at": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "priority": 1,
+      "source": "magpie"
+    }
+  ],
+  "plugins": [
+    {
+      "name": "example-plugin",
+      "source": "example-source",
+      "purpose": "占位示例：说明插件用途",
+      "installed": false,
+      "verified_at": null
+    }
+  ],
+  "install_commands": [
+    "magpie provider add <preset> <key>",
+    "magpie accounts add <agent>",
+    "magpie plugin add <package>"
+  ],
+  "notes": [
+    "本文件是接入记录示例，不含真实供应商、账号、额度或凭证。",
+    "凭证只交给 Magpie 自己保存，本 Skill 不读取、不复制、不记录 key、cookie 或 token。",
+    "windows.used 与 resets_at 记录额度窗口读数；读不到时写 unknown，不填 0 冒充。",
+    "install_commands 只作为命令形状参考，实际执行前需确认当前安装版 CLI 帮助。"
+  ]
+}

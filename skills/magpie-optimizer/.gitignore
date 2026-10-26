@@ -1,0 +1,7 @@
+# 原始维护记录只留在本机，不进入公开仓库或发布包
+TASKS.md
+DECISIONS.md
+
+# Skill 自身运行产生的 Python 缓存不入库；公开层源码、示例与 schema 正常入库
+__pycache__/
+*.pyc

@@ -1,0 +1,60 @@
+{
+  "schema": "magpie-profile.v1",
+  "version": 1,
+  "gateway": {
+    "url": "http://127.0.0.1:3425",
+    "verify_tls": true
+  },
+  "entry": {
+    "main_group": "group/example-main",
+    "subagent_group": "group/example-subagent",
+    "main_effort": "max",
+    "subagent_effort": "high"
+  },
+  "roles": {
+    "planning": {
+      "capability": "规划、方向决定与最终验收",
+      "models": [],
+      "sources_per_tier": 2
+    },
+    "complex_implementation": {
+      "capability": "跨文件实现、复杂根因定位与关键判断",
+      "models": [],
+      "sources_per_tier": 2
+    },
+    "execution": {
+      "capability": "边界明确的常规执行与已指定验收的实现",
+      "models": [],
+      "sources_per_tier": 2
+    },
+    "light_task": {
+      "capability": "字段提取、格式化、信息查询等轻量任务",
+      "models": [],
+      "sources_per_tier": 1
+    },
+    "free": {
+      "capability": "免费或最低成本层，只承接可容错的轻任务",
+      "models": [],
+      "sources_per_tier": 2
+    }
+  },
+  "constraints": {
+    "expensive_models_explicit_only": true,
+    "personal_account_before_team": true,
+    "require_apply_confirmation": true,
+    "never_log_secrets": true,
+    "auto_rotate_accounts": false
+  },
+  "account_priority": [
+    {
+      "provider": "example-provider",
+      "order": ["example-account-a", "example-account-b"],
+      "note": "个人账号优先，个人额度不可用时由团队账号兜底"
+    }
+  ],
+  "auxiliary_routes": {
+    "web_search": "example/light-model",
+    "compaction": "example/light-model",
+    "thread_metadata": "example/light-model"
+  }
+}

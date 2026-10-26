@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill 公开化助手"
+  short_description: "把个人自用 Skill 剥离私有配置并整理为可公开分发版本"
+  default_prompt: "使用 $skill-publicizer 对指定 Skill 做公开化预检、分层、剥离与门禁，并按用户授权执行发布步骤。"

@@ -1,0 +1,101 @@
+{
+  "schema": "magpie-inventory.v1",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "magpie_version": "0.0.0-example",
+  "agents": [
+    {
+      "name": "example-agent-a",
+      "model": "group/example-main",
+      "subagent_model": "group/example-subagent",
+      "subagent_effort": "high",
+      "gateway_routed": true,
+      "visible_models": 0
+    }
+  ],
+  "providers": [
+    {
+      "id": "example-provider-a",
+      "name": "Example Provider A",
+      "models": 0,
+      "accounts": 2,
+      "account_labels": [
+        "example-account-a",
+        "example-account-b"
+      ],
+      "multi_account": true,
+      "enabled": true,
+      "account_order_set": null,
+      "capabilities": {
+        "vision": false,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high"
+        ]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "id": "group/example-main",
+      "routing": "order",
+      "stays": "auto",
+      "members": 0,
+      "rules": 0,
+      "single_source_tiers": [
+        "group/example-subagent"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "code": "SINGLE_SOURCE_TIER",
+      "severity": "warn",
+      "detail": "该能力层当前只有一个可服务来源，额度休息或供应商关闭时整层无法承接。",
+      "where": "group/example-subagent"
+    },
+    {
+      "code": "EXPENSIVE_FALLBACK",
+      "severity": "high",
+      "detail": "高成本模型位于回退链上，前层不可用时会被兜底消耗。",
+      "where": "group/example-main"
+    },
+    {
+      "code": "SUBAGENT_REENTERS_MAIN_ROUTE",
+      "severity": "warn",
+      "detail": "子 Agent 默认模型未单独指定，可能沿默认链落到非预期入口，且不会自动继承主入口意图分流。",
+      "where": "example-agent-a"
+    },
+    {
+      "code": "CROSS_LAYER_FALLBACK",
+      "severity": "warn",
+      "detail": "provider 回退指向其它能力层，跨层接管后成本与归因口径不一致。",
+      "where": "example-provider-a"
+    },
+    {
+      "code": "ACCOUNT_ORDER_UNSET",
+      "severity": "warn",
+      "detail": "多账号 provider 未设置账号顺序，实际落点由默认策略决定。",
+      "where": "example-provider-a"
+    },
+    {
+      "code": "AUX_CALLS_OUTSIDE_GROUP",
+      "severity": "info",
+      "detail": "网页搜索、压缩、会话标题等辅助调用未纳入当前入口组。",
+      "where": "example-agent-a"
+    },
+    {
+      "code": "DEAD_MEMBER",
+      "severity": "warn",
+      "detail": "组成员当前不可服务（供应商关闭或模型未暴露），会产生无效尝试。",
+      "where": "group/example-main"
+    }
+  ],
+  "notes": [
+    "本文件是脱敏盘点输出格式示例，所有标识与计数均为占位，不代表任何真实环境。",
+    "risks.code 含义：SINGLE_SOURCE_TIER=单来源层；EXPENSIVE_FALLBACK=高成本模型处于回退链；SUBAGENT_REENTERS_MAIN_ROUTE=子 Agent 沿默认链落到非预期入口且不自动继承主入口意图分流；CROSS_LAYER_FALLBACK=跨层 provider 回退；ACCOUNT_ORDER_UNSET=多账号未设顺序；AUX_CALLS_OUTSIDE_GROUP=辅助调用在组外；DEAD_MEMBER=成员当前不可服务。",
+    "severity 取值固定为 info / warn / high 三档，与盘点脚本实际输出一致；严重度由盘点者按当次成本边界判定。",
+    "account_labels 只写脱敏占位，不写真实账号名、邮箱或 token。",
+    "account_order_set 为 null 表示示例未声明账号顺序（未知）；该字段不表示账号是否启用，也不由账号并发配置推断顺序，只反映是否显式配置了账号顺序。"
+  ]
+}

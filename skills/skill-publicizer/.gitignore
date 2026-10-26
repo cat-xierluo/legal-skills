@@ -1,0 +1,7 @@
+# Local maintenance records and audit evidence are not distribution files.
+TASKS.md
+DECISIONS.md
+state/
+*.local.*
+__pycache__/
+*.pyc

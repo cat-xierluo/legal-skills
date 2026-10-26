@@ -1,0 +1,13 @@
+# 本机私有配置与运行态证据留在本地，不进入公开仓库
+# 通配覆盖全部 *.local.* 私有配置：新增私有文件名不再需要逐个补规则
+*.local.*
+
+# 运行态与证据
+state/
+*.log
+*.jsonl
+*.snapshot.json
+*.receipt.json
+*.secret
+*.token
+*.key

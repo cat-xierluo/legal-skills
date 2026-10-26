@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/magpie-integration.v1",
+  "title": "magpie-integration.v1",
+  "description": "接入与账号记录格式：provider、脱敏账号标签、额度窗口、插件与安装命令形状。凭证不进入本格式；额度读数未知时写 null 或字符串 unknown，不填 0 冒充已读到的 0。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "providers", "accounts", "plugins", "install_commands", "notes"],
+  "properties": {
+    "schema": {
+      "const": "magpie-integration.v1"
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/provider"
+      }
+    },
+    "accounts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/account"
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/plugin"
+      }
+    },
+    "install_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "只作命令形状参考；实际执行前需确认当前安装版 CLI 帮助。"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "method", "models", "visible_to", "enabled", "notes"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["api", "oauth", "subscription", "plugin", "cli", "unknown"],
+          "description": "本 Skill 接入记录的分类，不是 Magpie CLI 的原生枚举；未知时写 unknown。"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "visible_to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "可见该 provider 模型的客户端名列表。"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "label", "plan", "windows", "priority", "source"],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "description": "脱敏账号标签；不写真实账号名、邮箱或 token。"
+        },
+        "plan": {
+          "type": ["string", "null"],
+          "description": "套餐名；读不到时为 null（未知）。"
+        },
+        "windows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/window"
+          }
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "账号优先级；数值越小越优先。"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["magpie", "manual", "imported", "unknown"],
+          "description": "账号来源。"
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "used", "resets_at"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "used": {
+          "type": ["number", "string", "null"],
+          "minimum": 0,
+          "pattern": "^unknown$",
+          "description": "已用量读数。读不到时写 null 或字符串 unknown；不填 0 冒充已读到的 0。"
+        },
+        "resets_at": {
+          "type": ["string", "null"],
+          "description": "重置时刻（ISO 8601）；读不到时为 null（未知）。"
+        }
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "source", "purpose", "installed", "verified_at"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "verified_at": {
+          "type": ["string", "null"],
+          "description": "最近一次核验时间；未核验时为 null（未知）。"
+        }
+      }
+    }
+  }
+}
