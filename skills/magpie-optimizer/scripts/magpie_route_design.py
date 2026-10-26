@@ -29,7 +29,7 @@ def load_json(path):
     target = Path(path)
     try:
         return validate_examples.load_json_file(target)
-    except Exception as error:
+    except validate_examples.InputError as error:
         # The shared loader maps I/O, JSON and budget failures to InputError.
         raise DesignError("InputError") from error
 
@@ -46,6 +46,8 @@ def _provider_key(value):
 
 def _leaf_providers(member, groups_by_id, seen=None):
     seen = seen or frozenset()
+    if not isinstance(member, str):
+        return set()
     if member in seen:
         return set()
     if not _is_group_ref(member):
@@ -85,6 +87,16 @@ def validate_design(design):
             continue
         groups_by_id[gid] = group
 
+    # Graph operations only accept lists of strings, including direct API use.
+    for group in groups_by_id.values():
+        members = group.get("members")
+        if not isinstance(members, list) or not members:
+            errors.append("group_members_required")
+        elif any(not isinstance(member, str) or not member for member in members):
+            errors.append("group_member_invalid")
+    if errors:
+        return sorted(set(errors)), warnings
+
     entries = [g for g in groups_by_id.values() if g.get("role") == "entry"]
     if len(entries) > 1:
         errors.append("entry_group_duplicate")
@@ -119,25 +131,28 @@ def validate_design(design):
             else:
                 referenced_targets.add(member)
 
-    # A nested path must terminate and stay within eight group references.
+    # Count group nodes including the entry; model leaves add no depth.
     def visit(member, chain, depth):
         if not _is_group_ref(member):
             return
         if member in chain:
             errors.append("nested_group_cycle")
             return
+        if depth > 8:
+            errors.append("nested_group_depth")
+            return
         group = groups_by_id.get(member)
         if group is None:
             return
         for child in group.get("members", []):
             if isinstance(child, str):
-                if _is_group_ref(child) and depth >= 8:
-                    errors.append("nested_group_depth")
-                    continue
                 visit(child, chain | {member}, depth + (1 if _is_group_ref(child) else 0))
 
     for gid in groups_by_id:
-        visit(gid, frozenset(), 0)
+        visit(gid, frozenset(), 1)
+
+    if errors:
+        return sorted(set(errors)), warnings
 
     for group in groups_by_id.values():
         gid = group.get("id")
@@ -157,7 +172,7 @@ def validate_design(design):
             if not isinstance(rule, dict):
                 errors.append("selection_rule_shape")
                 continue
-            if rule.get("use") not in members:
+            if not isinstance(rule.get("use"), str) or rule.get("use") not in members:
                 errors.append("selection_rule_target_missing")
             has_condition = bool(rule.get("intent") or rule.get("compact"))
             if not has_condition:
@@ -219,6 +234,8 @@ def validate_file(design_path, schema_path):
     instance_errors = []
     if not schema_errors:
         instance_errors = validate_examples.validate_instance(design, schema)
+    if schema_errors or instance_errors:
+        return design, sorted(set(schema_errors + instance_errors)), []
     semantic_errors, warnings = validate_design(design)
     errors = sorted(set(schema_errors + instance_errors + semantic_errors))
     return design, errors, warnings

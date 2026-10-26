@@ -96,8 +96,7 @@ class RouteDesignTests(unittest.TestCase):
         entry["selection_rules"] = []
         entry["pause_rules"] = []
         design["groups"] = [entry]
-        parent = "group/example-main"
-        for level in range(1, 9):
+        for level in range(1, 8):
             gid = "group/example-level-%d" % level
             design["groups"].append({
                 "id": gid, "role": "nested", "members": [], "routing": "order",
@@ -110,12 +109,17 @@ class RouteDesignTests(unittest.TestCase):
                 previous = "group/example-level-%d" % (level - 1)
                 parent_group = next(g for g in design["groups"] if g["id"] == previous)
                 parent_group["members"] = [gid]
-        leaf = "group/example-level-8"
+        leaf = "group/example-level-7"
         leaf_group = next(g for g in design["groups"] if g["id"] == leaf)
         leaf_group["members"] = ["example/model", "other-example/model"]
         errors, warnings = d.validate_design(design)
         self.assertEqual((errors, warnings), ([], []))
-        leaf_group["members"] = ["group/example-level-1"]
+        leaf_group["members"] = ["group/example-level-8"]
+        design["groups"].append({
+            **copy.deepcopy(leaf_group),
+            "id": "group/example-level-8",
+            "members": ["example/model", "other-example/model"],
+        })
         self.assertIn("nested_group_depth", d.validate_design(design)[0])
 
     def test_non_string_members_and_pause_targets_fail_closed(self):
@@ -145,7 +149,38 @@ class RouteDesignTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertNotIn("Traceback", result.stderr + result.stdout)
             report = json.loads(result.stdout)
-            self.assertIn("group_member_invalid", report["errors"])
+            self.assertEqual(report["status"], "FAILED")
+            self.assertTrue(report["errors"])
+
+    def test_cli_rejects_invalid_shapes_before_semantic_checks(self):
+        cases = [
+            (("groups", 0, "members"), None),
+            (("groups", 0, "members"), 42),
+            (("groups", 0, "members", 0), ["SYNTHETIC_PRIVATE_VALUE"]),
+            (("groups", 0, "selection_rules"), None),
+            (("groups", 0, "selection_rules", 0, "use"), {"SYNTHETIC_PRIVATE_VALUE": 1}),
+            (("groups", 0, "pause_rules", 0, "pause"), ["SYNTHETIC_PRIVATE_VALUE"]),
+            (("accounts",), None),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "design.local.json"
+            for path, value in cases:
+                with self.subTest(path=path):
+                    design = shipped()
+                    parent = design
+                    for key in path[:-1]:
+                        parent = parent[key]
+                    parent[path[-1]] = value
+                    target.write_text(json.dumps(design), encoding="utf-8")
+                    result = subprocess.run(
+                        [sys.executable, str(SCRIPTS / "magpie_route_design.py"),
+                         "validate", "--design", str(target), "--strict"],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(json.loads(result.stdout)["status"], "FAILED")
+                    self.assertNotIn("Traceback", result.stderr + result.stdout)
+                    self.assertNotIn("SYNTHETIC_PRIVATE_VALUE", result.stderr + result.stdout)
 
     def test_cli_reports_without_local_identifiers(self):
         with tempfile.TemporaryDirectory() as tmp:

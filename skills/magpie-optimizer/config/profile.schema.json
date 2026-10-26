@@ -186,7 +186,7 @@
           "items": {
             "type": "string"
           },
-          "description": "provider/model 或 group/id；空数组表示由盘点结果推荐。"
+          "description": "provider/model 或 group/id；空数组表示待 Agent 结合当前模型目录和任务验收选择。"
         },
         "sources_per_tier": {
           "type": "integer",

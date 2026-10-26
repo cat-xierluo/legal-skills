@@ -1043,6 +1043,9 @@ class TaskDocumentPrivacyTests(unittest.TestCase):
             "skills/magpie-optimizer/state/.gitignore"))
         self.assertTrue(release._is_private_state_path(
             "skills/magpie-optimizer/state/plan.json"))
+        for path in ("state/nested/state/.gitignore",
+                     "skills/magpie-optimizer/state/nested/state/.gitignore"):
+            self.assertTrue(release._is_private_state_path(path))
 
     def test_untracked_maintenance_records_do_not_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
