@@ -91,7 +91,7 @@ python scripts/auto_discover.py auto-discover \
 
 `coverage.watch_coverage.evidence_candidates` 披露四组事实：`fetched_this_run`（本轮取证的仓库数）、`fetched_in_candidates` 与 `fetched_not_in_candidates`（取证后是否进入候选）、`candidates_with_evidence` / `candidates_without_evidence`（候选里带证据的条数与总数）。**没进候选不等于没变化**：被队列上限挡下的取证仓库会显式列出。
 
-`coverage.review_queue.quota` 披露本轮候选的准入来源：`backlog_reserve`（保留名额配置）、`backlog_reserved_slots`（保留名额实际服务的候选数）、`evidence_slots`（证据通道进入的候选数）、`sources_by_count`（`backlog` = 由保留名额进入的最久未展示 pending；`evidence` = 证据通道；`other` = 两者之外的候选）与逐候选 `sources`。`with_evidence` 单独说明入选候选中有多少同时属于证据池；准入来源和证据持有可能重合，不把“积压保留”误读成“本轮取证数”。回执的 `queue_quota` 字段带同一份数据，闭环核来源不必重读运行包。
+`coverage.review_queue.quota` 披露本轮候选的准入来源：`backlog_reserve`（保留名额配置）、`backlog_reserved_slots`（保留名额实际服务的候选数）、`evidence_slots`（证据通道进入的候选数）、`sources_by_count`（`backlog` = 由保留名额进入的最久未展示 pending；`evidence` = 证据通道；`other` = 两者之外的候选）与逐候选 `sources`。`with_evidence` 单独说明入选候选中有多少同时属于证据池；准入来源和证据持有可能重合，不把“积压保留”误读成“本轮取证数”。回执的 `queue_quota` 字段带同一份数据，闭环核来源不必重读运行包。历史速率包含人工与测试轮次；`estimated_days_to_cover` 只是按历史速率外推，不代表未来计划频率或消化有价值机会所需时长。
 
 `coverage.review_queue.coverage_cycle` 把覆盖周期摊开为可核算的数字：`never_shown_pending`（从未展示的积压量）、`backlog_slots_per_round`（每轮实际服务积压的宽度）、`estimated_rounds_to_cover`（按当前宽度覆盖全部积压所需轮数）、`observed_rounds_per_day`（从真实运行包历史测得的每日轮次）与 `estimated_days_to_cover`。回执的 `coverage_cycle` 字段带同一份数据。周期只针对本状态目录已知的 pending 队列；**未覆盖的仓库与未取证的仓库都不等于没有机会**——没进候选可能只是还没轮到，不能声称没有变化。
 

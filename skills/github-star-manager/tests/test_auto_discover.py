@@ -1842,6 +1842,29 @@ class QueueFairnessTests(unittest.TestCase):
                          sum(row.get("evidence_rank", 0) > 0 for row in selected))
         self.assertEqual(report["evidence_pool_size"], report["with_evidence"])
 
+    def test_malformed_history_does_not_block_a_new_preparation(self):
+        ad.atomic_json(self.data / "original_latest.json", snapshot(self.repos()))
+        history = self.data / "auto-opportunities" / "runs"
+        history.mkdir(parents=True)
+        bad_values = [["bad"], "bad", 7, None, {"generated_at": ["bad"]},
+                      {"generated_at": {"bad": True}}]
+        for index, value in enumerate(bad_values):
+            (history / f"broken-{index}.json").write_text(json.dumps(value))
+        _, result = self.run_round(1, limit=3, per_project=1, evidence_limit=3)
+        self.assertTrue(result["items"])
+        self.assertIsNone(result["coverage"]["review_queue"]["coverage_cycle"]
+                          ["observed_rounds_per_day"])
+        self.assertTrue(Path(result["run_path"]).exists())
+
+    def test_frequency_skips_invalid_history_and_preserves_valid_rounds(self):
+        history = self.data / "auto-opportunities" / "runs"
+        history.mkdir(parents=True)
+        (history / "a.json").write_text(json.dumps({"generated_at": NOW.isoformat()}))
+        (history / "b.json").write_text(json.dumps(["bad"]))
+        (history / "c.json").write_text(json.dumps({
+            "generated_at": (NOW + timedelta(days=1)).isoformat()}))
+        self.assertEqual(ad.observed_rounds_per_day(self.data), 1.0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

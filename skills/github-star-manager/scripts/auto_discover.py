@@ -403,7 +403,10 @@ def observed_rounds_per_day(data_dir, now=None, max_rounds=30):
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        stamp = parse_dt((value or {}).get("generated_at"))
+        if not isinstance(value, dict):
+            continue
+        generated_at = value.get("generated_at")
+        stamp = parse_dt(generated_at) if isinstance(generated_at, str) else None
         if stamp is not None:
             stamps.append(stamp)
     if len(stamps) < 2:
@@ -597,6 +600,9 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
     elif (isinstance(coverage, dict) and coverage.get("watch_coverage") is not None
           and not isinstance(coverage["watch_coverage"], dict)):
         invalid_reason = "coverage.watch_coverage 必须是 JSON 对象"
+    elif (isinstance(coverage, dict) and coverage.get("review_queue") is not None
+          and not isinstance(coverage["review_queue"], dict)):
+        invalid_reason = "coverage.review_queue 必须是 JSON 对象"
     elif "status" in value and value["status"] not in ("ok", "partial"):
         invalid_reason = "status 必须是 ok 或 partial"
     elif errors is not None and (not isinstance(errors, list)
@@ -2241,7 +2247,8 @@ def cmd_auto(args):
                                         if estimated_rounds and rounds_per_day else None),
             "scope": ("只针对本状态目录已知的 pending 队列；"
                       "未进入候选的收藏仓不代表没有机会"),
-            "note": ("积压覆盖周期按保留名额宽度估算；"
+            "note": ("积压覆盖周期按保留名额宽度和历史速率外推，"
+                     "历史包含人工与测试轮次，不代表未来计划频率；"
                      "未覆盖的仓库与未取证的仓库都不等于没有机会"),
         },
     }

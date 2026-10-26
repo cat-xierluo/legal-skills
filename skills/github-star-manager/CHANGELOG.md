@@ -16,10 +16,11 @@
 - **来源披露**：`coverage.review_queue.quota` 给出本轮候选的准入账本——`backlog_reserve` 配置、`backlog_reserved_slots` 实际占用、`evidence_slots`、`sources_by_count`（`backlog` / `evidence` / `other`）与逐候选 `sources`；每个候选同时带 `admission_source` 字段，`with_evidence` 单独统计入选候选中同时属于证据池的数量，避免把积压保留误读成本轮取证。回执新增 `queue_quota` 字段携带同一份数据，闭环核来源不必重读运行包。
 - **覆盖周期**：`coverage.review_queue.coverage_cycle` 按**真实运行包历史**（不是假设每日一轮）测得 `observed_rounds_per_day`，结合 `backlog_slots_per_round` 与 `never_shown_pending` 估算 `estimated_rounds_to_cover` 与 `estimated_days_to_cover`；`scope` 与 `note` 明确"只针对本状态目录已知的 pending 队列；未覆盖的仓库与未取证的仓库都不等于没有机会"。回执新增 `coverage_cycle` 字段。
 - **CLI**：`auto-discover --backlog-reserve <N>` 覆盖保留名额（默认 2，`0` 关闭）。
+- **异常数据隔离**：非对象 `coverage.review_queue` 走无效准备包路径并生成 failed 回执；历史频率统计跳过非对象 JSON 和异常时间戳，旧坏包不会阻断新准备。历史速率包含人工和测试轮次，估算不代表未来调度频率。
 
 ### 验证边界
 
-- 跨轮与来源披露回归新增 9 个用例：持续存在本轮取证高分候选时最久 pending 仍进入候选（连续 6 轮真实 `--write` 运行）、保留名额严格服务等待最久的候选、`--backlog-reserve 0` 恢复旧的证据优先排序、空积压时保留名额回落证据通道、per-project/per-repo 上限对积压通道不被突破、一条反馈卡抑制当前候选并推进下一条、quota/coverage_cycle 披露完整且回执可读。
+- 跨轮、来源披露与异常历史回归新增 11 个用例：持续存在本轮取证高分候选时最久 pending 仍进入候选（连续 6 轮真实 `--write` 运行）、保留名额严格服务等待最久的候选、`--backlog-reserve 0` 恢复旧的证据优先排序、空积压时保留名额回落证据通道、per-project/per-repo 上限对积压通道不被突破、一条反馈卡抑制当前候选并推进下一条、quota/coverage_cycle 披露完整且回执可读。
 - 在真实状态目录的隔离副本上做只读模拟：保留名额宽度 2 时得到 `sources_by_count={"backlog":2,"evidence":10}`，其中 2 条按最久等待进入；`with_evidence=11` 与准入来源分开统计，避免把积压保留误报成 11 条证据通道。覆盖周期由运行时的 `never_shown_pending`、实际保留名额和真实历史轮次计算，并在 `coverage_cycle` 明示；队列规模与运行频率变化后数值会变化，不在文档冻结绝对天数。宿主侧合并采用后仍需跑一次真实轮次，核 `queue_quota.sources_by_count` 出现 `backlog` 来源。
 ## [0.15.2] - 2026-10-26
 

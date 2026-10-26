@@ -958,7 +958,8 @@ class ReceiptPreparationContractTests(unittest.TestCase):
 
     def test_malformed_coverage_is_controlled_failure(self):
         for coverage in ([], ["bad"], "bad", {"watch_coverage": []},
-                         {"watch_coverage": ["bad"]}):
+                         {"watch_coverage": ["bad"]}, {"review_queue": ["bad"]},
+                         {"review_queue": "bad"}, {"review_queue": 4}):
             with self.subTest(coverage=coverage):
                 result, code = self.check_run({"items": [], "coverage": coverage})
                 self.assertEqual(code, 1)
