@@ -5,6 +5,23 @@
 ---
 
 
+## [0.16.0] - 2026-10-26
+
+### 修复
+
+**每日候选队列的积压饥饿**：`select_candidates` 把"本轮已取证"作为全局第一排序维度后，只要本轮存在取证高分候选，12 条候选可以全部被它占满。真实观察：2026-10-25 09:17 宿主自动轮 12/12 候选 `evidence_status=complete` 且 `this_run`。这不证明历史积压从未获得进展；独立模拟确认的缺陷是：持续高分证据存在时，旧 pending 没有可计算的展示保证。现在 `select_candidates` 分两个准入通道共享同一 `--limit`：**证据通道**（`evidence_rank > 0`，包含本轮取证、回退缓存和既有缓存，证据分档仍在通道内保持先后）与**积压通道**（在队列里存活过至少一轮、仍未研判的候选，严格按等待时间最久优先——从未展示的从 `first_seen_at` 起算，展示过未研判的从 `last_shown_at` 起算）。每轮为积压通道保留固定名额（`--backlog-reserve`，默认 2，`0` 关闭并完整恢复旧行为）；保留名额没有可服务的积压时回落给证据通道，不浪费容量。`--per-project/--per-repo` 上限对两个通道同等生效，一个仓库或项目仍不能占满整轮。一条反馈卡把候选判为 judged 后，它退出积压通道，下一条最久 pending 递补——队列真实向前推进而不是每轮重复同一条。
+
+### 新增
+
+- **来源披露**：`coverage.review_queue.quota` 给出本轮候选的准入账本——`backlog_reserve` 配置、`backlog_reserved_slots` 实际占用、`evidence_slots`、`sources_by_count`（`backlog` / `evidence` / `other`）与逐候选 `sources`；每个候选同时带 `admission_source` 字段，`with_evidence` 单独统计入选候选中同时属于证据池的数量，避免把积压保留误读成本轮取证。回执新增 `queue_quota` 字段携带同一份数据，闭环核来源不必重读运行包。
+- **覆盖周期**：`coverage.review_queue.coverage_cycle` 按**真实运行包历史**（不是假设每日一轮）测得 `observed_rounds_per_day`，结合 `backlog_slots_per_round` 与 `never_shown_pending` 估算 `estimated_rounds_to_cover` 与 `estimated_days_to_cover`；`scope` 与 `note` 明确"只针对本状态目录已知的 pending 队列；未覆盖的仓库与未取证的仓库都不等于没有机会"。回执新增 `coverage_cycle` 字段。
+- **CLI**：`auto-discover --backlog-reserve <N>` 覆盖保留名额（默认 2，`0` 关闭）。
+- **异常数据隔离**：非对象 `coverage.review_queue` 走无效准备包路径并生成 failed 回执；历史频率统计跳过非对象 JSON 和异常时间戳，旧坏包不会阻断新准备。历史速率包含人工和测试轮次，估算不代表未来调度频率。
+
+### 验证边界
+
+- 跨轮、来源披露与异常历史回归新增 11 个用例：持续存在本轮取证高分候选时最久 pending 仍进入候选（连续 6 轮真实 `--write` 运行）、保留名额严格服务等待最久的候选、`--backlog-reserve 0` 恢复旧的证据优先排序、空积压时保留名额回落证据通道、per-project/per-repo 上限对积压通道不被突破、一条反馈卡抑制当前候选并推进下一条、quota/coverage_cycle 披露完整且回执可读。
+- 在真实状态目录的隔离副本上做只读模拟：保留名额宽度 2 时得到 `sources_by_count={"backlog":2,"evidence":10}`，其中 2 条按最久等待进入；`with_evidence=11` 与准入来源分开统计，避免把积压保留误报成 11 条证据通道。覆盖周期由运行时的 `never_shown_pending`、实际保留名额和真实历史轮次计算，并在 `coverage_cycle` 明示；队列规模与运行频率变化后数值会变化，不在文档冻结绝对天数。宿主侧合并采用后仍需跑一次真实轮次，核 `queue_quota.sources_by_count` 出现 `backlog` 来源。
 ## [0.15.2] - 2026-10-26
 
 ### 修复
@@ -684,4 +701,3 @@ python scripts/main.py --batch-star repos.json    # 批量添加
 - 使用 CSS 变量管理主题色值
 - 响应式布局，支持移动端浏览
 - 本地 JSON 数据缓存，减少 API 请求
-

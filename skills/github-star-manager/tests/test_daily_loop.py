@@ -242,12 +242,17 @@ class DailyLoopTests(unittest.TestCase):
 
     # ---------- receipt ----------
 
-    def write_run(self, candidates=0, generated_at=NOW, budget=None):
+    def write_run(self, candidates=0, generated_at=NOW, budget=None,
+                  quota=None, coverage_cycle=None):
         directory = self.data / "auto-opportunities" / "runs"
         directory.mkdir(parents=True, exist_ok=True)
         payload = {"schema_version": "1.0", "generated_at": generated_at.isoformat(),
                    "status": "ok", "items": [{"x": i} for i in range(candidates)],
                    "coverage": {"watch_coverage": {"request_budget": budget}}}
+        if quota is not None:
+            payload["coverage"]["review_queue"] = {"quota": quota}
+        if coverage_cycle is not None:
+            payload["coverage"].setdefault("review_queue", {})["coverage_cycle"] = coverage_cycle
         path = directory / (generated_at.strftime("%Y%m%dT%H%M%S.%fZ") + ".json")
         ad.atomic_json(path, payload)
         return path
@@ -266,6 +271,25 @@ class DailyLoopTests(unittest.TestCase):
         self.assertEqual(receipt["reconcile"]["cards_now_judged"], 1)
         # 只有拒绝/暂缓类判断 → 不打扰用户
         self.assertFalse(receipt["notification"]["recommended"])
+
+    def test_receipt_carries_the_round_quota_and_coverage_cycle(self):
+        # The receipt has to say where the candidates came from. A round that
+        # served the backlog instead of the evidence channel must be visible
+        # without re-reading the run package.
+        quota = {"backlog_reserve": 2, "backlog_reserved_slots": 2,
+                 "evidence_slots": 0, "sources_by_count": {"backlog": 2}}
+        cycle = {"never_shown_pending": 100, "backlog_slots_per_round": 2,
+                 "estimated_rounds_to_cover": 50, "observed_rounds_per_day": 1.0,
+                 "estimated_days_to_cover": 50.0}
+        self.write_run(candidates=2, generated_at=NOW,
+                       quota=quota, coverage_cycle=cycle)
+        self.write_queue([queue_entry()])
+        self.write_card(feedback_card(recorded_at=NOW + timedelta(seconds=30)))
+        payload, code = ad.build_receipt(self.data, now=NOW + timedelta(minutes=1))
+        self.assertEqual(code, 0)
+        receipt = payload["receipt"]
+        self.assertEqual(receipt["queue_quota"], quota)
+        self.assertEqual(receipt["coverage_cycle"], cycle)
 
     def test_receipt_silent_requires_positive_evidence(self):
         self.write_run(candidates=0, generated_at=NOW)
@@ -934,7 +958,8 @@ class ReceiptPreparationContractTests(unittest.TestCase):
 
     def test_malformed_coverage_is_controlled_failure(self):
         for coverage in ([], ["bad"], "bad", {"watch_coverage": []},
-                         {"watch_coverage": ["bad"]}):
+                         {"watch_coverage": ["bad"]}, {"review_queue": ["bad"]},
+                         {"review_queue": "bad"}, {"review_queue": 4}):
             with self.subTest(coverage=coverage):
                 result, code = self.check_run({"items": [], "coverage": coverage})
                 self.assertEqual(code, 1)
@@ -999,4 +1024,3 @@ class ReceiptPreparationContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

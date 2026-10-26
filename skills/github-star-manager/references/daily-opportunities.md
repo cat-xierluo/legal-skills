@@ -87,9 +87,13 @@ python scripts/auto_discover.py auto-discover \
 
 `stale` 与 `cached` 同为缓存档（1 分），但同档内 `stale` 排前面：它的仓库元数据已经变了，附着的证据可能已经不对。`evidence_detail_rank` 是同档内的次序：本轮残缺（4）> 回退失败（3）> 回退跳过（2）> stale 缓存（2）> 新鲜缓存（1）。回退跳过与 stale 缓存同分但分属不同档（2 分与 1 分），实际先后由档位决定。
 
-排序语义：**本轮已取证是第一优先级维度**，被本轮付费取证的仓库优先进入候选，该优先级不会被 `select_candidates` 内部的字母序重排覆盖。`--limit/--per-project/--per-repo` 上限和轮转公平性保持不变——已取证优先只决定同一上限内的先后，一个仓库仍不能占满名额，一个项目仍不能垄断整轮。
+排序语义：**证据分档是证据通道内的第一优先级维度**，本轮深检/廉价探测及缓存回退按 `evidence_rank` 优先进入候选，该优先级不会被 `select_candidates` 内部的字母序重排覆盖。**但证据通道不能占满整轮**：`select_candidates` 每轮为 review 队列里存活的 pending 保留固定名额（`--backlog-reserve`，默认 2，`0` 关闭），保留名额严格按等待时间最久优先——从未展示过的候选从 `first_seen_at` 起算，展示过但未研判的从 `last_shown_at` 起算。没有保留名额时，持续存在高分证据会让历史 pending 缺少展示保证；保留名额让最老 pending 按固定周期出现在 Agent 面前。`--limit/--per-project/--per-repo` 上限和轮转公平性保持不变——保留名额同样受这些上限约束，一个仓库仍不能占满名额，一个项目仍不能垄断整轮。保留名额没有可服务的积压时回落给证据通道，不浪费容量；`--backlog-reserve 0` 完整恢复旧的证据优先行为。
 
 `coverage.watch_coverage.evidence_candidates` 披露四组事实：`fetched_this_run`（本轮取证的仓库数）、`fetched_in_candidates` 与 `fetched_not_in_candidates`（取证后是否进入候选）、`candidates_with_evidence` / `candidates_without_evidence`（候选里带证据的条数与总数）。**没进候选不等于没变化**：被队列上限挡下的取证仓库会显式列出。
+
+`coverage.review_queue.quota` 披露本轮候选的准入来源：`backlog_reserve`（保留名额配置）、`backlog_reserved_slots`（保留名额实际服务的候选数）、`evidence_slots`（证据通道进入的候选数）、`sources_by_count`（`backlog` = 由保留名额进入的最久未展示 pending；`evidence` = 证据通道；`other` = 两者之外的候选）与逐候选 `sources`。`with_evidence` 单独说明入选候选中有多少同时属于证据池；准入来源和证据持有可能重合，不把“积压保留”误读成“本轮取证数”。回执的 `queue_quota` 字段带同一份数据，闭环核来源不必重读运行包。历史速率包含人工与测试轮次；`estimated_days_to_cover` 只是按历史速率外推，不代表未来计划频率或消化有价值机会所需时长。
+
+`coverage.review_queue.coverage_cycle` 把覆盖周期摊开为可核算的数字：`never_shown_pending`（从未展示的积压量）、`backlog_slots_per_round`（每轮实际服务积压的宽度）、`estimated_rounds_to_cover`（按当前宽度覆盖全部积压所需轮数）、`observed_rounds_per_day`（从真实运行包历史测得的每日轮次）与 `estimated_days_to_cover`。回执的 `coverage_cycle` 字段带同一份数据。周期只针对本状态目录已知的 pending 队列；**未覆盖的仓库与未取证的仓库都不等于没有机会**——没进候选可能只是还没轮到，不能声称没有变化。
 
 本轮新取的 README 与 Release 正文在生成候选之前就已接入本轮召回，因此"新 Release 带来新能力 → 匹配到新组件"这条链路成立。召回仍然有界：README 正文与 Release 正文各取固定上限，未取证的仓库不会凭空进入候选。
 
@@ -159,4 +163,3 @@ python scripts/auto_discover.py lease release --data-dir ~/.local/state/github-s
 > 使用 github-star-manager，在已确认的套件根和私有状态目录执行每日准备入口，刷新收藏并在预算内取证。动态发现当前目标，不要求逐项目登记。按本参考核上游实际变化与目标现有能力，最多保留三个值得处理的机会，允许本轮无新发现。将研判、拒绝或暂缓通过 opportunity.py 写入同一状态目录并回读；不要把待研判队列标为已采用。只有新且可行动的机会、首次来源失败或需要用户决定时通知；无变化静默，相同未恢复问题不每天重报。不自动安装上游项目、执行其代码或修改业务 Skill。记录未覆盖范围及下一轮恢复入口。
 
 先用相同范围完整跑一次并检查反馈重跑，然后由用户指定/已授权的宿主建立定时任务。核实际任务 ID、时区与运行回执；创建成功不等于连续多日效果已验证。
-

@@ -26,6 +26,17 @@ from star_tracker import StarTracker
 
 REPO_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
+# Slots guaranteed to the review-queue backlog channel in every round.
+#
+# The evidence channel (repositories this run actually fetched) would
+# otherwise fill every slot on its own: a high-scoring this-run candidate is
+# always ahead of a historical pending item, so a pending candidate that was
+# never shown could stay invisible forever. Reserving a fixed share of the
+# round for the oldest never-shown pending candidates bounds that waiting
+# time. The reserved slots fall back to the evidence channel when the
+# backlog has nothing eligible, so the share never wastes capacity.
+DEFAULT_BACKLOG_RESERVE = 2
+
 
 def now_utc():
     return datetime.now(timezone.utc)
@@ -369,6 +380,72 @@ def judge_entries(entries, feedback, now):
     return newly
 
 
+def observed_rounds_per_day(data_dir, now=None, max_rounds=30):
+    """How many review rounds this state directory actually runs per day.
+
+    The queue cursor records the round sequence and the timestamp of the last
+    round. The run packages carry their own timestamps, so the observed rate
+    is computed from the real history rather than assumed to be one round per
+    day. The estimate is only a planning number: when the history is too
+    short to say anything, the caller receives ``None`` instead of a guess.
+    """
+    now = now or now_utc()
+    directory = Path(data_dir) / "auto-opportunities" / "runs"
+    stamps = []
+    try:
+        paths = sorted(directory.glob("*.json"))
+    except OSError:
+        return None
+    for path in paths[-max_rounds:]:
+        if path.name.endswith(".receipt.json"):
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(value, dict):
+            continue
+        generated_at = value.get("generated_at")
+        stamp = parse_dt(generated_at) if isinstance(generated_at, str) else None
+        if stamp is not None:
+            stamps.append(stamp)
+    if len(stamps) < 2:
+        return None
+    span = (max(stamps) - min(stamps)).total_seconds()
+    if span <= 0:
+        return None
+    rounds = len(stamps) - 1
+    days = span / 86400.0
+    rate = rounds / days
+    if rate <= 0:
+        return None
+    return round(rate, 2)
+
+
+def queue_backlog_cutoff(queue, now=None):
+    """The timestamp before which a pending candidate counts as backlogged.
+
+    The queue cursor records when the previous round was written. A
+    candidate first seen at or before that moment has already survived a
+    round without being shown, so it is genuinely waiting. A candidate first
+    seen after it is new in this round and has not waited yet.
+
+    Without a previous round there is nothing to be backlogged: the first
+    round of a fresh state directory has no history to be starved by.
+    """
+    cursor = (queue or {}).get("cursor") or {}
+    last_round = parse_dt(cursor.get("last_round_at"))
+    if last_round is not None:
+        return last_round
+    # A queue with entries but no cursor timestamp still has a history. Use
+    # the oldest entry as the cutoff so the pending backlog is recognised.
+    entries = (queue or {}).get("entries") or {}
+    seen = [parse_dt(entry.get("first_seen_at")) for entry in entries.values()
+            if isinstance(entry, dict)]
+    seen = [value for value in seen if value is not None]
+    return min(seen) if seen else None
+
+
 def queue_backlog(entries):
     """未研判积压统计（pending / shown 都算还没写反馈卡）。"""
     pending = [entry for entry in entries.values()
@@ -485,6 +562,7 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
     path = daily_loop.latest_run_file(data_dir)
     context = {"run_path": str(path) if path else None, "run_found": bool(path),
                "generated_at": None, "candidates": 0, "request_budget": None,
+               "queue_quota": None, "coverage_cycle": None,
                "status": None, "warnings": [], "stale_run": False,
                "run_age_hours": None, "max_run_age_hours": max_age_hours,
                "run_stale_reason": None, "run_readable": False,
@@ -522,6 +600,9 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
     elif (isinstance(coverage, dict) and coverage.get("watch_coverage") is not None
           and not isinstance(coverage["watch_coverage"], dict)):
         invalid_reason = "coverage.watch_coverage 必须是 JSON 对象"
+    elif (isinstance(coverage, dict) and coverage.get("review_queue") is not None
+          and not isinstance(coverage["review_queue"], dict)):
+        invalid_reason = "coverage.review_queue 必须是 JSON 对象"
     elif "status" in value and value["status"] not in ("ok", "partial"):
         invalid_reason = "status 必须是 ok 或 partial"
     elif errors is not None and (not isinstance(errors, list)
@@ -540,6 +621,13 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
     watch = coverage.get("watch_coverage") or {}
     if isinstance(watch.get("request_budget"), dict):
         context["request_budget"] = watch["request_budget"]
+    # The quota the round actually used. The receipt has to be able to say
+    # where the candidates came from, not only how many there were.
+    review_queue = coverage.get("review_queue") or {}
+    if isinstance(review_queue.get("quota"), dict):
+        context["queue_quota"] = review_queue["quota"]
+    if isinstance(review_queue.get("coverage_cycle"), dict):
+        context["coverage_cycle"] = review_queue["coverage_cycle"]
     age = daily_loop.run_age_hours(path, context["generated_at"], now)
     context["run_age_hours"] = round(age, 2) if age is not None else None
     if age is not None and age > max_age_hours:
@@ -807,6 +895,8 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
         "facts": facts,
         "evidence": evidence,
         "request_budget": run.get("request_budget"),
+        "queue_quota": run.get("queue_quota"),
+        "coverage_cycle": run.get("coverage_cycle"),
         "candidates": facts["candidates"],
         "cards_written": facts["cards_written"],
         "cards": written,
@@ -1089,7 +1179,8 @@ def evidence_delta(name, current, prior):
 
 def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
             recent_days=14, update_days=7, show_suppressed=False, focused=None,
-            queue=None, queue_now=None):
+            queue=None, queue_now=None, per_repo=None, backlog_reserve=None,
+            report=None):
     focused = focused or {}
     queue_now = queue_now or now
     candidates, suppressed = [], []
@@ -1200,6 +1291,7 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
                     "queue_state": {"first_seen_at": entry.get("first_seen_at", queue_now.isoformat()),
                                     "last_shown_at": entry.get("last_shown_at"),
                                     "shown_count": entry.get("shown_count", 0),
+                                    "queue_state": entry.get("state", "pending"),
                                     "cooldown_due": cooldown_due},
                     "evidence_status": evidence["status"],
                     "evidence_source": evidence["source"],
@@ -1232,26 +1324,69 @@ def prepare(snapshot, profiles, feedback, now, limit=12, per_project=2,
         -len(c["primary_matches"]), -len(c["matched_terms"]),
         -(int("recent_star" in c["signals"]) + int("upstream_activity" in c["signals"])),
         c["project_id"], c["repo"]))
-    return select_candidates(candidates, limit, per_project), suppressed, len(candidates)
+    return (select_candidates(candidates, limit, per_project, per_repo,
+                              backlog_reserve, report=report),
+            suppressed, len(candidates))
 
 
-def select_candidates(candidates, limit, per_project, per_repo=None):
+def _candidate_order_key(candidate):
+    """The global order of a candidate: this run's evidence comes first.
+
+    Evidence fetched in this run is the first ordering dimension: a repository
+    the run already paid for must reach the Agent instead of being pushed
+    behind alphabetically earlier candidates.
+    """
+    return (-candidate.get("evidence_rank", 0),
+            -int(candidate.get("evidence_detail_rank", 0)),
+            -int(candidate["queue_state"]["cooldown_due"]),
+            candidate["queue_state"].get("shown_count", 0),
+            candidate["queue_state"].get("first_seen_at", ""), candidate["project_id"],
+            candidate["repo"], candidate.get("capability", {}).get("key") or "")
+
+
+def _candidate_backlog_key(candidate):
+    """The backlog order of a candidate: strictly longest waiting first.
+
+    A candidate that was never shown has been waiting since ``first_seen_at``;
+    a candidate that was shown but not judged has been waiting since
+    ``last_shown_at``. Waiting time - not evidence rank - decides who gets
+    the reserved share, so the longest-waiting pending item comes first.
+    """
+    state = candidate.get("queue_state") or {}
+    last_shown = state.get("last_shown_at")
+    waiting_since = last_shown or state.get("first_seen_at", "")
+    return (waiting_since, state.get("first_seen_at", ""),
+            state.get("shown_count", 0),
+            candidate["project_id"], candidate["repo"],
+            candidate.get("capability", {}).get("key") or "")
+
+
+def _candidate_backlogged(candidate, cutoff):
+    """Has this candidate survived at least one queue round?
+
+    A candidate that was first seen in the current round has not waited yet,
+    and letting it into the reserved share would let a fresh weak match
+    displace a repository the run actually paid to fetch. ``cutoff`` is the
+    timestamp of the previous queue round. Without a previous round (a fresh
+    state directory) nothing is backlogged and the whole round goes to the
+    evidence channel.
+    """
+    if cutoff is None:
+        return False
+    first_seen = parse_dt((candidate.get("queue_state") or {}).get("first_seen_at"))
+    if first_seen is None:
+        return False
+    return first_seen <= cutoff
+
+
+def _legacy_select(candidates, limit, per_project, per_repo=None):
+    """The pre-fairness selection: one order, one pool.
+
+    Kept for ``backlog_reserve == 0`` so an operator can restore the exact
+    previous behaviour, and used to order the candidate pool itself.
+    """
     selected, counts, repo_counts = [], {}, {}
-    # Cooled-down pending items get the first slice, then one item per project
-    # in round-robin order, then remaining capacity by score. This prevents a
-    # lexicographically early project from monopolising every round.
-    #
-    # Evidence fetched in this run is the first ordering dimension: a
-    # repository the run already paid for must reach the Agent instead of
-    # being pushed behind alphabetically earlier candidates. The fairness
-    # rules are unchanged otherwise - per-project and per-repo caps still
-    # apply, and the round-robin over projects is preserved.
-    ordered = sorted(candidates, key=lambda c: (
-        -c.get("evidence_rank", 0),
-        -int(c.get("evidence_detail_rank", 0)),
-        -int(c["queue_state"]["cooldown_due"]), c["queue_state"].get("shown_count", 0),
-        c["queue_state"].get("first_seen_at", ""), c["project_id"], c["repo"],
-        c.get("capability", {}).get("key") or ""))
+    ordered = sorted(candidates, key=_candidate_order_key)
     def eligible(candidate):
         project = candidate["project_id"]
         return (per_project is None or counts.get(project, 0) < per_project) and (
@@ -1277,6 +1412,161 @@ def select_candidates(candidates, limit, per_project, per_repo=None):
         take(candidate)
     return selected
 
+
+def select_candidates(candidates, limit, per_project, per_repo=None, backlog_reserve=None,
+                      report=None, backlog_cutoff=None):
+    """Select this round's review candidates without letting one channel starve another.
+
+    Two admission channels compete for the same ``limit``:
+
+    * **evidence** - candidates whose upstream repository carries this run's
+      evidence (``evidence_rank > 0``). The run already paid for these
+      fetches, so they must reach the Agent instead of being pushed behind
+      alphabetically earlier candidates.
+    * **backlog** - candidates that survived at least one queue round and are
+      still pending. Without a reserved share these are starved forever:
+      every round fills its slots with high-scoring this-run evidence, so a
+      historical pending item never becomes visible.
+
+    ``backlog_reserve`` is the number of slots guaranteed to the backlog
+    channel (default ``DEFAULT_BACKLOG_RESERVE``, ``0`` disables it). The
+    reserved slots go to the *oldest never-shown* pending candidates, so
+    waiting time - not evidence rank - decides the reserved share. The
+    remaining slots go to the evidence channel first, then to any leftover
+    backlog candidate, then to the ordinary candidates. When the backlog
+    channel has nothing eligible the reserved slots fall back to the
+    evidence channel, so the share never wastes capacity.
+
+    The existing caps are never relaxed: ``per_project`` and ``per_repo``
+    apply to every candidate regardless of channel. The backlog channel is
+    strictly oldest-first so the anti-starvation guarantee does not depend on
+    which project happens to sort first; the evidence channel keeps the
+    round-robin over projects so one component cannot monopolise it.
+
+    ``limit=None`` means "no limit" - every candidate is returned in the
+    global order. That is how the preparation step collects the full
+    candidate pool before the round limits are applied.
+
+    When ``report`` is a dict it receives the per-channel admission record
+    used by the coverage disclosure.
+    """
+    reserve = DEFAULT_BACKLOG_RESERVE if backlog_reserve is None else max(0, int(backlog_reserve))
+    if limit is not None:
+        reserve = min(reserve, limit)
+    if limit is None:
+        # No limit: return the whole pool in the global order. The channel
+        # split only matters when the round has to choose.
+        ordered = sorted(candidates, key=_candidate_order_key)
+        if isinstance(report, dict):
+            evidence_keys = {row["candidate_key"] for row in ordered
+                             if row.get("evidence_rank", 0) > 0}
+            report.update({"backlog_reserve": reserve, "backlog_reserved_slots": 0,
+                           "evidence_slots": 0, "backlog_served": 0, "evidence_served": 0,
+                           "backlog_pool_size": 0,
+                           "evidence_pool_size": len(evidence_keys),
+                           "with_evidence": len(evidence_keys),
+                           "sources": {row["candidate_key"]: "unlimited" for row in ordered}})
+        return ordered
+    if reserve <= 0:
+        selected = _legacy_select(candidates, limit, per_project, per_repo)
+        if isinstance(report, dict):
+            evidence_keys = {row["candidate_key"] for row in selected
+                             if row.get("evidence_rank", 0) > 0}
+            report.update({"backlog_reserve": 0, "backlog_reserved_slots": 0,
+                           "evidence_slots": None, "backlog_served": 0,
+                           "evidence_served": len(evidence_keys),
+                           "backlog_pool_size": 0, "evidence_pool_size": 0,
+                           "with_evidence": len(evidence_keys),
+                           "sources": {row["candidate_key"]:
+                                       "evidence" if row["candidate_key"] in evidence_keys
+                                       else "other" for row in selected}})
+        return selected
+
+    selected, counts, repo_counts = [], {}, {}
+    chosen = set()
+    sources = {}
+    evidence_pool = [c for c in candidates if c.get("evidence_rank", 0) > 0]
+    backlog_pool = [c for c in candidates
+                    if _candidate_backlogged(c, backlog_cutoff)]
+    backlog_keys = {row["candidate_key"] for row in backlog_pool}
+    evidence_keys = {row["candidate_key"] for row in evidence_pool}
+    # A candidate can belong to both channels. It is admitted by the channel
+    # that reaches it first, so it is never counted twice.
+    ordinary_pool = [c for c in candidates
+                     if c["candidate_key"] not in backlog_keys | evidence_keys]
+    evidence_ordered = sorted(evidence_pool, key=_candidate_order_key)
+    backlog_ordered = sorted(backlog_pool, key=_candidate_backlog_key)
+    ordinary_ordered = sorted(ordinary_pool, key=_candidate_order_key)
+
+    def eligible(candidate):
+        project = candidate["project_id"]
+        return (per_project is None or counts.get(project, 0) < per_project) and (
+            per_repo is None or repo_counts.get(candidate["repo"], 0) < per_repo)
+    def take(candidate, source):
+        selected.append(candidate)
+        chosen.add(candidate["candidate_key"])
+        sources[candidate["candidate_key"]] = source
+        counts[candidate["project_id"]] = counts.get(candidate["project_id"], 0) + 1
+        repo_counts[candidate["repo"]] = repo_counts.get(candidate["repo"], 0) + 1
+
+    def fill(ordered_pool, slots, source, round_robin=True):
+        """Fill up to ``slots`` places from one channel."""
+        taken = 0
+        if slots is not None and slots <= 0:
+            return taken
+        if round_robin:
+            # One candidate per project before any project gets a second
+            # slot, so a single component cannot monopolise a channel.
+            first = {}
+            for candidate in ordered_pool:
+                first.setdefault(candidate["project_id"], candidate)
+            first_keys = {row["candidate_key"] for row in first.values()}
+            round_one = sorted(first.values(), key=lambda c: ordered_pool.index(c))
+            tail = [c for c in ordered_pool if c["candidate_key"] not in first_keys]
+            stream = round_one + tail
+        else:
+            stream = list(ordered_pool)
+        for candidate in stream:
+            if len(selected) >= limit:
+                break
+            if slots is not None and taken >= slots:
+                break
+            if candidate["candidate_key"] in chosen or not eligible(candidate):
+                continue
+            take(candidate, source)
+            taken += 1
+        return taken
+
+    # The backlog channel gets its reserved share first, strictly oldest
+    # first. A backlog candidate that also carries this-run evidence belongs
+    # to both channels; it is admitted here on its waiting time and the
+    # evidence channel then skips it because it is already selected.
+    backlog_taken = fill(backlog_ordered, reserve, "backlog", round_robin=False)
+    # Everything else goes to the evidence channel, then to the ordinary
+    # candidates, then to any backlog candidate that did not fit the share.
+    evidence_taken = fill(evidence_ordered, limit - len(selected), "evidence")
+    ordinary_taken = fill(ordinary_ordered, limit - len(selected), "other")
+    leftover = fill(backlog_ordered, limit - len(selected), "backlog", round_robin=False)
+    # Membership and admission are different questions. ``sources`` records
+    # the channel that admitted a candidate; ``with_evidence`` separately
+    # reports how many selected candidates also carry evidence.
+    with_evidence = sum(1 for row in selected
+                        if row["candidate_key"] in evidence_keys)
+    if isinstance(report, dict):
+        report.update({
+            "backlog_reserve": reserve,
+            "backlog_reserved_slots": backlog_taken,
+            "evidence_slots": evidence_taken,
+            "other_slots": ordinary_taken,
+            "backlog_served": backlog_taken + leftover,
+            "evidence_served": evidence_taken,
+            "with_evidence": with_evidence,
+            "backlog_pool_size": len(backlog_pool),
+            "evidence_pool_size": len(evidence_pool),
+            "ordinary_pool_size": len(ordinary_pool),
+            "sources": sources,
+        })
+    return selected
 
 def release_record(value):
     release = value[0] if value else None
@@ -1763,7 +2053,12 @@ def cmd_auto(args):
     for name in sorted(unavailable & {row.get("full_name") for row in snapshot.get("repos", [])}):
         warnings.append(f"Watched evidence incomplete: {name}; previous complete evidence retained")
     all_rows = candidates
-    candidates = select_candidates(candidates, args.limit, args.per_project, getattr(args, "per_repo", 3))
+    quota_report = {}
+    backlog_cutoff = queue_backlog_cutoff(queue, current)
+    candidates = select_candidates(candidates, args.limit, args.per_project,
+                                   getattr(args, "per_repo", 3),
+                                   getattr(args, "backlog_reserve", DEFAULT_BACKLOG_RESERVE),
+                                   report=quota_report, backlog_cutoff=backlog_cutoff)
     if args.write:
         queue = update_review_queue(data_dir, queue, candidates, all_rows, snapshot, feedback, current)
     snapshots_by_repo, observation_comparisons = {}, {}
@@ -1900,10 +2195,27 @@ def cmd_auto(args):
     queue_entries = list((queue.get("entries") or {}).values())
     queue_pending = [entry for entry in queue_entries if entry.get("state") in {"pending", "shown"}]
     shown_pending = [entry for entry in queue_pending if entry.get("state") == "shown"]
+    never_shown_pending = [entry for entry in queue_pending if not entry.get("last_shown_at")]
     oldest_pending = min((entry.get("first_seen_at", "") for entry in queue_pending), default=None)
+    quota_sources = quota_report.get("sources") or {}
+    source_counts = {}
+    for row in candidates:
+        source = quota_sources.get(row["candidate_key"]) or "evidence"
+        row["admission_source"] = source
+        source_counts[source] = source_counts.get(source, 0) + 1
+    # The backlog channel is the anti-starvation guarantee: it is the only
+    # channel that can show a candidate the evidence channel would never
+    # reach. Its effective width is what bounds the waiting time.
+    backlog_width = quota_report.get("backlog_reserved_slots") or 0
+    if not backlog_width:
+        backlog_width = quota_report.get("backlog_served") or 0
+    rounds_per_day = observed_rounds_per_day(data_dir, current)
+    estimated_rounds = (int(-(-len(never_shown_pending) // backlog_width))
+                        if backlog_width and never_shown_pending else None)
     queue_coverage = {
         "queue_state": queue.get("state", "healthy"),
         "pending_total": len(queue_pending), "shown_pending": len(shown_pending),
+        "never_shown_pending": len(never_shown_pending),
         "oldest_pending_first_seen_at": oldest_pending,
         "oldest_pending_age_days": (round((current - parse_dt(oldest_pending)).total_seconds() / 86400, 1)
                                     if oldest_pending and parse_dt(oldest_pending) else None),
@@ -1912,6 +2224,33 @@ def cmd_auto(args):
         "admitted_this_round": len(candidates),
         "starved_projects": sorted({entry.get("project_id") for entry in queue_pending}
                                    - {entry.get("project_id") for entry in candidates}),
+        "quota": {
+            "backlog_reserve": quota_report.get("backlog_reserve", 0),
+            "backlog_reserved_slots": quota_report.get("backlog_reserved_slots", 0),
+            "evidence_slots": quota_report.get("evidence_slots", 0),
+            "sources_by_count": source_counts,
+            "with_evidence": quota_report.get("with_evidence", 0),
+            "sources": {row["candidate_key"]: row["admission_source"] for row in candidates},
+            "backlog_pool_size": quota_report.get("backlog_pool_size", 0),
+            "evidence_pool_size": quota_report.get("evidence_pool_size", 0),
+            "channel_note": ("backlog = 由本轮保留名额进入的最久等待 pending；"
+                             "evidence = 由证据池进入（包含本轮取证与缓存证据）；"
+                             "other = 两个池之外；with_evidence 单独统计同时属于"
+                             "证据池的入选候选"),
+        },
+        "coverage_cycle": {
+            "never_shown_pending": len(never_shown_pending),
+            "backlog_slots_per_round": backlog_width,
+            "estimated_rounds_to_cover": estimated_rounds,
+            "observed_rounds_per_day": rounds_per_day,
+            "estimated_days_to_cover": (round(estimated_rounds / rounds_per_day, 1)
+                                        if estimated_rounds and rounds_per_day else None),
+            "scope": ("只针对本状态目录已知的 pending 队列；"
+                      "未进入候选的收藏仓不代表没有机会"),
+            "note": ("积压覆盖周期按保留名额宽度和历史速率外推，"
+                     "历史包含人工与测试轮次，不代表未来计划频率；"
+                     "未覆盖的仓库与未取证的仓库都不等于没有机会"),
+        },
     }
     selected_ids = {c["project_id"] for c in candidates}
     result = envelope(candidates, snapshot=snapshot, coverage={
@@ -2041,6 +2380,10 @@ def main():
             p.add_argument("--per-project", type=positive, default=2)
             p.add_argument("--per-repo", type=positive, default=3,
                            help="Maximum component opportunities from one repository per review queue")
+            p.add_argument("--backlog-reserve", type=nonnegative,
+                           default=DEFAULT_BACKLOG_RESERVE,
+                           help="Slots reserved each round for the oldest never-shown "
+                                "review-queue candidates (default 2); 0 disables the reserve")
             p.add_argument("--show-suppressed", action="store_true")
             p.add_argument("--refresh", action="store_true", help="Explicit GET via gh; atomically commit only a full same-account snapshot")
             p.add_argument("--fetch-evidence", action="store_true", help="Explicit bounded README/release/commit GETs")
@@ -2090,4 +2433,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

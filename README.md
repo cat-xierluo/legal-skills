@@ -36,12 +36,12 @@
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-10-26 | 新上传 | [skill-publicizer](skills/skill-publicizer/) | v1.0.0 | 个人 Skill 公开化流程：通用机制与私有配置拆分、真实导出树门禁、独立复审及分阶段发表授权。 |
 | 2026-10-26 | 新上传 | [magpie-optimizer](skills/magpie-optimizer/) | v1.6.0 | 从私有维护仓库迁入公开目录：保留体检/盘点/入门/路由治理与离线回归；本机画像、策略与运行证据通过 `config/*.local.*`、`state/` 私有层隔离。 |
+| 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.16.0 | 修复每日候选队列积压饥饿：每轮为最久未展示 pending 保留固定名额（`--backlog-reserve`，默认 2），本轮取证候选保持证据通道内第一优先级但不再占满整轮；coverage 与回执披露候选来源与按真实轮次估算的积压覆盖周期。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.2 | 回执校验准备包结构，缺失候选列表不再误判静默；准备错误保留为失败事实，格式异常受控降级；保留合法 partial 与旧包时间回退。 |
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.1 | 修复证据排序反转：本轮取证失败或预算跳过回退缓存的候选不再被从未尝试过的缓存命中挤掉（回退分支记 `cached_partial` / `cached_skipped`，排序按 status 而非 source）；范围冲突三值在 repository-profiles 补齐。 |
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.0 | 候选携带本轮证据（README/Release/提交摘要），本轮已取证仓库优先进入候选并披露因队列上限未入候选的取证数；范围冲突改按组件真实声明的排除短句判定，无可解析排除句时显式标注待人工确认。 |
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.2 | 修复运行包不可读时的零警告静默成功：新鲜度判定前置到可读性检查之前（用文件 mtime），损坏或格式异常的运行包按“没有有效运行包”处理（显式警告、不得 silent、无证据判 failed），本轮边界回退到 mtime 避免新增未研判条目漏计；同时对齐 CHANGELOG 的 run_id 表述。 |
 | 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.1 | 修复每日闭环回执与租约：`--outcome auto` 可用、显式 judged 须有正向证据、运行包新鲜度校验（默认 24 小时）、租约隔离失败不销毁原文、同 owner 续租保留 run_id。 |
-| 2026-10-24 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.14.0 | 新增每日闭环：离线对账 reconcile、judged/silent/failed 运行回执与并发租约 lease，全程离线且静默需正向证据。 |
 
 </details>
 
@@ -745,9 +745,9 @@
 <td>工具·Star管理</td>
 <td style="word-break:break-word">GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.15.2</td>
+<td style="text-align:center">v0.16.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/github-star-manager-0.6.6.zip">下载 v0.6.6</a></td>
-<td>源码 v0.15.2 待发布；下载为已发布 v0.6.6。</td>
+<td>源码 v0.16.0 待发布；下载为已发布 v0.6.6。</td>
 </tr>
 <tr>
 <td><a href="skills/skill-publicizer/"><strong>skill-publicizer</strong></a></td>
@@ -851,4 +851,3 @@
 | zhihe-legal-research     | v1.2.2 | 已归档（2026-08-09 复测：报告接口自 2026-04-08 起 has_report 持续 false，智合法律研究已整体迁移至新平台 zhiexa.com；老 API submit 端点持续 500，无法提交新问题。技能暂不可用，待后续迁移至新平台 zhiexa.com）。技能目录已从仓库移除                                                                                                          |
 
 </details>
-
