@@ -170,6 +170,21 @@ class OutcomesTests(unittest.TestCase):
 
 
 class ChangeTests(unittest.TestCase):
+    def test_timed_rule_binds_zone_without_ignoring_existing_zone(self):
+        rule = {'pause': 'example/cheap', 'time': '14:00-18:00'}
+        self.assertEqual(c.raw_rule(rule, 'UTC')['time'],
+                         {'from': '14:00', 'to': '18:00', 'zone': 'UTC'})
+        before = {'id': 'existing', 'members': ['example/strong', 'example/cheap'],
+                  'routing': 'smart', 'stays': 'auto', 'rules': []}
+        spec = {'schema': 'magpie-group-change.v1', 'group': 'existing',
+                'set': {}, 'append_rules': [rule]}
+        data = {'providers': [{'id': 'example', 'models': ['strong', 'cheap']}]}
+        step = c.patch_steps(spec, before, data, 'UTC')[0]
+        self.assertIn('tz=UTC', step['command'])
+        changed = copy.deepcopy(step['expected'])
+        changed['rules'][0]['time']['zone'] = 'Europe/London'
+        self.assertNotEqual(c.canonical(changed), c.canonical(step['expected']))
+
     @unittest.skipUnless(REAL,'explicit --real-cli required')
     def test_real_update_and_restore(self):
         original=m.config_path(); old=m.sha(original) if original.exists() else None

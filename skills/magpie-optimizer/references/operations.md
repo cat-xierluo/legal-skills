@@ -31,6 +31,9 @@ python3 scripts/magpie_route_design.py validate --design config/route-policy.loc
 
 检查范围：JSON schema、入口/嵌套组引用、自引用与循环、嵌套深度、规则目标在成员内、意图规则有分类器、compact 规则置首、意图描述含排除语，以及角色组是否有至少两个 provider 前缀。最后一条只是容量线索，不证明账号池独立；真实容量仍须按盘点与回读核对。
 
+`--strict` 不会因 `role_provider_diversity_insufficient` 单独失败：单来源层可以保留，
+该提示要求说明容量风险；其余结构/规则警告仍阻断严格检查。
+
 ### plan 的执行边界（据 `scripts/magpie_route.py` 的校验）
 
 - **只新建**：组 ID 必须匹配 `mpr-` 加小写字母数字与连字符，且不与既有组的 ID 或名称冲突（冲突时报 `existing_group_collision`）。既有组不会被 plan 改动，既有组变更走下面的 `magpie_change.py`。

@@ -19,6 +19,7 @@ import validate_examples
 
 SCHEMA = "magpie-route-design.v1"
 TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d-(?:[01]\d|2[0-3]):[0-5]\d$")
+ADVISORY_WARNINGS = {"role_provider_diversity_insufficient"}
 
 
 class DesignError(Exception):
@@ -254,7 +255,8 @@ def main(argv=None):
     except DesignError as error:
         print(json.dumps({"status": "REFUSED", "reason": str(error)}), file=sys.stderr)
         return 2
-    failed = bool(errors) or (args.strict and warnings)
+    strict_warnings = [warning for warning in warnings if warning not in ADVISORY_WARNINGS]
+    failed = bool(errors) or (args.strict and bool(strict_warnings))
     result = {
         "schema": "magpie-route-design-validation.v1",
         "status": "FAILED" if failed else "PASSED",

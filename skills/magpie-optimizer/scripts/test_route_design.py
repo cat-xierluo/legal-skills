@@ -77,6 +77,23 @@ class RouteDesignTests(unittest.TestCase):
         free["members"] = ["example/a", "example/b"]
         self.assertIn("role_provider_diversity_insufficient", d.validate_design(design)[1])
 
+    def test_single_provider_warning_does_not_fail_strict(self):
+        design = shipped()
+        free = next(g for g in design["groups"] if g["role"] == "free")
+        free["members"] = ["example/a", "example/b"]
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "design.local.json"
+            target.write_text(json.dumps(design), encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(SCRIPTS / "magpie_route_design.py"), "validate",
+                 "--design", str(target), "--strict"],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["status"], "PASSED")
+            self.assertIn("role_provider_diversity_insufficient", report["warnings"])
+
     def test_duplicate_json_keys_are_refused_without_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "design.local.json"

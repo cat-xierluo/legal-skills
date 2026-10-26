@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import sys
 import time
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 sys.dont_write_bytecode = True
 import magpie_route as m
 
@@ -34,17 +35,40 @@ def rest(data, gid):
     return out
 
 
-def raw_rule(r):
+def local_rule_timezone():
+    candidates = [os.environ.get('TZ', '').lstrip(':')]
+    localtime = str(Path('/etc/localtime').resolve())
+    for marker in ('/zoneinfo/', '/zoneinfo.default/'):
+        if marker in localtime:
+            candidates.append(localtime.split(marker, 1)[1])
+    try:
+        candidates.append(Path('/etc/timezone').read_text().strip())
+    except OSError:
+        pass
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            ZoneInfo(candidate)
+        except (ZoneInfoNotFoundError, ValueError):
+            continue
+        return candidate
+    raise m.Refused('local_rule_timezone_unavailable')
+
+
+def raw_rule(r, timezone=None):
     out = {k: v for k, v in r.items() if k not in ('pause', 'use', 'time')}
     out['use'] = r.get('use', r.get('pause'))
     if 'pause' in r:
         out['pause'] = True
     if 'time' in r:
         out['time'] = {'from': r['time'][:5], 'to': r['time'][6:]}
+        if timezone:
+            out['time']['zone'] = timezone
     return out
 
 
-def patch_steps(spec, before, data):
+def patch_steps(spec, before, data, timezone=None):
     m.require(set(spec) == {'schema', 'group', 'set', 'append_rules'} and spec['schema'] == 'magpie-group-change.v1', 'change_schema')
     gid = spec['group']
     m.require(isinstance(gid, str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]*', gid), 'group_id_invalid')
@@ -67,8 +91,10 @@ def patch_steps(spec, before, data):
         current.update(edits)
         steps.append({'command': command, 'expected': copy.deepcopy(current)})
     for r in spec['append_rules']:
-        current.setdefault('rules', []).append(raw_rule(r))
+        current.setdefault('rules', []).append(raw_rule(r, timezone))
         command = ['group', 'rule', 'add', gid] + [k if v is True else k + '=' + str(v) for k, v in r.items()]
+        if timezone and 'time' in r:
+            command.append('tz=' + timezone)
         steps.append({'command': command, 'expected': copy.deepcopy(current)})
     m.require(steps, 'empty_change')
     return steps
@@ -78,12 +104,19 @@ def make_plan(spec, path):
     raw = path.read_bytes()
     data = m.parse_json(raw)
     before = copy.deepcopy(group_of(data, spec['group']))
-    steps = patch_steps(spec, before, data)
+    # New CLI versions persist the local zone. Bind it explicitly in both
+    # command and expected state instead of ignoring a readback difference.
+    timezone = None
+    if any('time' in rule for rule in spec.get('append_rules', []) if isinstance(rule, dict)):
+        if 'tz=<zone>' in m.cli(['group', 'rule', '--help']):
+            timezone = local_rule_timezone()
+    steps = patch_steps(spec, before, data, timezone)
     version = m.cli(['--version']).strip()
     m.require(m.sha(path) == hashlib.sha256(raw).hexdigest(), 'configuration_drift')
     return {'schema': 'magpie-group-change-plan.v1', 'created_epoch': time.time(), 'config_path': str(path.resolve()),
             'config_sha256': hashlib.sha256(raw).hexdigest(), 'cli_version': version,
-            'spec': spec, 'before': before, 'steps': steps, 'mode': 'change'}
+            'spec': spec, 'before': before, 'steps': steps, 'mode': 'change',
+            'rule_timezone': timezone}
 
 
 def recovery_plan(applied_plan, path):
@@ -124,12 +157,12 @@ def apply(plan, path):
     gid = plan['spec']['group']
     m.require(canonical(group_of(data, gid)) == canonical(plan['before']), 'group_before_mismatch')
     if plan['mode'] == 'change':
-        m.require(patch_steps(plan['spec'], plan['before'], data) == plan['steps'], 'plan_commands_tampered')
+        m.require(patch_steps(plan['spec'], plan['before'], data, plan.get('rule_timezone')) == plan['steps'], 'plan_commands_tampered')
     else:
         m.require(plan['mode'] == 'restore', 'plan_mode')
         source = plan.get('source_change_plan')
         m.require(isinstance(source, dict), 'restore_source_required')
-        m.require(patch_steps(source['spec'], source['before'], data) == source['steps'], 'source_commands_tampered')
+        m.require(patch_steps(source['spec'], source['before'], data, source.get('rule_timezone')) == source['steps'], 'source_commands_tampered')
         regenerated = recovery_plan(source, path)
         m.require(regenerated['spec'] == plan['spec'] and regenerated['steps'] == plan['steps'], 'restore_commands_tampered')
     for step in plan['steps']:
