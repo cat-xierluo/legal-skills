@@ -145,6 +145,7 @@ python scripts/auto_discover.py lease release --data-dir ~/.local/state/github-s
   - 判定口径：silent 必须有正向证据（存在**新鲜**的准备阶段运行包、候选数为 0、队列无新增未研判、无卡片写入），否则被拒绝并以退出码 1 结束；Agent 崩溃、候选未研判、队列损坏一律记 failed。
   - 显式覆盖同样受事实约束：`failed` 始终保留（Agent 主动报错是合法意图）；`silent` 仍须通过正向证据校验；**显式 `judged` 也必须有正向证据**——本轮写出反馈卡，或队列条目真实变为 judged，且不存在队列损坏等失败事实；否则降级为 failed 并在 `errors` 说明原因。显式覆盖不能用来伪造与事实矛盾的结论。
   - 回执记录请求预算用量、候选数、写入卡片、reconcile 结果与通知结论。缺运行包时按“候选数为 0”处理并附显式警告。
+  - **准备证据结构与错误**：可读 JSON 对象仍须包含 `items` 候选对象列表；`coverage`、`watch_coverage`、显式 `status`（`ok`/`partial`）及 `errors` 容器须符合生产者契约。缺失/非列表 `items` 不等于零候选；格式异常使用既有无效包降级。准备阶段非空 `errors` 是失败事实，不得静默或用显式 `judged` 掩盖。只有警告的合法 `partial` 不一律失败。兼容仅含 `items` 的旧包，时间戳缺失或不可解析仍回退 mtime。
   - **运行包新鲜度**：运行包的 `generated_at` 距今超过 `--max-run-age-hours`（默认 24 小时）时，本轮按“没有有效运行包”处理——候选数按 0 计、该运行包不作为“本轮”的边界（旧运行包之后写出的卡片不计入本轮 `cards_written`），并给出显式警告与错误。这种情况下不得记成静默成功。阈值可用 `--max-run-age-hours` 覆盖；过期判定用运行包自带的 `generated_at`，缺失时回退到文件 mtime。
   - **运行包不可读**：运行包损坏（JSON 解析失败）或格式异常（顶层不是 JSON 对象）时，同样按“没有有效运行包”处理——候选数按 0 计、给出显式警告、**不得走 silent 分支**，无研判证据时判 failed。新鲜度判定在可读性检查**之前**生效（用文件 mtime），因此“长时间停机 + 运行包损坏”不会变成零警告的静默成功。此时“本轮边界”回退到文件 mtime，使本轮之后新出现的未研判条目仍被计入统计，而不是因为拿不到 `generated_at` 就被排除在外；连文件 mtime 都不可读时显式披露边界失效（`facts.run_boundary_known=false`）。
 - **lease** 维护 `auto-opportunities/lease.json`（owner、run_id、acquired_at、expires_at），保证同一状态目录只有一个执行者消费队列。

@@ -565,7 +565,8 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
                "run_stale_reason": None, "run_readable": False,
                "run_invalid": False,
                "run_invalid_reason": None, "run_boundary_known": False,
-               "boundary_at": None, "boundary_source": None}
+               "boundary_at": None, "boundary_source": None,
+               "preparation_errors": []}
     if not path:
         context["warnings"].append(
             "没有找到准备阶段运行包——本轮候选数按 0 计；"
@@ -582,12 +583,35 @@ def latest_run_context(data_dir, max_age_hours=DEFAULT_MAX_RUN_AGE_HOURS, now=No
     if not isinstance(value, dict):
         return _invalid_run_context(context, mtime_age, mtime_iso, max_age_hours,
                                     "运行包格式异常（顶层不是 JSON 对象）")
-    context["run_readable"] = True
+    # A readable JSON object is not proof that preparation produced no candidates.
+    # Preserve minimal legacy envelopes (items only, mtime fallback), but validate
+    # every container before reading it and reject an unknown explicit status.
     items = value.get("items")
-    context["generated_at"] = value.get("generated_at")
-    context["candidates"] = len(items) if isinstance(items, list) else 0
+    coverage = value.get("coverage")
+    errors = value.get("errors")
+    invalid_reason = None
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        invalid_reason = "items 必须是候选对象列表"
+    elif coverage is not None and not isinstance(coverage, dict):
+        invalid_reason = "coverage 必须是 JSON 对象"
+    elif (isinstance(coverage, dict) and coverage.get("watch_coverage") is not None
+          and not isinstance(coverage["watch_coverage"], dict)):
+        invalid_reason = "coverage.watch_coverage 必须是 JSON 对象"
+    elif "status" in value and value["status"] not in ("ok", "partial"):
+        invalid_reason = "status 必须是 ok 或 partial"
+    elif errors is not None and (not isinstance(errors, list)
+                                or any(not isinstance(error, str) for error in errors)):
+        invalid_reason = "errors 必须是字符串列表"
+    if invalid_reason:
+        return _invalid_run_context(context, mtime_age, mtime_iso, max_age_hours,
+                                    "运行包格式异常（" + invalid_reason + "）")
+    context["run_readable"] = True
+    generated_at = value.get("generated_at")
+    context["generated_at"] = generated_at if isinstance(generated_at, str) else None
+    context["candidates"] = len(items)
     context["status"] = value.get("status")
-    coverage = value.get("coverage") or {}
+    context["preparation_errors"] = list(errors or [])
+    coverage = coverage or {}
     watch = coverage.get("watch_coverage") or {}
     if isinstance(watch.get("request_budget"), dict):
         context["request_budget"] = watch["request_budget"]
@@ -764,6 +788,7 @@ def build_receipt(data_dir, outcome=None, errors=None, notify=None,
                 judged_cards += 1
                 break
     failures = list(errors or [])
+    failures.extend("准备阶段失败：" + error for error in run.get("preparation_errors", []))
     if reconcile_code:
         failures.extend(reconcile.get("errors") or [])
     stale_reason = run.get("run_stale_reason") if stale_run else None

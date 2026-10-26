@@ -932,5 +932,94 @@ class UnreadableRunPackageRegressionTests(unittest.TestCase):
         self.assertFalse(receipt["facts"]["stale_run"])
 
 
+class ReceiptPreparationContractTests(unittest.TestCase):
+    """Malformed preparation is not positive evidence of zero candidates."""
+
+    def check_run(self, value, outcome=None):
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run = data / "auto-opportunities/runs/preparation.json"
+            run.parent.mkdir(parents=True)
+            run.write_text(json.dumps(value), encoding="utf-8")
+            return ad.build_receipt(data, outcome=outcome)
+
+    def test_missing_or_non_list_items_cannot_be_silent(self):
+        for value in ({}, {"items": None}, {"items": {}}, {"items": ""}):
+            with self.subTest(value=value):
+                result, code = self.check_run(value)
+                self.assertEqual(code, 1)
+                self.assertEqual(result["receipt"]["outcome"], "failed")
+                self.assertTrue(result["receipt"]["facts"]["run_invalid"])
+
+    def test_non_object_candidate_cannot_be_zero_or_valid_evidence(self):
+        result, code = self.check_run({"items": [None]})
+        self.assertEqual(code, 1)
+        self.assertTrue(result["receipt"]["facts"]["run_invalid"])
+
+    def test_malformed_coverage_is_controlled_failure(self):
+        for coverage in ([], ["bad"], "bad", {"watch_coverage": []},
+                         {"watch_coverage": ["bad"]}):
+            with self.subTest(coverage=coverage):
+                result, code = self.check_run({"items": [], "coverage": coverage})
+                self.assertEqual(code, 1)
+                self.assertEqual(result["receipt"]["outcome"], "failed")
+
+    def test_explicit_silent_rejects_invalid_run(self):
+        result, code = self.check_run({}, outcome="silent")
+        self.assertEqual(code, 1)
+        self.assertFalse(result["ok"])
+
+    def test_preparation_errors_survive_receipt(self):
+        result, code = self.check_run({"items": [], "status": "partial",
+                                       "errors": ["synthetic preparation failed"]})
+        self.assertEqual(code, 1)
+        self.assertEqual(result["receipt"]["outcome"], "failed")
+        self.assertTrue(any("synthetic preparation failed" in error
+                            for error in result["receipt"]["errors"]))
+
+    def test_invalid_status_and_error_container_fail_closed(self):
+        for fields in ({"status": "error"}, {"status": []},
+                       {"errors": "failed"}, {"errors": [None]}):
+            with self.subTest(fields=fields):
+                result, code = self.check_run({"items": [], **fields})
+                self.assertEqual(code, 1)
+                self.assertTrue(result["receipt"]["facts"]["run_invalid"])
+
+    def test_legacy_minimal_items_list_keeps_mtime_fallback(self):
+        result, code = self.check_run({"items": []})
+        self.assertEqual(code, 0)
+        self.assertEqual(result["receipt"]["outcome"], "silent")
+        self.assertEqual(result["receipt"]["facts"]["run_boundary_source"], "file_mtime")
+
+    def test_unparseable_timestamp_keeps_documented_mtime_fallback(self):
+        for timestamp in ("not-a-date", ["bad"], {"bad": True}):
+            with self.subTest(timestamp=timestamp):
+                result, code = self.check_run({"items": [], "generated_at": timestamp})
+                self.assertEqual(code, 0)
+                self.assertEqual(result["receipt"]["facts"]["run_boundary_source"], "file_mtime")
+
+    def test_cli_persists_failed_receipt_without_traceback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "auto-opportunities/runs/preparation.json"
+            run.parent.mkdir(parents=True)
+            run.write_text(json.dumps({"items": [], "coverage": ["bad"]}))
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "auto_discover.py"), "receipt",
+                 "--data-dir", directory, "--outcome", "auto"],
+                capture_output=True, text=True, check=False)
+            self.assertEqual(completed.returncode, 1)
+            self.assertNotIn("Traceback", completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["outcome"], "failed")
+            stored = json.loads(Path(result["receipt_path"]).read_text())
+            self.assertEqual(stored["outcome"], "failed")
+
+    def test_partial_with_warning_only_keeps_valid_empty_result(self):
+        result, code = self.check_run({"items": [], "status": "partial",
+                                      "warnings": ["bounded coverage"], "errors": []})
+        self.assertEqual(code, 0)
+        self.assertEqual(result["receipt"]["outcome"], "silent")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
