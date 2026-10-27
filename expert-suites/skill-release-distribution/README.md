@@ -29,7 +29,7 @@
 | [subtree-publish](../../skills/subtree-publish/) | 把 monorepo 子目录增量推送到独立仓库 | [已发布 v1.7.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/subtree-publish-1.7.1.zip) |
 | [skill-manager](../../skills/skill-manager/) | 管理多 Agent 平台的 Skill 安装、同步和状态；源码 v1.9.1 待发布 | [已发布 v1.7.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-manager-1.7.2.zip) |
 | [skill-lint](../../skills/skill-lint/) | 在发布前审查 Skill 结构、安全和质量；源码 v2.9.3 待发布 | [已发布 v2.9.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-lint-2.9.1.zip) |
-| [skill-publicizer](../../skills/skill-publicizer/) | 把个人自用 Skill 剥离私有配置并整理成公开候选；源码 v1.0.0 待发布 | 尚无公开下载 |
+| [skill-publicizer](../../skills/skill-publicizer/) | 把个人自用 Skill 剥离私有配置并整理成公开候选；源码 v1.1.0 待发布 | 尚无公开下载 |
 | [verification-gate](../../skills/verification-gate/) | 为脚本和发布链路生成真实验证证据 | [已发布 v1.3.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/verification-gate-1.3.0.zip) |
 
 ## 建议使用方式

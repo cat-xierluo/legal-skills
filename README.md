@@ -36,14 +36,12 @@
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.6 | 完整材料快照预检与脱敏报告，修复公开引文误拦；新增不带评测答案的 Runtime 候选准备与真实日志覆盖回执。完整跨 Runtime 闭环仍待实测验收。 |
 | 2026-10-27 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.1 | 修复畸形枚举反馈中断整轮索引：先验类型、保留无效报告的重评标记与合法旧卡。 |
+| 2026-10-27 | 更新 | [skill-publicizer](skills/skill-publicizer/) | v1.1.0 | 私仓到公仓的迁移形态必须显式裁决；多 Runtime、状态库与报告类复合 Skill 增加公开目录前向安装检查；结构校验先对齐目标仓发布字段规范。 |
 | 2026-10-26 | 新上传 | [skill-publicizer](skills/skill-publicizer/) | v1.0.0 | 个人 Skill 公开化流程：通用机制与私有配置拆分、真实导出树门禁、独立复审及分阶段发表授权。 |
 | 2026-10-26 | 新上传 | [magpie-optimizer](skills/magpie-optimizer/) | v1.6.0 | 从私有维护仓库迁入公开目录：保留体检/盘点/入门/路由治理与离线回归；本机画像、策略与运行证据通过 `config/*.local.*`、`state/` 私有层隔离。 |
 | 2026-10-27 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.7.0 | 并入官方社区 magpie-setup / magpie-quota 的命令面与额度读数合同（MIT，已署名）：单 Skill 覆盖配置到额度到治理全链路。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.0 | 新增离线动态复用审查：每日候选直接绑定目标原文与三修订，核来源摘录、方法转移和生产能力提案义务；缺据暂缓，报告保存后可回读且消费时重验；廉价探测区分缓存与本轮观察，同方向多锚点只占一席。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.16.0 | 修复每日候选队列积压饥饿：每轮为最久未展示 pending 保留固定名额（`--backlog-reserve`，默认 2），本轮取证候选保持证据通道内第一优先级但不再占满整轮；coverage 与回执披露候选来源与按真实轮次估算的积压覆盖周期。 |
-| 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.2 | 回执校验准备包结构，缺失候选列表不再误判静默；准备错误保留为失败事实，格式异常受控降级；保留合法 partial 与旧包时间回退。 |
-| 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.1 | 修复证据排序反转：本轮取证失败或预算跳过回退缓存的候选不再被从未尝试过的缓存命中挤掉（回退分支记 `cached_partial` / `cached_skipped`，排序按 status 而非 source）；范围冲突三值在 repository-profiles 补齐。 |
-| 2026-10-25 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.0 | 候选携带本轮证据（README/Release/提交摘要），本轮已取证仓库优先进入候选并披露因队列上限未入候选的取证数；范围冲突改按组件真实声明的排除短句判定，无可解析排除句时显式标注待人工确认。 |
 
 </details>
 
@@ -756,7 +754,7 @@
 <td>工具·公开化</td>
 <td style="word-break:break-word">整理个人 Skill 的通用机制、配置样例与本地私有层，复查导出树及历史隐私，按已有授权交付公开候选</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">v1.1.0</td>
 <td style="text-align:center">源码待发布</td>
 <td>所属套件：Skill 发布与分发；按阶段依赖 skill-creator、skill-lint、git-workflow 等工具</td>
 </tr>
