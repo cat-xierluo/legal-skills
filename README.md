@@ -37,6 +37,7 @@
 | 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.6 | 完整材料快照预检与脱敏报告，修复公开引文误拦；新增不带评测答案的 Runtime 候选准备与真实日志覆盖回执。完整跨 Runtime 闭环仍待实测验收。 |
 | 2026-10-26 | 新上传 | [skill-publicizer](skills/skill-publicizer/) | v1.0.0 | 个人 Skill 公开化流程：通用机制与私有配置拆分、真实导出树门禁、独立复审及分阶段发表授权。 |
 | 2026-10-26 | 新上传 | [magpie-optimizer](skills/magpie-optimizer/) | v1.6.0 | 从私有维护仓库迁入公开目录：保留体检/盘点/入门/路由治理与离线回归；本机画像、策略与运行证据通过 `config/*.local.*`、`state/` 私有层隔离。 |
+| 2026-10-27 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.7.0 | 并入官方社区 magpie-setup / magpie-quota 的命令面与额度读数合同（MIT，已署名）：单 Skill 覆盖配置到额度到治理全链路。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.0 | 新增离线动态复用审查：每日候选直接绑定目标原文与三修订，核来源摘录、方法转移和生产能力提案义务；缺据暂缓，报告保存后可回读且消费时重验；廉价探测区分缓存与本轮观察，同方向多锚点只占一席。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.16.0 | 修复每日候选队列积压饥饿：每轮为最久未展示 pending 保留固定名额（`--backlog-reserve`，默认 2），本轮取证候选保持证据通道内第一优先级但不再占满整轮；coverage 与回执披露候选来源与按真实轮次估算的积压覆盖周期。 |
 | 2026-10-26 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.15.2 | 回执校验准备包结构，缺失候选列表不再误判静默；准备错误保留为失败事实，格式异常受控降级；保留合法 partial 与旧包时间回退。 |
@@ -590,9 +591,9 @@
 <tr>
 <td><a href="skills/magpie-optimizer/"><strong>magpie-optimizer</strong></a></td>
 <td>工具·AI效能</td>
-<td style="word-break:break-word">基于 Magpie 分析个人 AI 工作效能：供应商与账号额度盘点、插件接入、路由治理、Token 消耗与限流诊断、资源安排建议，并关联任务产物和验收比较效果；本机配置与运行证据留在私有层</td>
+<td style="word-break:break-word">基于 Magpie 配置并优化 AI 工作效能：完整命令参考、供应商与订阅接入、额度窗口读数、路由治理、Token 消耗与限流诊断，并关联任务产物和验收比较效果；本机配置与运行证据留在私有层</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.0</td>
+<td style="text-align:center">v1.7.0</td>
 <td style="text-align:center">源码待发布</td>
 <td>本机配置通过 `config/*.local.*` 与 `state/` 私有层隔离；不改生产配置、不自动消耗额度</td>
 </tr>

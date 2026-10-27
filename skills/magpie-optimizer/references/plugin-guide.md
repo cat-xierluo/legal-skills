@@ -192,7 +192,7 @@ Codex 的主模型与子 Agent 模型是两层，可分别指定。结论摘要�
 
 | 降级路径 | 适用条件 | 做法 |
 |---|---|---|
-| 直接用 provider add | Magpie CLI 本身支持该 provider 的原生接入 | 用原生 CLI 增加 provider，再按[操作入口](operations.md)建组与配规则 |
+| 直接用 provider add | Magpie CLI 本身支持该 provider 的原生接入 | 改走原生 CLI：`magpie provider add` / `magpie accounts add` / `magpie plugin add`，语法见[CLI 命令参考](cli-command-reference.md)，接入验证按[供应商与账号接入](provider-integration.md)执行，建组与配规则再按[操作入口](operations.md) |
 | 用官方文档里的账号导入入口 | 该 provider 官方提供账号导入界面或命令 | 由使用者在官方入口完成导入，再回读 Magpie 侧是否可见 |
 | 只用已有 provider | 现有 provider 目录已覆盖当前任务所需能力 | 复用现有 provider 与组，只做组内分层与时段规则，不新增接入面 |
 | 先升级 Magpie | 目标插件或 provider 能力在当前安装版缺失 | 升级前先确认升级会改变哪些行为；升级后重新核对 CLI 语法、配置字段与落点 |

@@ -1,9 +1,9 @@
 ---
 name: magpie-optimizer
-description: 用 Magpie 从零配置模型路由或优化 AI 工作效能：本地 agent 扫描、供应商与账号额度盘点、账号导入、插件安装、路由模板与模型路由配置；诊断 Token 消耗与限流、安排套餐与临期积分、关联任务产物比较效果。
+description: 用 Magpie 配置并优化 AI 工作效能：接入供应商、订阅与插件，配置模型路由组与意图规则，管理网关、可见性、共享 MCP 与搜索；盘点额度与套餐，诊断 Token 消耗与限流，把每次调整关联真实任务验收效果。
 license: MIT
 metadata:
-  version: "1.6.0"
+  version: "1.7.0"
   author: 杨卫薪律师（微信ywxlaw）
   homepage: https://github.com/cat-xierluo/legal-skills
 ---
@@ -22,9 +22,11 @@ metadata:
 | 为什么消耗快，哪里值得优化 | 先采集、核覆盖，再诊断；必要时按会话深入 |
 | 怎样利用套餐和临期积分 | 诊断结合现有任务，读取[资源策略](references/token-strategy.md)，输出当前/稍后/待输入建议 |
 | 新建路由或改已有组 | 先按[智能路由设计](references/adaptive-routing-design.md)生成草案；再读[配置合同](references/cli-contract.md)和[操作入口](references/operations.md)，展示计划，按已有授权执行 |
+| 查某个 magpie 子命令的写法，或接入供应商、订阅、插件 | 读[CLI 命令参考](references/cli-command-reference.md)；涉及写入时按[CLI 与变更边界](references/cli-contract.md)先只读回读并展示计划 |
 | 已有多个 provider，不知道怎么分层、哪些模型放同一层 | 读[智能路由设计](references/adaptive-routing-design.md)，先抽角色与硬边界，再映射到现有资源 |
 | 单一入口里嵌套多个能力组并配意图规则 | 读[智能路由设计](references/adaptive-routing-design.md)，用 `magpie_route_design.py validate` 先核结构，再按[操作入口](references/operations.md)生成/执行变更 |
 | 跨 harness 共用难易任务自动分流 | 读取[通用 smart-split](references/smart-split.md)，复用稳定组ID，核规则和有意回退 |
+| 查额度还剩多少、窗口何时重置、等额度恢复 | 读[额度读数合同](references/cli-command-reference.md#额度读数合同magpie-quota---json)，按窗口口径回答；[额度、任务与成果](references/token-strategy.md)承接成本与资源安排 |
 | 只用一个组当统一入口、建组/拆组、组内分层与回退治理 | 读取[路由治理](references/routing-governance.md)，按坑位排障、成员分层、计点溢出、规则顺序、出口代理分层与可配置项落地 |
 | 给某 harness 的子 Agent 单独配模型、核优先级与坑 | 读取[子Agent模型指定](references/subagent-models.md)，先核安装版与该客户端可见模型列表 |
 | 派发时指定了子 Agent 模型却没按它跑 | 读取[指名覆盖观测](references/subagent-override.md)，核请求名、统一默认与实际 served 是否一致 |

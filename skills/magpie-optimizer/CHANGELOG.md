@@ -1,5 +1,15 @@
 # 变更记录
 
+## [1.7.0] - 2026-10-27
+
+### 新增
+- 新增 `references/cli-command-reference.md`：完整 magpie 命令面（供应商、订阅、插件、agent 指向、子 agent、路由组与规则、网关 key 与预算、模型呈现与定价、共享 MCP/指令/搜索、维护命令）与 `magpie quota --json` 字段读数合同；命令面与字段合同整理自 magpie-community/plugins 的 magpie-setup 与 magpie-quota（MIT），按 MIT 兼容方式并入并重写。
+- SKILL 工作方式表新增两条入口：查子命令写法/接入路径、查额度窗口与等待恢复，直接路由到命令参考与额度合同；纯命令语法与纯额度读数不再需要另装独立 Skill。
+
+### 调整
+- description 扩展为覆盖配置与额度完整能力，避免与官方 magpie-setup / magpie-quota 触发面重叠时漏接。
+- 插件指南中「原生接入可用」的回退路径改为指向命令参考与接入验证步骤。
+
 ## [1.6.0] - 2026-10-26
 
 ### 修复

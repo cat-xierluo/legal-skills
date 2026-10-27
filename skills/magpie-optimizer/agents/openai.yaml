@@ -1,4 +1,4 @@
 interface:
   display_name: "AI 工作效能优化"
-  short_description: "基于 Magpie 分析消耗与上下文，调整路由并结合验收复核效果"
-  default_prompt: "使用 $magpie-optimizer 读取 Magpie 观测，诊断 AI 工作消耗，提出可验证的调整并按已有授权推进。"
+  short_description: "基于 Magpie 完成供应商接入、额度盘点、路由配置与消耗治理，并结合任务验收复核效果"
+  default_prompt: "使用 $magpie-optimizer 配置或诊断 Magpie：接入供应商与插件、盘点额度、设计并校验路由调整，关联任务验收后按已有授权推进。"
