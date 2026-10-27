@@ -18,6 +18,10 @@
 | 离线测试 | `python3 -m unittest` / 项目测试 | 脚本行为回归，含错误路径 |
 | 候选绑定证据 | skill-lint `harness_evidence_gate.py` | 有可执行 checker 时取得 `HARNESS_REVIEW_VERIFIED`；纯文档 Skill 标 NOT_VERIFIED，不凭空造 checker |
 
+### 数据去向须逐入口核对
+
+含可选模型、CLI 或旧兼容入口时，逐项核实际代码中的数据类别、传输通道、所需凭据、失败行为与触发条件。直接 HTTP 与已登录 CLI 可能走不同通道，不能合并成“都需要同一个 Key”；报错中断与降级成功也须按实际退出码区分。本机其他数据目录中的复制不等于联网。调度模板默认关闭不等于启用后不会周期外发：同时核手动入口与启用后的调度路径，不实际调用外部模型来证明这些静态事实。
+
 ### 结构工具的项目差异
 
 `quick_validate.py` 是通用结构检查，不同项目可能把 `version`、`author`、`homepage` 放在根 frontmatter 或 `metadata`，并有自己的发布字段规范。公开化时按以下顺序处理：
