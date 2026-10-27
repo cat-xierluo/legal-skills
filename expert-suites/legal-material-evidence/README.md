@@ -1,6 +1,6 @@
 # 法律材料与证据处理专家套件
 
-> [下载已发布套件（0.1.0）](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-legal-material-evidence-0.1.0.zip)
+> [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-legal-material-evidence-0.1.0.zip)
 > 整套源码 v0.1.1 待发布
 > 上方旧包内容不随源码变化。
 

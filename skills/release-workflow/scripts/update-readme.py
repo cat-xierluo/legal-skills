@@ -13,6 +13,7 @@ are eligible; independent-repository download links are left untouched.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
@@ -24,6 +25,8 @@ from pathlib import Path
 
 
 ASSET_RE = re.compile(r"^(.+)-(\d+\.\d+\.\d+)\.zip$")
+VERSION_RE = re.compile(r"^## \[?v?(\d+\.\d+\.\d+)\]?", re.MULTILINE)
+PENDING_RE = re.compile(r"源码 v\d+\.\d+\.\d+ 待发布[；;。]?\s*")
 
 
 def detect_repo() -> str:
@@ -69,8 +72,38 @@ def asset_url_map(release: dict[str, object]) -> dict[str, str]:
             continue
         match = ASSET_RE.fullmatch(name)
         if match:
-            result[match.group(1)] = url
+            slug = match.group(1)
+            previous = ASSET_RE.fullmatch(result.get(slug, "").rsplit("/", 1)[-1])
+            if not previous or version_tuple(match.group(2)) > version_tuple(previous.group(2)):
+                result[slug] = url
     return result
+
+
+def version_tuple(version: str) -> tuple[int, ...]:
+    return tuple(map(int, version.split(".")))
+
+
+def source_dir(readme: Path, category: str, name: str) -> Path | None:
+    """Find source beside the README, including expert-suite member references."""
+    for root in readme.resolve().parents:
+        directory = root / category / name
+        if (directory / "CHANGELOG.md").is_file():
+            return directory
+    return None
+
+
+def source_version(directory: Path | None) -> str | None:
+    if directory is None:
+        return None
+    match = VERSION_RE.search((directory / "CHANGELOG.md").read_text(encoding="utf-8"))
+    if not match:
+        raise ValueError(f"CHANGELOG 缺少 SemVer: {directory.name}")
+    return match.group(1)
+
+
+def asset_version(url: str | None) -> str | None:
+    match = ASSET_RE.fullmatch((url or "").rsplit("/", 1)[-1])
+    return match.group(2) if match else None
 
 
 def discover_readmes(root: Path) -> list[Path]:
@@ -82,18 +115,11 @@ def discover_readmes(root: Path) -> list[Path]:
 
 
 def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, object]:
-    """刷新一个 README:下载链接按「行内声明的技能名」重映射,版本列同步对齐。
+    """Refresh asset links while preserving current source versions and row order.
 
-    三层处理,彼此幂等:
-    1. 根 README 的 HTML 表行(<tr> 块):按行内 href="skills/<name>/" 的技能名
-       重映射下载链接(根治改名残留死链——链接里的旧 slug 不再决定去向),
-       并把紧邻下载 td 的版本列对齐到 zip 实际版本(含 vA.B.C→vX.Y.Z 区间写法)。
-       行内没有指向本仓库的链接时(如独立仓库下载行)整行不动。
-    2. 套件 README 的 Markdown 表行:按行内 ](../skills/<name>/) 成员名重映射链接。
-    3. 表行之外的散链(正文引用、blockquote 整套链接):按链接自身 slug 映射。
-
-    返回 {"links": 变更链接数, "versions": 对齐版本列数, "unmatched": [...]},
-    仅当内容变化时写回。
+    Source CHANGELOG wins over ZIP versions. With no local source (a standalone
+    README), retain legacy asset-version alignment. Missing assets keep existing
+    published links, so a partial hotfix never erases another component's link.
     """
     text = path.read_text(encoding="utf-8")
     stats: dict[str, object] = {"links": 0, "versions": 0, "unmatched": []}
@@ -101,7 +127,29 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
         r"https://github\.com/"
         + re.escape(repo)
         + r"/releases/(?:latest/download|download/[^/\s]+)/([A-Za-z0-9.\-]+\.zip)"
+        + r"(?=$|[\s<>\"')])"
     )
+
+    def target_for(slug: str, cell: str) -> str | None:
+        old = repo_link.search(cell)
+        # An unobserved latest/download URL may only be a future placeholder.
+        historical = old.group(0) if old and "/releases/download/" in old.group(0) else None
+        if "待发布" in cell or "待首次发布" in cell:
+            historical = None
+        target = url_map.get(slug)
+        if historical and target and version_tuple(asset_version(historical)) > version_tuple(asset_version(target)):
+            return historical
+        return target or historical
+
+    def download(target: str, markdown: bool = False) -> str:
+        label = f"已发布 v{asset_version(target)}"
+        return f"[{label}]({target})" if markdown else f'<a href="{html.escape(target, quote=True)}">{label}</a>'
+
+    def pending(body: str, current: str | None, published: str | None) -> str:
+        body = PENDING_RE.sub("", body).strip("；; ")
+        if current and current != published:
+            return f"{body}；源码 v{current} 待发布" if body else f"源码 v{current} 待发布"
+        return body
 
     def _rewrite_html_row(row_match: re.Match[str]) -> str:
         tr = row_match.group(0)
@@ -109,61 +157,82 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
         if not name_match:
             return tr
         name = name_match.group(1)
-        target = url_map.get(name)
-        links = repo_link.findall(tr)
-        if not links:
-            return tr  # 独立仓库下载行或无下载链接:整行不动
+        cells = list(re.finditer(r"(<td\b[^>]*>)(.*?)(</td>)", tr, re.DOTALL))
+        version_index = next(
+            (i for i, cell in enumerate(cells) if re.fullmatch(r"\s*v[\d.]+[^<]*", cell[2])),
+            None,
+        )
+        if version_index is None or version_index + 1 >= len(cells):
+            return tr
+        download_index = version_index + 1
+        old_download = cells[download_index][2]
+        if re.search(r"https?://", old_download) and not repo_link.search(old_download):
+            return tr  # Independent-repository downloads remain untouched.
+        target = target_for(name, old_download)
+        current = source_version(source_dir(path, "skills", name))
         if target is None:
-            stats["unmatched"].append(f"{name}(行)")
-            return tr
-
-        changed = 0
-
-        def swap(match: re.Match[str]) -> str:
-            nonlocal changed
-            if match.group(0) != target:
-                changed += 1
-            return target
-
-        new_tr = repo_link.sub(swap, tr)
-
-        # 版本列对齐:锚定「版本 td + 本仓库下载 td」结构。链接可能已是最新
-        # (幂等重跑或链接先于版本列被修过),版本列仍需独立检查对齐
-        target_ver = ASSET_RE.fullmatch(target.rsplit("/", 1)[-1])
-        if target_ver:
-            version_cell = re.compile(
-                r"(<td[^>]*>)v[\d.]+[^<]*(</td>\s*<td[^>]*><a href=\""
-                + re.escape(target)
-                + r"\")"
-            )
-            new_tr, hits = version_cell.subn(
-                rf"\g<1>v{target_ver.group(2)}\g<2>", new_tr, count=1
-            )
-            stats["versions"] = int(stats["versions"]) + hits
-        if new_tr == tr:
-            return tr
-        stats["links"] = int(stats["links"]) + changed
+            stats["unmatched"].append(f"{name}(尚无公开资产)")
+        published = asset_version(target)
+        replacements = {download_index: download(target) if target else "尚无公开 ZIP"}
+        current = current or published
+        if current and cells[version_index][2] != f"v{current}":
+            replacements[version_index] = f"v{current}"
+            stats["versions"] = int(stats["versions"]) + 1
+        if download_index + 1 < len(cells):
+            notes = cells[download_index + 1][2]
+            if "内容版本待核" in old_download and "内容版本待核" not in notes:
+                notes = f"历史 ZIP 内容版本待核；{notes}"
+            notes = re.sub(r"下载为已发布 v[\d.]+[；;。]?\s*", "", notes)
+            notes = re.sub(r"(?:源码待发布|下载(?:链接)?仍为上一已发布包)[；;。]?\s*", "", notes)
+            replacements[download_index + 1] = pending(notes, current, published)
+        previous = repo_link.search(old_download)
+        if target and (not previous or previous.group(0) != target):
+            stats["links"] = int(stats["links"]) + 1
+        new_tr = tr
+        for index, content in sorted(replacements.items(), reverse=True):
+            cell = cells[index]
+            new_tr = new_tr[:cell.start(2)] + content + new_tr[cell.end(2):]
         return new_tr
 
     def _rewrite_md_row(line_match: re.Match[str]) -> str:
         line = line_match.group(0)
+        suite = re.search(r"\]\(expert-suites/([a-z0-9-]+)/\)", line)
+        if suite:
+            name = suite.group(1)
+            cells = line.split("|")
+            if len(cells) != 7:
+                return line
+            directory = source_dir(path, "expert-suites", name)
+            current = source_version(directory)
+            if current:
+                if cells[4].strip() != f"v{current}":
+                    stats["versions"] = int(stats["versions"]) + 1
+                cells[4] = f" v{current} "
+            if directory and (directory / "skills").is_dir():
+                cells[3] = f" {sum(p.is_symlink() for p in (directory / 'skills').iterdir())} "
+            target = target_for(f"suite-{name}", cells[5])
+            previous = repo_link.search(cells[5])
+            if target and (not previous or previous.group(0) != target):
+                stats["links"] = int(stats["links"]) + 1
+            cells[5] = f" {download(target, markdown=True)} " if target else " 尚无公开 ZIP "
+            return "|".join(cells)
         member = re.search(r"\]\([^)]*?/skills/([a-z0-9-]+)/\)", line)
         if not member:
             return line
-        target = url_map.get(member.group(1))
-        if not target or not repo_link.search(line):
+        cells = line.split("|")
+        if len(cells) != 5:
             return line
-        changed = 0
-
-        def swap(match: re.Match[str]) -> str:
-            nonlocal changed
-            if match.group(0) != target:
-                changed += 1
-            return target
-
-        new_line = repo_link.sub(swap, line)
-        stats["links"] = int(stats["links"]) + changed
-        return new_line
+        if re.search(r"https?://", cells[3]) and not repo_link.search(cells[3]):
+            return line
+        name = member.group(1)
+        current = source_version(source_dir(path, "skills", name))
+        target = target_for(name, cells[3])
+        previous = repo_link.search(cells[3])
+        if target and (not previous or previous.group(0) != target):
+            stats["links"] = int(stats["links"]) + 1
+        cells[2] = f" {pending(cells[2].strip(), current, asset_version(target))} "
+        cells[3] = f" {download(target, markdown=True)} " if target else " 尚无公开下载 "
+        return "|".join(cells)
 
     text = re.sub(r"<tr>.*?</tr>", _rewrite_html_row, text, flags=re.DOTALL)
     text = re.sub(r"^\|.*\|$", _rewrite_md_row, text, flags=re.MULTILINE)
@@ -178,12 +247,51 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
         if target is None:
             stats["unmatched"].append(match.group(1))
             return match.group(0)
+        if version_tuple(parsed.group(2)) > version_tuple(asset_version(target)):
+            return match.group(0)
         if target != match.group(0):
             stats["links"] = int(stats["links"]) + 1
             return target
         return match.group(0)
 
     text = repo_link.sub(_replace_loose, text)
+
+    # Keep suite headers honest when only some assets have been hotfixed.
+    if path.parent.parent.name == "expert-suites" and "## 包含的 Skills" in text:
+        header, rest = text.split("## 包含的 Skills", 1)
+        current = source_version(path.parent)
+        own_link = next(
+            (m.group(0) for m in repo_link.finditer(header)
+             if ASSET_RE.fullmatch(m.group(1)).group(1) == f"suite-{path.parent.name}"),
+            None,
+        )
+        target = target_for(f"suite-{path.parent.name}", own_link or "")
+        header = re.sub(r"^> 整套源码 v[\d.]+ 待[^\n]*\n?", "", header, flags=re.MULTILINE)
+        published = asset_version(target)
+        if not target and own_link:
+            header = re.sub(r"^> \[[^\n]+\]\(" + re.escape(own_link) + r"\)[ \t]*\n?", "",
+                            header, flags=re.MULTILINE)
+        if target:
+            line = f"> {download(target, markdown=True)}"
+            header = re.sub(
+                r"^> \[[^\n]+\]\(" + re.escape(own_link or "") + r"\)[ \t]*$",
+                lambda _: line,
+                header, flags=re.MULTILINE,
+            ) if own_link else re.sub(
+                r"^(# [^\n]+\n)\n*", lambda m: m[1] + "\n" + line + "\n\n", header, count=1
+            )
+        if current != published:
+            marker = "待发布" if target else "待首次发布（尚无公开下载）"
+            marker = f"> 整套源码 v{current} {marker}"
+            if target:
+                header = header.replace(line + "\n", line + "\n" + marker + "\n", 1)
+            else:
+                header = re.sub(
+                    r"^(# [^\n]+\n)\n*", lambda m: m[1] + "\n" + marker + "\n\n", header, count=1
+                )
+        else:
+            header = header.replace("> 上方旧包内容不随源码变化。\n", "")
+        text = header.rstrip() + "\n\n## 包含的 Skills" + rest
 
     original = path.read_text(encoding="utf-8")
     if text != original:
