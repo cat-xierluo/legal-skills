@@ -18,6 +18,15 @@
 | 离线测试 | `python3 -m unittest` / 项目测试 | 脚本行为回归，含错误路径 |
 | 候选绑定证据 | skill-lint `harness_evidence_gate.py` | 有可执行 checker 时取得 `HARNESS_REVIEW_VERIFIED`；纯文档 Skill 标 NOT_VERIFIED，不凭空造 checker |
 
+### 结构工具的项目差异
+
+`quick_validate.py` 是通用结构检查，不同项目可能把 `version`、`author`、`homepage` 放在根 frontmatter 或 `metadata`，并有自己的发布字段规范。公开化时按以下顺序处理：
+
+1. 先读取目标仓项目发布配置和同类已公开 Skill 的实际 frontmatter。
+2. 目标项目要求的字段以目标仓规范为准，不因通用白 narrower 而删除。
+3. 记录实际使用的校验器路径/版本；若它拒绝项目合法字段，该结构项标 `NOT_VERIFIED`，继续用其他门禁，不修改目标 Skill 来迎合不匹配的通用工具。
+4. 独立 reviewer 复核项目规范、同类样例与候选 frontmatter 三者一致。
+
 ## 隐私模式检测设计
 
 slides 案例的收敛原则：**不是维护者私有的客户名单，而是通用模式——凡提交内容里明显含具体名称的都拦**。本 Skill 不内置该脚本；优先复用目标仓/目标 Skill 的等价门禁（例如公开 slides 的 `scripts/check-privacy.js`），复用时须补齐本节「不回显原文」与 strict 语义差距。没有等价门禁时，在目标 Skill 内实现并补正反例。
