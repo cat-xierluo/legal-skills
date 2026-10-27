@@ -130,10 +130,16 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
         + r"(?=$|[\s<>\"')])"
     )
 
-    def target_for(slug: str, cell: str) -> str | None:
+    def target_for(slug: str, cell: str, *, known_alias: bool = False) -> str | None:
         old = repo_link.search(cell)
-        # An unobserved latest/download URL may only be a future placeholder.
-        historical = old.group(0) if old and "/releases/download/" in old.group(0) else None
+        historical = None
+        if old:
+            parsed = ASSET_RE.fullmatch(old.group(1))
+            # A historical link can only stand in for the same component. This
+            # prevents a higher-version link belonging to another skill from
+            # masquerading as this row's published asset.
+            if parsed and (parsed.group(1) == slug or (known_alias and slug not in url_map)) and "/releases/download/" in old.group(0):
+                historical = old.group(0)
         if "待发布" in cell or "待首次发布" in cell:
             historical = None
         target = url_map.get(slug)
@@ -168,7 +174,8 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
         old_download = cells[download_index][2]
         if re.search(r"https?://", old_download) and not repo_link.search(old_download):
             return tr  # Independent-repository downloads remain untouched.
-        target = target_for(name, old_download)
+        alias_note = old_download + (cells[-1][2] if download_index + 1 < len(cells) else "")
+        target = target_for(name, old_download, known_alias="旧名" in alias_note or "历史名称" in alias_note)
         current = source_version(source_dir(path, "skills", name))
         if target is None:
             stats["unmatched"].append(f"{name}(尚无公开资产)")
@@ -201,6 +208,8 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
             name = suite.group(1)
             cells = line.split("|")
             if len(cells) != 7:
+                return line
+            if re.search(r"https?://", cells[5]) and not repo_link.search(cells[5]):
                 return line
             directory = source_dir(path, "expert-suites", name)
             current = source_version(directory)
@@ -237,8 +246,63 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
     text = re.sub(r"<tr>.*?</tr>", _rewrite_html_row, text, flags=re.DOTALL)
     text = re.sub(r"^\|.*\|$", _rewrite_md_row, text, flags=re.MULTILINE)
 
-    # 表行之外的散链:按链接自身 slug 映射
+    # 表行之外的散链按链接自身 slug 映射。链接文字已明确另一个历史版本时，
+    # 保留原链接，避免“文字写 v1.0.0、链接指向 v2.0.0”的错位。
+    context_link = re.compile(
+        r"(?P<md>\[(?P<md_label>[^\]]+)\]\((?P<md_url>" + repo_link.pattern + r")\))"
+        r"|(?P<html><a\s+href=\"(?P<html_url>" + repo_link.pattern + r")\"[^>]*>(?P<html_label>.*?)</a>)",
+        re.DOTALL,
+    )
+    protected_urls: set[str] = set()
+
+    def historical_context(match: re.Match[str], target: str) -> bool:
+        start = text.rfind("\n", 0, match.start()) + 1
+        end = text.find("\n", match.end())
+        line = text[start:end if end != -1 else len(text)]
+        declared = re.search(r"v(\d+\.\d+\.\d+)", line)
+        return bool(
+            re.search(r"历史|归档|旧版", line) and declared
+            and declared.group(1) != asset_version(target)
+        )
+
+    def _replace_context(match: re.Match[str]) -> str:
+        if match.group("md"):
+            url = match.group("md_url")
+            label = match.group("md_label")
+        else:
+            url = match.group("html_url")
+            label = re.sub(r"<[^>]+>", "", match.group("html_label"))
+        parsed = ASSET_RE.fullmatch(url.rsplit("/", 1)[-1])
+        if not parsed:
+            return match.group(0)
+        target = url_map.get(parsed.group(1))
+        if target is None:
+            stats["unmatched"].append(parsed.group(1))
+            return match.group(0)
+        declared = re.search(r"v(\d+\.\d+\.\d+)", label)
+        target_version = asset_version(target)
+        if (declared and target_version and declared.group(1) != target_version) or historical_context(match, target):
+            protected_urls.add(url)
+            return match.group(0)
+        if version_tuple(parsed.group(2)) > version_tuple(asset_version(target)):
+            protected_urls.add(url)
+            return match.group(0)
+        if url != target:
+            stats["links"] = int(stats["links"]) + 1
+        if match.group("md"):
+            return f"[{label}]({target})"
+        return re.sub(
+            r"href=\"" + re.escape(url) + "\"",
+            f"href=\"{target}\"",
+            match.group(0),
+            count=1,
+        )
+
+    text = context_link.sub(_replace_context, text)
+
     def _replace_loose(match: re.Match[str]) -> str:
+        if match.group(0) in protected_urls:
+            return match.group(0)
         parsed = ASSET_RE.fullmatch(match.group(1))
         if not parsed:
             stats["unmatched"].append(match.group(1))
@@ -246,6 +310,8 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
         target = url_map.get(parsed.group(1))
         if target is None:
             stats["unmatched"].append(match.group(1))
+            return match.group(0)
+        if historical_context(match, target):
             return match.group(0)
         if version_tuple(parsed.group(2)) > version_tuple(asset_version(target)):
             return match.group(0)

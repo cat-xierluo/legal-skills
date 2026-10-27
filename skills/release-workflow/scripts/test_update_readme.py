@@ -264,6 +264,28 @@ class SourceAwareRefreshTest(unittest.TestCase):
         })
         self.assertIn(self.old_url, self.readme.read_text())
 
+    def test_foreign_slug_link_never_becomes_this_rows_asset(self) -> None:
+        foreign = self.base + "wrong-9.0.0.zip"
+        self.readme.write_text(self.root_row(f'<a href="{foreign}">下载</a>'))
+        MODULE.rewrite_readme(self.readme, self.repo, {
+            "alpha-skill": self.base + "alpha-skill-1.0.0.zip"
+        })
+        text = self.readme.read_text()
+        self.assertIn("alpha-skill-1.0.0.zip", text)
+        self.assertNotIn(foreign, text)
+
+    def test_documented_renamed_history_is_kept_until_first_new_name_release(self) -> None:
+        old_name = self.base + "old-name-1.2.2.zip"
+        self.readme.write_text(self.root_row(f'<a href="{old_name}">下载（旧名包）</a>'))
+        MODULE.rewrite_readme(self.readme, self.repo, {})
+        self.assertIn(old_name, self.readme.read_text())
+        # An available new-name asset takes priority over even a higher old-name version.
+        newer_old = self.base + "old-name-9.0.0.zip"
+        self.readme.write_text(self.root_row(f'<a href="{newer_old}">下载（旧名包）</a>'))
+        MODULE.rewrite_readme(self.readme, self.repo, {"alpha-skill": self.new_url})
+        self.assertIn(self.new_url, self.readme.read_text())
+        self.assertNotIn(newer_old, self.readme.read_text())
+
     def test_unobserved_latest_placeholder_is_not_claimed_as_published(self) -> None:
         future = self.new_url.replace("download/v2026.10.27", "latest/download")
         self.readme.write_text(self.root_row(f'<a href="{future}">待发布</a>'))
@@ -337,6 +359,24 @@ class SourceAwareRefreshTest(unittest.TestCase):
         self.suite_readme.write_text(self.suite_document(f"> [下载]({old})\n{extra}"))
         MODULE.rewrite_readme(self.suite_readme, self.repo, {})
         self.assertIn(extra, self.suite_readme.read_text())
+
+    def test_suite_root_external_download_link_is_preserved(self) -> None:
+        external = "https://github.com/example/other/releases/download/v1/suite-demo-suite-1.0.0.zip"
+        line = f"| [法律](expert-suites/demo-suite/) | 作用 | 9 | v0.1.0 | [外部下载]({external}) |\n"
+        self.readme.write_text(line)
+        MODULE.rewrite_readme(self.readme, self.repo, {})
+        self.assertIn(external, self.readme.read_text())
+        self.assertNotIn("尚无公开 ZIP", self.readme.read_text())
+
+    def test_labelled_historical_loose_link_is_not_upgraded(self) -> None:
+        old = self.base + "alpha-skill-1.0.0.zip"
+        new = self.base + "alpha-skill-2.0.0.zip"
+        self.readme.write_text(f"历史资产 v1.0.0：[下载]({old})\n")
+        MODULE.rewrite_readme(self.readme, self.repo, {"alpha-skill": new})
+        text = self.readme.read_text()
+        self.assertIn(old, text)
+        self.assertNotIn(new, text)
+        self.assertIn("历史资产 v1.0.0", text)
 
     def test_asset_choice_is_semver_ordered_not_api_ordered(self) -> None:
         assets = [
