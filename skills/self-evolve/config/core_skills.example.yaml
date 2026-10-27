@@ -1,0 +1,44 @@
+# 复制到 config/core_skills.yaml 后按实际目录和重点 Skill 修改。
+# inventory 是候选全集；core_skills 只控制重点关注与优先级。
+
+version: "2.0"
+last_updated: "YYYY-MM-DD"
+
+skill_sources:
+  private-skills: <private-skills-root>
+  legal-skills: <legal-skills-root>
+
+core_skills:
+  - id: example-skill
+    display_name: 示例 Skill
+    source: private-skills
+    function: 用一个动词短语说明输入、核心动作和产出
+    domain_keywords:
+      - 示例触发词
+      - 示例领域词
+    references:
+      - file: references/01-workflow.md
+        purpose: 示例工作流
+        version_added: v1.0.0
+    priority: high
+    last_reviewed: YYYY-MM-DD
+    notes: 说明重点关注原因，不在这里复制完整 Skill 内容。
+
+default_priority: high
+
+# output_paths 里的 <data-root> 指代 config/data_root.yaml 的 data_root 值。
+# data_root 已拆到单独文件(config/data_root.yaml),本文件只管 skill 清单与来源。
+output_paths:
+  skill_inventory_json: "<data-root>/runtime/skill-inventory.json"
+  skill_inventory_md: "<data-root>/runtime/skill-inventory.md"
+  skill_portraits: "<data-root>/runtime/skill-portraits.json"
+  skill_chain_graph: "<data-root>/runtime/skill-chain-graph.json"
+  session_summaries: "<data-root>/runtime/session-summaries"
+  review_inbox: "<data-root>/review/inbox"
+  review_quarantine: "<data-root>/review/quarantine"
+  review_archive: "<data-root>/review/archive"
+  proposals: "<data-root>/proposals"
+  panel: "<data-root>/panel"
+
+exclude_project_paths:
+  - <maintenance-project-fragment>

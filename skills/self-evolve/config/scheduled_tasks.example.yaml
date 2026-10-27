@@ -1,0 +1,191 @@
+schema_version: "2.0"
+
+# ──────────────────────────────────────────────────────────────────
+# 这是 example 模板。复制到 config/scheduled_tasks.yaml 后按本机改:
+#   1) 把所有 <your-timezone> 换成本机时区(用系统时区标识,
+#      例如 Asia/Shanghai、America/New_York、Europe/London)。
+#   2) cron 时刻是“建议值”,按本机空闲时段调整即可;避开 :00/:30
+#      整点高峰(全网 cron 都挤在整点,易撞 API 限流)。
+#   3) sources 按你实际用的 agent 填,见 nightly-dream-sweep 注释。
+# 本文件只登记任务、参数白名单和运行 kill switch。
+# 实际是否安装、启用以及何时唤醒,以外部 Cron 系统为唯一真相。
+# ──────────────────────────────────────────────────────────────────
+
+tasks:
+  - id: render-panel-snapshot
+    name: 刷新 Self Evolve 面板快照
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "15 * * * *"
+      timezone: <your-timezone>
+    command:
+      type: render_panel
+      args:
+        limit: 120
+    run_policy:
+      overlap: skip
+      timeout_minutes: 5
+      max_runs_per_day: 30
+
+  - id: refresh-skill-inventory
+    name: 刷新 Skill 库存清单
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "10 2 * * *"
+      timezone: <your-timezone>
+    command:
+      type: refresh_inventory
+      args: {}
+    run_policy:
+      overlap: skip
+      timeout_minutes: 10
+      max_runs_per_day: 4
+
+  - id: nightly-dream-sweep
+    name: 夜间 Timeline Dream Sweep
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "30 2 * * *"
+      timezone: <your-timezone>
+    command:
+      type: dream_sweep
+      args:
+        since: 14d
+        mode: dry-run
+        budget: low
+        # sources:逗号分隔的会话来源。当前 dream_sweep 正式支持:
+        #   claude, codex
+        # WorkBuddy / Qoder / QwenWork 已验证可接入(见 references),
+        # 正式纳入 discover 路径后即可加进来,如:claude,codex,workbuddy
+        sources: claude,codex
+        max_sessions: 160
+        max_lines_per_session: 5000
+        min_cluster_size: 2
+        max_reports: 8
+    run_policy:
+      overlap: skip
+      timeout_minutes: 60
+      max_runs_per_day: 1
+
+  - id: history-backfill-index
+    name: 历史 Session 回填索引
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "10 3 * * *"
+      timezone: <your-timezone>
+    command:
+      type: dream_sweep
+      args:
+        mode: dry-run
+        index_mode: backfill
+        backfill_batch_size: 200
+        backfill_order: newest-first
+        budget: low
+    run_policy:
+      overlap: skip
+      timeout_minutes: 90
+      max_runs_per_day: 1
+
+  - id: nightly-skill-portrait-distill
+    name: 周度 Skill 功能画像蒸馏
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "50 3 * * 1"
+      timezone: <your-timezone>
+    command:
+      type: distill_portrait
+      args:
+        limit: 24
+        model: haiku
+        max_budget_usd: 0.10
+        max_calls: 24
+        max_total_budget_usd: 2.40
+    run_policy:
+      overlap: skip
+      timeout_minutes: 90
+      max_runs_per_day: 1
+
+  - id: maintain-runtime
+    name: 检查 Self Evolve 运行数据
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "20 5 * * 0"
+      timezone: <your-timezone>
+    command:
+      type: maintain_runtime
+      args: {}
+    run_policy:
+      overlap: skip
+      timeout_minutes: 10
+      max_runs_per_day: 2
+
+  - id: weekly-deep-dream
+    name: 周度 Deep Dream 待审提案
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "0 4 * * 0"
+      timezone: <your-timezone>
+    command:
+      type: deep_dream
+      args:
+        max_clusters: 5
+        execute: false
+        timeout: 300
+        model: sonnet
+        max_budget_usd: 0.50
+        per_call_budget_usd: 0.10
+        max_calls: 5
+    run_policy:
+      overlap: skip
+      timeout_minutes: 120
+      max_runs_per_day: 1
+
+  - id: weekly-iteration-report
+    name: 周度迭代报告(脱敏 digest,写桌面)
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "30 9 * * 1"
+      timezone: <your-timezone>
+    command:
+      type: iteration_report
+      args:
+        # output:桌面副本路径,默认 ~/Desktop/self-evolve-周报-YYYY-MM-DD.md
+        output: "~/Desktop/self-evolve-周报.md"
+        since: 7d
+    run_policy:
+      overlap: skip
+      timeout_minutes: 10
+      max_runs_per_day: 1
+
+  - id: weekly-workmode-analyze
+    name: 周度工作模式偏好提炼与入账
+    runner:
+      enabled: false
+      external_only: true
+    recommended_schedule:
+      cron: "10 9 * * 1"
+      timezone: <your-timezone>
+    command:
+      type: workmode_analyze
+      args:
+        since: 14d
+    run_policy:
+      overlap: skip
+      timeout_minutes: 15
+      max_runs_per_day: 1

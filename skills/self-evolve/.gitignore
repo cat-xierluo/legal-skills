@@ -1,0 +1,26 @@
+runtime/
+review/output/
+review/inbox/
+review/quarantine/
+review/archive/*
+!review/archive/README.md
+proposals/
+panel/
+audit/
+migrations/
+__pycache__/
+*.pyc
+.DS_Store
+config/*.bak-*
+
+# 实际本地配置：从 config/*.example.yaml 复制填写，不入 Git（UP-CFG，DEC-053）
+config/data_root.yaml
+config/core_skills.yaml
+config/asset_owners.yaml
+
+config/scheduled_tasks.yaml
+config/*.local.*
+state/
+TASKS.md
+DECISIONS.md
+RESULT.md

@@ -1,0 +1,20 @@
+# 非 skill 资产归属登记（可选，默认空）。
+# 这是 example。复制为 config/asset_owners.yaml 后按需填写；实际配置不入 Git。
+#
+# 只有当你要让 Branch A 对"非 skill finding"也能指名道姓路由时才填。
+# 初学者留空即可——非 skill finding 会走 Branch B 顾问模式。
+# 缺失本文件时等同于空列表，功能不受影响。
+#
+# schema:
+# asset_owners:
+#   - asset_type: <资产形态，如 法律知识规则 / 问答知识 / 模板 / checklist>
+#     owning_skill: <已安装的 owning skill id>
+#     triggers: [<触发关键词>]
+#
+# 示例：
+# asset_owners:
+#   - asset_type: 问答知识
+#     owning_skill: your-qa-skill-id
+#     triggers:
+#       - 常见问题
+asset_owners: []

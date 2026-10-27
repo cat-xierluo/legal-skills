@@ -1,0 +1,3 @@
+{"role":"user","timestamp":"2026-07-18T01:00:00Z","content":[{"type":"tool_result","content":"SYNTHETIC_TOOL_OUTPUT 不应成为 human"}]}
+{"role":"user","timestamp":"2026-07-18T01:01:00Z","content":[{"type":"text","text":"请沉淀顶层 transcript 适配器的验收流程"}]}
+{"role":"assistant","timestamp":"2026-07-18T01:02:00Z","content":[{"type":"text","text":"已完成顶层 content 解析验证"}]}
