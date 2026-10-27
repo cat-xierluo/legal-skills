@@ -325,12 +325,14 @@ def validate_card(card: Dict, base_dir: Optional[Path] = None) -> Tuple[bool, Li
         _verify_code_evidence(evidence, errors, warnings, base_dir)
 
     # 5. gap 枚举
-    if card["gap"] not in GAP_TYPES:
+    if not isinstance(card["gap"], str) or card["gap"] not in GAP_TYPES:
         errors.append(f"gap 必须是 {sorted(GAP_TYPES)} 之一，实际: {card['gap']}")
 
     # 6. decision 状态机
     decision = card["decision"]
-    if not isinstance(decision, dict) or decision.get("status") not in DECISIONS:
+    if (not isinstance(decision, dict)
+            or not isinstance(decision.get("status"), str)
+            or decision.get("status") not in DECISIONS):
         errors.append(f"decision.status 必须是 {sorted(DECISIONS)} 之一")
     else:
         status = decision["status"]
@@ -356,7 +358,7 @@ def validate_card(card: Dict, base_dir: Optional[Path] = None) -> Tuple[bool, Li
     if scope is None and capability_key:
         scope = "direction"
         card["scope"] = scope
-    if scope is not None and scope not in DECISION_SCOPES:
+    if scope is not None and (not isinstance(scope, str) or scope not in DECISION_SCOPES):
         errors.append(f"scope 必须是 {sorted(DECISION_SCOPES)} 之一")
     if scope == "direction" and not (card.get("target") or {}).get("capability_key"):
         errors.append("scope=direction 缺少 target.capability_key")
@@ -647,3 +649,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

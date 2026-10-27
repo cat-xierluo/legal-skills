@@ -141,6 +141,34 @@ class ReuseTests(unittest.TestCase):
         del card["reuse_assessment"]
         self.assertTrue(validate_card(card, self.root)[0])
 
+    def test_malformed_enum_feedback_is_rejected_without_stopping_index(self):
+        import auto_discover as ad
+        feedback_dir = self.root / "feedback"
+        feedback_dir.mkdir()
+        for field in ("gap", "status", "scope", "target_scope"):
+            for value in (["invalid"], {"invalid": "value"}, True, 1):
+                with self.subTest(field=field, value=value):
+                    bad = self.card()
+                    if field == "status":
+                        bad["decision"]["status"] = value
+                    elif field == "target_scope":
+                        bad["target"]["scope"] = value
+                    else:
+                        bad[field] = value
+                    self.assertFalse(validate_card(bad, self.root)[0])
+                    # Keep a valid legacy sibling: one bad card must not stop
+                    # the daily index or silently consume its judged entry.
+                    good = self.card()
+                    del good["reuse_assessment"]
+                    (feedback_dir / "bad.json").write_text(json.dumps(bad))
+                    (feedback_dir / "good.json").write_text(json.dumps(good))
+                    indexed, warnings = ad.feedback_index(self.root)
+                    self.assertTrue(indexed)
+                    self.assertEqual(indexed.invalid_reuse_files, {"bad.json"})
+                    self.assertTrue(any("bad.json" in warning for warning in warnings))
+                    self.assertTrue(all(card["_file"] == "good.json"
+                                        for cards in indexed.values() for card in cards))
+
     def test_card_rejects_missing_sha_cross_binding_and_recomputed_category(self):
         baseline = self.card()
         for field in ("missing", "sha", "project_id", "repo_revision", "evidence_revision", "target_revision", "capability_key", "candidate_key", "category"):
@@ -294,3 +322,4 @@ class ReuseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
