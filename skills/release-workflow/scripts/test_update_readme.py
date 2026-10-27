@@ -279,6 +279,11 @@ class SourceAwareRefreshTest(unittest.TestCase):
         self.readme.write_text(self.root_row(f'<a href="{old_name}">下载（旧名包）</a>'))
         MODULE.rewrite_readme(self.readme, self.repo, {})
         self.assertIn(old_name, self.readme.read_text())
+        once = self.readme.read_bytes()
+        MODULE.rewrite_readme(self.readme, self.repo, {})
+        self.assertEqual(once, self.readme.read_bytes())
+        self.assertIn(old_name, self.readme.read_text())
+        self.assertIn("旧名历史包 v1.2.2", self.readme.read_text())
         # An available new-name asset takes priority over even a higher old-name version.
         newer_old = self.base + "old-name-9.0.0.zip"
         self.readme.write_text(self.root_row(f'<a href="{newer_old}">下载（旧名包）</a>'))

@@ -176,6 +176,9 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
             return tr  # Independent-repository downloads remain untouched.
         alias_note = old_download + (cells[-1][2] if download_index + 1 < len(cells) else "")
         target = target_for(name, old_download, known_alias="旧名" in alias_note or "历史名称" in alias_note)
+        historical_alias = bool(
+            target and ASSET_RE.fullmatch(target.rsplit("/", 1)[-1]).group(1) != name
+        )
         current = source_version(source_dir(path, "skills", name))
         if target is None:
             stats["unmatched"].append(f"{name}(尚无公开资产)")
@@ -191,6 +194,9 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
                 notes = f"历史 ZIP 内容版本待核；{notes}"
             notes = re.sub(r"下载为已发布 v[\d.]+[；;。]?\s*", "", notes)
             notes = re.sub(r"(?:源码待发布|下载(?:链接)?仍为上一已发布包)[；;。]?\s*", "", notes)
+            notes = re.sub(r"旧名(?:历史)?包 v[\d.]+[；;。]?\s*", "", notes)
+            if historical_alias:
+                notes = f"旧名历史包 v{published}；{notes}"
             replacements[download_index + 1] = pending(notes, current, published)
         previous = repo_link.search(old_download)
         if target and (not previous or previous.group(0) != target):

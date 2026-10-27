@@ -227,7 +227,7 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v2.0.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/litigation-analysis-1.4.0.zip">已发布 v1.4.0</a></td>
-<td>由 litigation-analysis 更名，调用名与“单份判决深析”职责对齐；，下载仍为旧名 1.4.0 包；所属套件：[诉讼文书与案件推进](expert-suites/litigation-documents-operations/)；源码 v2.0.0 待发布</td></tr>
+<td>旧名历史包 v1.4.0；由 litigation-analysis 更名，调用名与“单份判决深析”职责对齐；所属套件：[诉讼文书与案件推进](expert-suites/litigation-documents-operations/)；源码 v2.0.0 待发布</td></tr>
 <tr>
 <td><a href="skills/moot-court/"><strong>moot-court</strong></a></td>
 <td>通用·诉讼</td>
@@ -734,7 +734,7 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v3.1.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip">已发布 v2.30.5</a></td>
-<td>旧包保留历史名称。所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)；源码 v3.1.1 待发布</td>
+<td>旧名历史包 v2.30.5；旧包保留历史名称。所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)；源码 v3.1.1 待发布</td>
 </tr>
 <tr>
 <td><a href="skills/release-workflow/"><strong>release-workflow</strong></a></td>
