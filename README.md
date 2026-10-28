@@ -34,8 +34,8 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
 | 2026-10-27 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.4 | README 回写区分源码版本与真实 ZIP 版本，支持部分热补、首次发布与幂等重跑；法律套件在根索引中排前。 |
-| 2026-10-27 | 新上传 | [self-evolve](skills/self-evolve/) | v1.28.0 | 从本机多 Runtime 会话生成证据化复盘与个人画像，沉淀 Skill 建议、采用账本和七页本地报告。 |
 | 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.11 | 新增固定三角色庭审审计与 WorkBuddy 原生 trace 审计；主控私有词项预检和法官保密复核约束公开概述，交付缺陷按四分类处理。 |
 | 2026-10-27 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.1 | 修复畸形枚举反馈中断整轮索引：先验类型、保留无效报告的重评标记与合法旧卡。 |
 | 2026-10-27 | 更新 | [skill-publicizer](skills/skill-publicizer/) | v1.1.0 | 明确单源实现、权威仓库与完整功能合同；按能力前向验证安装、演示隔离与产物保留；结构校验先对齐目标仓规范。 |
@@ -767,9 +767,9 @@
 <td>工具·复盘</td>
 <td style="word-break:break-word">扫描本机已登记 Agent Runtime 的会话，做低成本初筛与增量账本；由当前 Agent 生成个人画像、Skill 沉淀建议、采用记录和可独立打开的七页本地 HTML 报告</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.28.0</td>
+<td style="text-align:center">v1.28.1</td>
 <td style="text-align:center">尚无公开 ZIP</td>
-<td>默认扫描只读本机并写入专用数据根；Agent 判断使用已配置模型通道。旧兼容入口单独说明；所属套件：[Skill 发布与分发](expert-suites/skill-release-distribution/)；源码 v1.28.0 待发布</td>
+<td>默认扫描只读本机并写入专用数据根；Agent 判断使用已配置模型通道。旧兼容入口单独说明；所属套件：[Skill 发布与分发](expert-suites/skill-release-distribution/)；源码 v1.28.1 待发布</td>
 </tr>
 <tr>
 <td><a href="skills/skill-publish-sync/"><strong>skill-publish-sync</strong></a></td>

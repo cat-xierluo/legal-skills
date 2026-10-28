@@ -3,7 +3,7 @@ name: self-evolve
 description: 扫描本机 Claude Code、Codex、WorkBuddy、CodeBuddy、ZCode 等 Agent 会话，保留初始化和增量处理记录，低成本初筛后由当前 Agent 提炼经验、迭代与 Skill 沉淀建议，生成可独立打开的 HTML 报告。也用于复盘当前对话、接续每周沉淀或检查扫描覆盖。无需单独配置模型 API Key；不自动应用建议或安装 Skill。
 license: MIT
 metadata:
-  version: "1.28.0"
+  version: "1.28.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -33,7 +33,7 @@ metadata:
 
 ## 公开版执行
 
-首次使用读 [初始化](references/00-first-run-setup.md)。在本技能目录运行：
+首次使用读 [初始化](references/00-first-run-setup.md)。调用本 Skill 的 Agent 与被扫描的会话来源相互独立；例如拟由 Qoder 分析本机 WorkBuddy 会话时，先核当前环境的 Python、文件访问与数据根，具体条件和未验边界见 [调用宿主与会话来源](references/18-public-workflow.md#调用宿主与会话来源)。在本技能目录运行：
 
 ```bash
 python3 scripts/public_workflow.py scan
