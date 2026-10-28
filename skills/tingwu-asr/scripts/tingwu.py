@@ -3,6 +3,9 @@
 
 import json
 import os
+import re
+import socket
+import subprocess
 import sys
 import time
 import uuid
@@ -497,6 +500,72 @@ def _oss_progress(consumed, total):
         print(f"\r  上传进度: {pct}%", end="", flush=True)
 
 
+_FAKE_IP_CACHE = {}
+_GETADDRINFO_ORIG = socket.getaddrinfo
+
+
+def _looks_fake_ip(ip):
+    """Clash / Surge fake-ip 模式把真实域名解析到保留段，直连必然 TLS 失败。"""
+    octets = ip.split(".")
+    if len(octets) != 4:
+        return False
+    try:
+        first, second = int(octets[0]), int(octets[1])
+    except ValueError:
+        return False
+    return (first, second) in {(198, 18), (198, 19), (0, 0)}
+
+
+def _resolve_real_ip(host):
+    """用公共 DNS 取真实 IP；失败返回 None（保持原解析行为）。"""
+    if host in _FAKE_IP_CACHE:
+        return _FAKE_IP_CACHE[host]
+    ip = None
+    for resolver in ("223.5.5.5", "119.29.29.29"):
+        try:
+            out = subprocess.run(
+                ["dig", "+short", "+time=3", "+tries=1", "@" + resolver, host],
+                capture_output=True, text=True, timeout=10,
+            ).stdout.split()
+            cands = [o for o in out if re.match(r"^\d+(\.\d+){3}$", o)
+                     and not _looks_fake_ip(o)]
+            if cands:
+                ip = cands[0]
+                break
+        except Exception:
+            continue
+    _FAKE_IP_CACHE[host] = ip
+    return ip
+
+
+def _safe_getaddrinfo(host, port, *args, **kwargs):
+    """域名被 fake-ip 污染时改用真实 IP 解析，其余域名原样放行。"""
+    try:
+        infos = _GETADDRINFO_ORIG(host, port, *args, **kwargs)
+        if infos and _looks_fake_ip(infos[0][4][0]):
+            real = _resolve_real_ip(str(host))
+            if real:
+                return _GETADDRINFO_ORIG(real, port, *args, **kwargs)
+    except Exception:
+        pass
+    return _GETADDRINFO_ORIG(host, port, *args, **kwargs)
+
+
+def _enable_fake_ip_dns_bypass():
+    """直连上传时安装 fake-ip DNS 兜底（幂等）。
+
+    fake-ip 场景下 `trust_env=False` 直连会连到 198.18.x 保留地址，表现为
+    `SSLEOFError: EOF occurred in violation of protocol`；而改走代理时大文件
+    分片又常被 `ConnectionResetError` 掐断。这里在解析层把被污染的域名换成
+    真实 IP，两条路都不通的机器无需 sudo 改 hosts 即可直连。
+    设 `TINGWU_SKIP_DNS_BYPASS=1` 关闭。
+    """
+    if os.environ.get("TINGWU_SKIP_DNS_BYPASS"):
+        return
+    if socket.getaddrinfo is not _safe_getaddrinfo:
+        socket.getaddrinfo = _safe_getaddrinfo
+
+
 def _build_oss_bucket(sts):
     """构造 OSS 上传专用 Bucket。
 
@@ -514,6 +583,7 @@ def _build_oss_bucket(sts):
     )
     bucket = oss2.Bucket(auth, sts["endpoint"], sts["bucket"])
     if not os.environ.get("TINGWU_OSS_USE_PROXY"):
+        _enable_fake_ip_dns_bypass()
         bucket.session.session.trust_env = False
     return bucket
 
@@ -539,6 +609,7 @@ def _upload_via_requests(file_path, put_link_result):
             )
         else:
             # 同 _build_oss_bucket：忽略环境代理，国内 OSS 直连
+            _enable_fake_ip_dns_bypass()
             s = requests.Session()
             s.trust_env = False
             resp = s.put(

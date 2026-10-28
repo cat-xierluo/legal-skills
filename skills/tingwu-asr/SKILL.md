@@ -2,7 +2,7 @@
 name: tingwu-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.4.7"
+version: "0.4.8"
 license: MIT
 description: 使用阿里云通义听悟进行云端音频/视频转录。本技能应在用户需要云端语音转文字、长音频转录、本地 ASR 不可用或需要更高精度时使用。不适用于无网络环境或需要完全离线的场景。
 ---
@@ -222,6 +222,13 @@ python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor
   `ProxyError: Cannot connect to proxy`）。现上传 session 默认 `trust_env=False`
   忽略环境代理直连国内 OSS 节点；确需经代理出海时设 `TINGWU_OSS_USE_PROXY=1` 恢复。
   注意：yt-dlp 下载链接（小宇宙/YouTube/B站）不受此改动影响，海外源仍按环境代理走
+- Clash/Surge **fake-ip 模式**下直连同样会失败（v0.4.8 起自动兜底）：fake-ip 把 OSS 域名解析到
+  `198.18.x.x` 保留段，`trust_env=False` 直连报 `SSLEOFError: EOF occurred in violation of protocol`；
+  改设 `TINGWU_OSS_USE_PROXY=1` 走代理，大文件分片又常被 `ConnectionResetError` 掐断（实测 1.4GB
+  视频在 52% 处断），两条路都不通。现在直连上传会自动装解析层兜底：命中保留段时用公共 DNS
+  （`dig +short @223.5.5.5`，备用 `119.29.29.29`）取真实 IP 重解，无需 sudo 改 `/etc/hosts`。
+  判定方法：`dig +short <oss域名>` 返回 198.18.x 即为 fake-ip。
+  `TINGWU_SKIP_DNS_BYPASS=1` 关闭兜底；本机无 `dig` 时静默跳过，行为退回直连原状。
 - macOS Apple Silicon 上 `cryptography<=41` 的 `_rust.abi3.so` 在 OpenSSL CPU 探测
   （`_armv8_sve_probe`）时会死循环挂起，症状是任何 import oss2 的脚本无输出卡死。
   已在 `tingwu.py` 入口自动设置 `OPENSSL_armcap=0` 绕过；若仍遇到，运行前手动

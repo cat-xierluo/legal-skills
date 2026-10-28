@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.8] - 2026-10-28
+
+### 修复
+- `tingwu.py`：Clash/Surge fake-ip 模式下 OSS 直连上传必然失败的兜底（新增 `_enable_fake_ip_dns_bypass()`）。fake-ip 把 `*.oss-cn-shanghai.aliyuncs.com` 解析到 `198.18.x.x` 保留段，v0.4.6 的 `trust_env=False` 直连报 `SSLEOFError: EOF occurred in violation of protocol`；改设 `TINGWU_OSS_USE_PROXY=1` 走代理时，1.4GB 视频分片上传又在 52% 处被 `ConnectionResetError` 掐断——两条路都不通。现在解析层检测保留段并用公共 DNS（`dig +short @223.5.5.5`，备用 `119.29.29.29`）取真实 IP 重解，oss2 分片上传与 requests 兜底 PUT 均生效，无需 sudo 改 `/etc/hosts`。`TINGWU_SKIP_DNS_BYPASS=1` 关闭；本机无 `dig` 时静默跳过，行为退回直连原状。
+- `SKILL.md`：注意事项补充 fake-ip 判定方法（`dig +short <oss域名>` 返回 198.18.x）与两个逃生阀。
+
 ## [0.4.7] - 2026-09-23
 
 ### 修复
