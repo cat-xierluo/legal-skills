@@ -12,10 +12,10 @@
 {
   "id": "20260404_143025_1234",
   "timestamp": "2026-04-04T14:30:25+08:00",
-  "sms_raw": "【xx市人民法院】张三，您好！您有（2025）苏0981民初1234号案件文书送达，请点击链接查收：https://zxfw.court.gov.cn/...",
+  "sms_raw": "【xx市人民法院】张三，您好！您有（YYYY）苏XXXX民初XXXX号案件文书送达，请点击链接查收：https://zxfw.court.gov.cn/...",
   "parsed": {
     "type": "document_delivery",
-    "case_number": "（2025）苏0981民初1234号",
+    "case_number": "（YYYY）苏XXXX民初XXXX号",
     "parties": ["张三", "xx有限公司"],
     "court": "xx市人民法院"
   },
@@ -85,8 +85,33 @@
 | `document.received_at` | 否 | 用户收到时间（手机短信网关时间） |
 | `document.appeal_deadline` | 否 | 仅 deadline_status=confirmed 时填写；否则 null |
 | `document.appeal_days_remaining` | 否 | 仅 confirmed 时填写；按办案适用本地日期计算，其他状态为 null |
+| `document.payment_due` | 否 | 仅《交纳诉讼费用通知书》等缴费类文书填写；其他类型留 null 或省略。结构见下方 |
+
+#### `document.payment_due` 字段（缴费类文书专用）
+
+```json
+"payment_due": {
+  "amount_yuan": 25,
+  "amount_chinese": "贰拾伍元整",
+  "payment_code": "37020026260001451190",
+  "deadline_hint": "收到本通知书次日起七日内",
+  "deadline_status": "pending",
+  "deadline_basis": "通知书正文·限再收到次日起X日内预交，期满未预按撤回处理"
+}
+```
+
+| 子字段 | 说明 |
+|--------|------|
+| `amount_yuan` | 数字，单位元；从正文"金额：...元"或"小写￥X元"取 |
+| `amount_chinese` | 大写金额字符串；保留原版式用于对照 |
+| `payment_code` | 缴款码/票号；用于线上/线下渠道缴费定位；从正文"缴款码：20 位数字"取 |
+| `deadline_hint` | 缴费期限的措辞原文（如"收到次日起七日内"），不自动换算成日期 |
+| `deadline_status` | `pending` / `confirmed`；未经送达证据核对前不填 confirmed |
+| `deadline_basis` | 期限起算事件与适用规则的原文摘录；不得仅按文书标题推断 |
+
+**与 `deadline_status` 的区别**：`deadline_status` 专指上诉/再审等司法救济期间；缴费、举证等单列期限走 `payment_due` 等专属字段，互不复用同一状态字段。
 | `archive.matched_case` | 否 | 匹配到的案件目录名 |
-| `archive.target_path` | 否 | 文书最终归档的相对路径 |
+| `archive.target_path` | 否 | 文书最终归档的相对路径；基准为 `config/workspace.json` 的 `case_root`，未配置时以当前工作区为基准。同时建议写 `archive.root` 记录实际使用的绝对根目录，便于日后核对 |
 
 ## v1.5.3 送达与期限字段
 

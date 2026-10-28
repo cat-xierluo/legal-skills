@@ -209,9 +209,9 @@
 <td>通用·案件管理</td>
 <td style="word-break:break-word">法院短信识别与文书下载技能，自动解析法院短信（文书送达、立案通知、开庭提醒等），提取案号、当事人、下载链接，下载文书并归档到对应案件目录</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.5.3</td>
+<td style="text-align:center">v1.5.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip">已发布 v1.5.1</a></td>
-<td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a>；所属套件：[法律材料与证据处理](expert-suites/legal-material-evidence/)、[诉讼案件前期研判](expert-suites/litigation-assessment/)、[诉讼文书与案件推进](expert-suites/litigation-documents-operations/)；源码 v1.5.3 待发布</td></tr>
+<td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a>；所属套件：[法律材料与证据处理](expert-suites/legal-material-evidence/)、[诉讼案件前期研判](expert-suites/litigation-assessment/)、[诉讼文书与案件推进](expert-suites/litigation-documents-operations/)；源码 v1.5.4 待发布</td></tr>
 <tr>
 <td><a href="skills/new-case/"><strong>new-case</strong></a></td>
 <td>通用·案件管理</td>
