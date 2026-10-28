@@ -93,7 +93,7 @@
 "payment_due": {
   "amount_yuan": 25,
   "amount_chinese": "贰拾伍元整",
-  "payment_code": "37020026260001451190",
+  "payment_code": "3702002626XXXXXXXXXX",
   "deadline_hint": "收到本通知书次日起七日内",
   "deadline_status": "pending",
   "deadline_basis": "通知书正文·限再收到次日起X日内预交，期满未预按撤回处理"

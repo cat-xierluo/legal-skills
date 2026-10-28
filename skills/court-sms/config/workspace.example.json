@@ -1,0 +1,5 @@
+{
+  "case_root": null,
+  "search_depth": 3,
+  "new_case_dir_template": "{案号} {当事人与案由}"
+}

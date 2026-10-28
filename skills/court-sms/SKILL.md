@@ -582,6 +582,8 @@ http://dzsd.hbfy.gov.cn/hb/msg=XXXXXXX
 
 三个配置文件，均改完即生效，不需要动脚本：
 
+首次使用可把 `config/workspace.example.json` 复制为 `config/workspace.json`；不创建该文件时按当前工作目录回退。
+
 | 文件 | 管什么 | 关键字段 |
 | --- | --- | --- |
 | `config/workspace.json` | **文书归档到哪里** | `case_root`（归档根目录，`null`=用当前工作目录）、`search_depth`（递归匹配层数，默认 3）、`new_case_dir_template`（新案件目录命名） |
