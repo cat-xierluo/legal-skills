@@ -18,7 +18,7 @@ python3 /path/to/moot-court/scripts/prepare_runtime_candidate.py \
 
 | 路径 | 内容 |
 |---|---|
-| `skill/` | 显式允许集：`SKILL.md`、`LICENSE.txt`、运行必需 references（不含 `evaluation.md`、`blind-probe.md`）、`scripts/clerk.py`、`scripts/presubmit_check.py`、民事与刑事合成案卷样例 |
+| `skill/` | 显式允许集：`SKILL.md`、`LICENSE.txt`、运行必需 references（不含 `evaluation.md`、`blind-probe.md`）、书记员/预检/固定角色审计脚本、民事与刑事合成案卷样例 |
 | `materials.json` | 调用方案卷的字节原样副本 |
 | `task-source.txt` | 原始任务字节（保留占位符） |
 | `task.md` | 占位符展开后的任务文本：`{skill_dir}` 指向 bundle 内 `skill/`、`{manifest}` 指向 bundle 内 `materials.json`，冷启动宿主不会读回源 Skill 或源案卷 |
@@ -32,7 +32,7 @@ python3 /path/to/moot-court/scripts/prepare_runtime_candidate.py \
 
 ## 允许集与排除
 
-采用显式白名单而非递归全拷：`TASKS.md`、`CHANGELOG.md`、`DECISIONS.md`、`archive/`、各测试脚本、`prepare_probe.py`、`index_claude_trace.py`、`evaluation.md`、`blind-probe.md`、`semantic-probe-reviewer.json`、`claude-stream.example.jsonl` 及源中任何其他文件都不带入；`manifest.json` 的 `excluded_paths` 如实列出源目录中未带入的全部文件。引用依赖先核对再抽取，不因目录名盲删导致生产 Skill 断链。
+采用显式白名单而非递归全拷：`TASKS.md`、`CHANGELOG.md`、`DECISIONS.md`、`archive/`、各测试脚本、`prepare_probe.py`、`index_claude_trace.py`、`evaluation.md`、`blind-probe.md`、`semantic-probe-reviewer.json`、`claude-stream.example.jsonl` 及源中任何其他文件都不带入；`manifest.json` 的 `excluded_paths` 如实列出源目录中未带入的全部文件。引用依赖先核对再抽取，不因目录名盲删导致生产 Skill 断链。固定角色审计脚本随生产合同带入，其依赖的 WorkBuddy 冷启动审计公共解析器一并带入；两者仍只读归档，不启动代理。
 
 ## 投影（唯一允许点，fail-closed）
 

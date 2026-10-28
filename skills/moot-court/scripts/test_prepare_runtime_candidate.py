@@ -46,6 +46,7 @@ def make_source(tmp):
         "clerk-protocol.md": "# 书记员协议\n\n[回合](drill.md)\n",
         "criminal-hearing.md": "# 刑事闭环\n\n[方案](procedure-profiles.md)\n",
         "drill.md": "# 调度\n\n[信息模型](information-model.md)\n",
+        "fixed-role-hearing-audit.md": "# 固定角色审计\n",
         "information-model.md": "# 信息模型\n",
         "intake.md": "# 材料准备\n\n案卷格式见 "
                     "[civil](../assets/civil-case.example.json)。\n",
@@ -60,6 +61,8 @@ def make_source(tmp):
     }
     for name, text in refs.items():
         write(source / "references" / name, text)
+    write(source / "scripts" / "audit_fixed_role_hearing.py", "# fixed audit\n")
+    write(source / "scripts" / "audit_workbuddy_trace.py", "# workbuddy audit\n")
     write(source / "scripts" / "clerk.py", "# clerk\n")
     write(source / "scripts" / "presubmit_check.py", "# presubmit\n")
     write(source / "assets" / "civil-case.example.json", '{"documents": []}\n')
@@ -81,6 +84,8 @@ def make_source(tmp):
     write(source / "scripts" / "test_presubmit_check.py", "# test\n")
     write(source / "scripts" / "test_prepare_probe.py", "# test\n")
     write(source / "scripts" / "test_index_claude_trace.py", "# test\n")
+    write(source / "scripts" / "test_audit_fixed_role_hearing.py", "# test\n")
+    write(source / "scripts" / "test_audit_workbuddy_trace.py", "# test\n")
     write(source / "scripts" / "index_claude_trace.py", "# indexer\n")
     write(source / "scripts" / "prepare_probe.py", "# probe\n")
     write(source / "assets" / "semantic-probe-reviewer.json", '{"answer": "x"}\n')
@@ -134,12 +139,15 @@ class HappyPathTest(unittest.TestCase):
             actual = sorted(p.relative_to(output / "skill").as_posix()
                             for p in (output / "skill").rglob("*") if p.is_file())
             expected = sorted(["SKILL.md", "LICENSE.txt",
+                               "scripts/audit_fixed_role_hearing.py",
+                               "scripts/audit_workbuddy_trace.py",
                                "scripts/clerk.py", "scripts/presubmit_check.py",
                                "assets/civil-case.example.json",
                                "assets/criminal-case.example.json"] +
                               [f"references/{n}" for n in
                                ["checklist.md", "civil-hearing.md", "clerk-protocol.md",
-                                "criminal-hearing.md", "drill.md", "information-model.md",
+                                "criminal-hearing.md", "drill.md",
+                                "fixed-role-hearing-audit.md", "information-model.md",
                                 "intake.md", "procedure-profiles.md", "research-methods.md",
                                 "review-rubric.md", "role-profiles.md", "runtime-adapters.md",
                                 "runtime-validation.md", "templates.md"]])
@@ -152,6 +160,8 @@ class HappyPathTest(unittest.TestCase):
                         "references/evaluation.md", "references/blind-probe.md",
                         "scripts/test_clerk.py", "scripts/test_presubmit_check.py",
                         "scripts/test_prepare_probe.py", "scripts/test_index_claude_trace.py",
+                        "scripts/test_audit_fixed_role_hearing.py",
+                        "scripts/test_audit_workbuddy_trace.py",
                         "scripts/index_claude_trace.py", "scripts/prepare_probe.py",
                         "assets/semantic-probe-reviewer.json",
                         "assets/claude-stream.example.jsonl"]))
@@ -218,7 +228,7 @@ class HappyPathTest(unittest.TestCase):
                            "--task-file", task, "--output", output)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             manifest_obj = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(len(manifest_obj["allowed_original_paths"]), 20)
+            self.assertEqual(len(manifest_obj["allowed_original_paths"]), 23)
             self.assertNotIn("references/evaluation.md", manifest_obj["allowed_original_paths"])
             self.assertNotIn("references/blind-probe.md", manifest_obj["allowed_original_paths"])
             self.assertIn("scripts/test_clerk.py", manifest_obj["excluded_paths"])

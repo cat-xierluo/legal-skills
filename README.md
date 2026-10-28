@@ -36,7 +36,7 @@
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-10-27 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.4 | README 回写区分源码版本与真实 ZIP 版本，支持部分热补、首次发布与幂等重跑；法律套件在根索引中排前。 |
 | 2026-10-27 | 新上传 | [self-evolve](skills/self-evolve/) | v1.28.0 | 从本机多 Runtime 会话生成证据化复盘与个人画像，沉淀 Skill 建议、采用账本和七页本地报告。 |
-| 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.6 | 完整材料快照预检与脱敏报告，修复公开引文误拦；新增不带评测答案的 Runtime 候选准备与真实日志覆盖回执。完整跨 Runtime 闭环仍待实测验收。 |
+| 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.11 | 新增固定三角色庭审审计与 WorkBuddy 原生 trace 审计；主控私有词项预检和法官保密复核约束公开概述，交付缺陷按四分类处理。 |
 | 2026-10-27 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.1 | 修复畸形枚举反馈中断整轮索引：先验类型、保留无效报告的重评标记与合法旧卡。 |
 | 2026-10-27 | 更新 | [skill-publicizer](skills/skill-publicizer/) | v1.1.0 | 明确单源实现、权威仓库与完整功能合同；按能力前向验证安装、演示隔离与产物保留；结构校验先对齐目标仓规范。 |
 | 2026-10-27 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.7.0 | 并入官方社区 magpie-setup / magpie-quota 的命令面与额度读数合同（MIT，已署名）：单 Skill 覆盖配置到额度到治理全链路。 |
@@ -233,9 +233,9 @@
 <td>通用·诉讼</td>
 <td style="word-break:break-word">基于案卷自动组织多角色模拟庭审：法官与民事原被告／刑事控辩通过书记员记录交换发言；支持版本化材料、取消重派与进度恢复，交付庭审笔录、争点复盘和庭前补强清单</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.2.6</td>
+<td style="text-align:center">v1.2.11</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/moot-court-1.2.1.zip">已发布 v1.2.1</a></td>
-<td>新增私有材料预检与跨 Runtime 候选准备；源码版本与已发布包分别标注；源码 v1.2.6 待发布</td>
+<td>新增私有材料预检、跨 Runtime 候选准备与固定角色庭审审计；源码版本与已发布包分别标注；源码 v1.2.11 待发布</td>
 </tr>
 <tr>
 <td><a href="skills/contract-copilot/"><strong>contract-copilot</strong></a></td>

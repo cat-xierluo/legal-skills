@@ -32,7 +32,7 @@ packet 正文**不包含**源 run 绝对路径。但主控仍需持有它：`cle
 
 1. **准备 packet**：主控 `dispatch` 后运行 `prepare_probe.py`，为当前角色生成唯一输入文件。
 2. **干净上下文一次性角色**：把该文件作为该角色本轮的**全部**输入，交给一个没有历史对话的独立上下文执行一次发言。不要把上一轮内容、其他角色输出或复核答案带进同一上下文。
-3. **主控入卷**：角色按 `submission_template` 产出提交；主控按 SKILL 的公开边界核对，并用 `presubmit_check.py --packet <本轮原样packet> --manifest <派发时完整材料快照> --submission <角色原稿>` 预检，完整清单不送给角色。合格后执行 `clerk commit`；成功入卷即自动结束本回合，不再 `cancel`。不合格退回原角色修稿，技术故障按书记员协议恢复。
+3. **主控入卷**：角色按 `submission_template` 产出提交；主控按 SKILL 的公开边界核对，并用 `presubmit_check.py --run <当前run> --packet <本轮原样packet> --manifest <派发时完整材料快照> --submission <角色原稿>` 预检，完整清单不送给角色。合格后执行 `clerk commit`；成功入卷即自动结束本回合，不再 `cancel`。不合格退回原角色修稿，技术故障按书记员协议恢复。
 4. **下一 packet**：回到第 1 步取下一个角色的输入。
 
 全部角色的正式发言都入卷之后，才把 `assets/semantic-probe-reviewer.json` 交给一位**未参与生成任何发言**的复核人。该资产含来源、四类语义边界（事实归属、推断限度、角色可见范围、程序回应性）、材料编号预期与评分步骤；它不是结论，也不能替代真实复核人判断。
