@@ -1,315 +1,61 @@
-# 动态 SVG 模式规范
+# 动态 SVG：让对象发生变化
 
-本文档是**默认输出模式**的规范，支持 SMIL 动画效果。
+先按 [视觉设计](visual-design.md) 确定图要解释的内容与视觉主句，再选择画面形态和运动方法。例子用于说明技术，不能代替当前内容的创意推导。
 
-## 模式特性
+## 从内容到分镜
 
-- 动态 SVG 效果：SMIL 动画标签
-- Emoji 与动态效果结合
-- 视觉复杂度提升：3-6 个视觉元素
-- SVG 代码直接嵌入 Markdown 文件
-- 公众号完美支持（原生 SMIL）
-- ⚠️ **背景色强制要求**：SVG 画布必须设置非白色背景色（见下方详述）
+先写图要解释的变化，再决定怎么运动。例如对象进入、按条件分流、一路保留而另一路退回，最后回到可读初态。保持对象身份、状态切换与阅读停留，比持续浮动更重要。
 
----
+优先表现对象本身的变化，而不是依次播放几张文字卡。界面图让选中、提交、反馈确实改变对象状态；机制图让输入、分流和结果可追踪。压缩重复说明、没有新信息的空等及过慢的移入/退场；依据实际阅读任务保留必要停留，避免一概加速到结果来不及看清。
 
-## 一、SMIL 动画基础
+常规循环目标为 **3–5 秒**：单次、直接的状态变化可落在 3 秒左右，需要多步对照的过程用 4–5 秒，5 秒为文章插图上限。超过 5 秒时先删去无信息动作、合并连续状态或拆成多图，不能把“内容复杂”直接换算成更长周期。无论取多久，关键结果至少留一段可读停留；形成、拆分、替换和接续不能让读者来不及辨认。
 
-公众号仅支持 SMIL 动画（`<animate>`、`<animateTransform>`），禁止使用 CSS `@keyframes` 和 JavaScript。
+关键变化前后并排或暂停对照检查：背景与前景是否分层，选中状态是否有足够视觉差异，标签是否只是重复旁白。静态图号若不参与解释或正文引用，不随动画模板自动添加。
 
-| 标签 | 功能 | 应用场景 |
-|------|------|---------|
-| `<animate>` | 属性动画 | 颜色、透明度、线条偏移 |
-| `<animateTransform>` | 变换动画 | 位移、旋转、缩放 |
+为每个对象列出初态、可见区间、移动路径、结果、归属容器和坐标系。骨架用唯一 `data-cue` 标记内容组；秒数写入 JSON，由 [工具](timeline-tools.md) 产生共同 duration 的 SMIL。
 
----
+| 秒数区间 | 内容变化 | 画面/停留 | 验证时点 |
+|---|---|---|---|
+| 0–0.8 | 初态 | 状态和操作入口可读 | 0、0.4 |
+| 0.8–2 | 移入与反馈 | 指针靠近后点击 | 1.2、1.8 |
+| 2–4.6 | 结果 | 新状态保持 | 2、3.2、4.4 |
+| 4.6–5 | 复位 | 为下一轮恢复 | 4.99、5、5.01 |
 
-## 二、⚠️ 背景色强制要求
+这是 `assets/demo.*` 的短例节奏，用来示范 3–5 秒内怎样安排“初态—过程—停留—复位”。文章插图默认从这里出发：先找出对象的形成、选择、流动、遮挡、替换、反馈或回看过程，再编成短循环。若只能说出一句话，应在计划中说明并按静态例外处理；不能把“流程已经画出来”当作省略动效的理由。
 
-**【前置要求 - 最高优先级】**
+## 变换的坐标合同
 
-所有动态 SVG 画布 **必须设置非白色背景色**，禁止使用纯白 `#FFFFFF` 作为画布背景。
-
-**原因**：
-1. 纯白背景导致圆角、边框等视觉元素与背景融为一体，无法区分
-2. 白色背景与内容对比度不足，视觉层次感差
-3. 无法体现设计感和专业性
-
-**背景色选择**：
-```svg
-<!-- ❌ 错误：纯白背景 -->
-<svg viewBox="0 0 800 450">
-  <rect x="60" y="60" width="680" height="330" rx="12" fill="#FFFFFF"/>
-</svg>
-
-<!-- ✅ 正确：浅色背景 -->
-<svg viewBox="0 0 800 450">
-  <rect x="0" y="0" width="800" height="450" fill="#F0F4F8"/>
-  <!-- 圆角框元素 rx="10" -->
-  <rect x="60" y="60" width="680" height="330" rx="10" fill="rgba(255,255,255,0.8)" stroke="#D0D8E0"/>
-</svg>
-```
-
-**同一篇文章内的每张配图按序号轮流使用不同背景色**。背景色从以下色库选择：
-- `#F5F5F5` `#F8F9FA` `#FAF8F5` `#FAF0E6` `#F0F4F8`
-- `#E8F5E8` `#FFF0F5` `#F3E8F8` `#E0F0F8` `#FFFBE6`
-
----
-
-## 三、核心动态效果
-
-### 效果 1：浮动动画
-
-多角色元素上下浮动
+SMIL `animateTransform` 默认替换**同一元素**的基础 transform；translate、scale、rotate 类型不同也不会自动保留静态定位。外层静态定位与内层运动分开；不同变换也使用独立层。嵌套 translate 是正常的坐标合成。
 
 ```xml
-<circle cx="200" cy="200" r="50" fill="#4A90E2">
-  <animateTransform attributeName="transform" type="translate"
-    values="0,0; 0,-10; 0,0" dur="3s" repeatCount="indefinite"
-    calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"/>
-</circle>
-```
-
-**参数**：
-- 浮动幅度：8-15px
-- 浮动周期：2-4 秒
-- 多角色错峰：0.5-1 秒
-
-### 效果 2：虚线框流动
-
-强调框架边界
-
-```xml
-<rect x="100" y="100" width="600" height="250" fill="none"
-  stroke="#4A90E2" stroke-width="3" rx="10" stroke-dasharray="10,5">
-  <animate attributeName="stroke-dashoffset" from="30" to="0"
-    dur="1s" repeatCount="indefinite"/>
-</rect>
-```
-
-**参数**：
-- 虚线 `10,5`
-- 流动 0.8-1.5 秒
-
-### 效果 3：箭头绘制
-
-展示流程指向
-
-```xml
-<defs>
-  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="#4A90E2"/>
-  </marker>
-</defs>
-<line x1="200" y1="200" x2="600" y2="200" stroke="#4A90E2"
-  stroke-width="4" marker-end="url(#arrow)"
-  stroke-dasharray="400" stroke-dashoffset="400">
-  <animate attributeName="stroke-dashoffset" from="400" to="0"
-    dur="1.5s" repeatCount="indefinite"/>
-</line>
-```
-
-**参数**：
-- 线条粗 3-5px
-- 绘制 1-2 秒
-
----
-
-## 三、Emoji 动态效果
-
-### Emoji 浮动动画
-
-```xml
-<!-- ✅ 正确：用 x/y 定位，内层 g 做浮动动画 -->
-<g>
-  <text x="200" y="225" font-size="100" text-anchor="middle">😰</text>
+<g transform="translate(180 200)">
   <g>
+    <circle r="32" fill="#17609a"/>
     <animateTransform attributeName="transform" type="translate"
-      values="0,0; 0,-12; 0,0" dur="3s" repeatCount="indefinite"
-      calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"/>
+      values="0 0;0 -12;0 0" keyTimes="0;0.5;1"
+      begin="0s" dur="3s" repeatCount="indefinite" fill="freeze"/>
   </g>
 </g>
 ```
 
-### Emoji 脉冲动画
+动画的父组包含实际 circle，它运动的就是该子树。旧的“先写 text，再放空的兄弟 g 动画”不会移动 text。缩放也用上述嵌套方式，在内层原点附近安排内容。
 
-```xml
-<!-- ✅ 正确：translate 定位 + scale 动画（scale 不覆盖 translate） -->
-<g transform="translate(400, 225)">
-  <text x="0" y="35" font-size="100" text-anchor="middle">🎯</text>
-  <animateTransform attributeName="transform" type="scale"
-    values="1; 1.08; 1" dur="2s" repeatCount="indefinite"
-    calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"/>
-</g>
-```
+**相对位移写法**：骨架 `transform="translate(180 200)"`，轨道为 `0 0 → 20 10`，最终位置为 `(200,210)`。编译器保留骨架外层，并把轨道注入内层。
 
-### Emoji + 几何图形组合
+**绝对坐标写法**：骨架运动组不设初始定位，轨道为 `180 200 → 200 210`。同一条轨迹若又配骨架 `translate(180 200)`，会得到双倍偏移；编译器不能从两个合法数字推断作者想写哪种。带缩放、旋转的祖先下，轨道属于该局部坐标系，更不能当成画布坐标。
 
-```xml
-<!-- ✅ 正确：translate 定位 + opacity 动画（不冲突） -->
-<g transform="translate(400, 225)">
-  <circle cx="0" cy="0" r="90" fill="#E8F4F8">
-    <animate attributeName="fill-opacity" values="0.6; 1; 0.6"
-      dur="3s" repeatCount="indefinite"/>
-  </circle>
-  <text x="0" y="35" font-size="100" text-anchor="middle">🚀</text>
-</g>
-```
+同一 cue 的 translate、scale 按 JSON 轨道出现顺序从外到内嵌套，顺序改变会改变结果。缩放中心是该运动层原点，必要时增加静态中心定位。用 `getScreenCTM()` 的结果换回 SVG 用户坐标核对位置，不能只看编译成功。
 
----
+## 静态后备与发布
 
-## 四、动态效果使用原则
+骨架自身应可阅读；opacity 会写入第一帧作为基础值，运动则由 SMIL 控制。动画被清洗后未必仍能讲完整过程，需要时另交静态总结图或 PNG。`loop:false` 的单次动画在最终帧冻结。
 
-### 逻辑性动态效果优先
+播放检查覆盖两个完整周期，并核复位前后；状态互斥用实际计算透明度/可见性验证。至少检查初态、第一个关键变化、结果停留、循环末和下一轮开始。`opacity=0` 的组仍有布局边界，不应当作可见文字碰撞；两个淡入淡出层同时可见也不能仅凭“互斥”标记豁免。
 
-**最重要**：动态效果必须服务于**逻辑关系的表达**，而非单纯的装饰。
+浏览器与公众号不是同一验收环境。渐变、filter、系统 emoji、富文本保存与 SMIL 均按实际环境记录；没有设备或账户证据写 `NOT_VERIFIED`。当前 CLI 拒绝 filter、CSS 动画和事件触发 SMIL 是其检查边界，不表示这些特性在所有平台都不支持。
 
-**优先级表**：
+## 原生 SMIL 与本地交接
 
-| 优先级 | 动态效果类型 | 作用 | 必须使用场景 |
-|--------|------------|------|------------|
-| **最高** | 箭头绘制动画 | 展示指向、流程、因果关系 | 所有包含箭头/连接线的图 |
-| **最高** | 虚线框流动动画 | 强调框架、边界、范围 | 所有包含虚线框的图 |
-| **高** | 线条流动动画 | 展示数据/信息流动 | 流程图、关系图 |
-| **中** | 脉冲动画 | 强调核心元素 | 中心概念、关键节点 |
-| **低** | 浮动动画 | 增加生动感 | emoji、角色元素 |
+发布动画由 SVG 内的 `<animate>` / `<animateTransform>`、values、keyTimes、dur 等属性驱动，不依赖预览页的 JS、按钮或时间滑杆。交接前运行 `python3 scripts/svg_motion.py publish compiled.svg -o publish.svg`，删除 data-* 制作标记并保留原生 SMIL；它是本地文件导出，不向任何平台发布，也不把动画栅格化。
 
-### 严格规则
-
-- 有箭头必须动画、有虚线框必须动画
-- 逻辑先于装饰：先确保逻辑关系动画，再考虑 emoji 浮动
-- **禁止静态箭头**
-
-### 推荐使用场景
-
-多角色场景（浮动）、强调框架（虚线流动）、流程指向（箭头绘制）、核心元素（脉冲）、状态变化（颜色渐变）
-
-### 谨慎使用
-
-单元素场景、信息密集、需要稳定感的内容
-
-### 组合原则
-
-- 主次分明：1-2 种主要动画
-- 节奏协调
-- 方向一致
-- 错峰展示
-
----
-
-## 五、成功标准
-
-- 布局多样化，动态效果自然流畅
-- 公众号显示正常，动画无卡顿
-- 在丰富性和可读性之间保持平衡
-- 逻辑性动画优先于装饰性动画
-
----
-
-## 六、⚠️ 兼容性警告
-
-### 🚨 禁止 transform + animateTransform translate 组合
-
-**这是最常见的问题！** 当外层有 `transform="translate(x,y)"`，内层又有 `<animateTransform type="translate">` 时，动画会**完全覆盖**外层的定位，导致元素飞到左上角 (0,0)。
-
-```svg
-<!-- ❌ 错误：translate 定位 + translate 动画 = 元素堆到左上角 -->
-<g transform="translate(180, 200)">
-  <circle cx="0" cy="0" r="80" fill="#4A90E2"/>
-  <animateTransform type="translate" values="0,0; 0,-12; 0,0"/>
-</g>
-
-<!-- ✅ 正确方法1：直接用 cx/cy 定位，内层包一层做动画 -->
-<g>
-  <circle cx="180" cy="200" r="80" fill="#4A90E2"/>
-  <g>
-    <animateTransform type="translate" values="0,0; 0,-12; 0,0" dur="3s" repeatCount="indefinite"/>
-  </g>
-</g>
-
-<!-- ✅ 正确方法2：translate 定位 + scale 动画（scale不会覆盖translate） -->
-<g transform="translate(180, 200)">
-  <circle cx="0" cy="0" r="80" fill="#4A90E2"/>
-  <animateTransform type="scale" values="1; 1.1; 1" dur="2s" repeatCount="indefinite"/>
-</g>
-
-<!-- ✅ 正确方法3：纯 emoji 浮动，用 x/y 定位 -->
-<text x="180" y="235" font-size="80" text-anchor="middle">🐎</text>
-<g>
-  <animateTransform type="translate" values="0,0; 0,-12; 0,0" dur="3s" repeatCount="indefinite"/>
-</g>
-```
-
-**核心原则**：
-- `transform="translate()"` 只能和 `type="scale"` 动画组合
-- 要做 `type="translate"` 浮动动画，必须直接用 `cx/cy` 或 `x/y` 定位
-- 永远不要嵌套两层 `translate`（一个静态一个动态）
-
-### 禁止使用 SVG Filter
-
-**微信环境不兼容**：使用 `<g filter="url(#shadow)">` 会导致 SMIL 动画无法在微信中显示。
-
-```svg
-<!-- ❌ 错误：filter 会导致动画失效 -->
-<g filter="url(#shadow)">
-  <rect ...>
-    <animateTransform attributeName="transform" .../>
-  </rect>
-</g>
-
-<!-- ✅ 正确：直接使用 transform 定位 -->
-<g transform="translate(100, 120)">
-  <rect ...>
-    <animateTransform attributeName="transform" .../>
-  </rect>
-</g>
-```
-
-**解决方案**：
-1. 禁止在任何 SVG 元素上使用 `filter` 属性
-2. 使用 `transform` 替代 filter 进行视觉定位
-3. 阴影效果可以用边框颜色深浅或背景色区分来替代
-
-### 禁止渐变填充 + 动画组合
-
-**微信环境不兼容**：当 `fill="url(#gradient)"` 和 `<animateTransform>` 在同一个元素上时，渐变无法显示。
-
-```svg
-<!-- ❌ 错误：渐变和动画在同一元素上 -->
-<rect fill="url(#gradient)">
-  <animateTransform attributeName="transform" .../>
-</rect>
-
-<!-- ✅ 推荐：直接使用纯色 -->
-<rect fill="#10B981">
-  <animateTransform attributeName="transform" .../>
-</rect>
-```
-
-### 🚫 禁止所有渐变填充
-
-**公众号不支持所有渐变**：即使静态的渐变背景也无法渲染，请使用纯色。
-
-```svg
-<!-- ❌ 错误：渐变背景 -->
-<linearGradient id="bgGrad">...</linearGradient>
-<rect fill="url(#bgGrad)"/>
-
-<!-- ✅ 正确：使用纯色 -->
-<rect fill="#f8f9fa"/>
-```
-
----
-
-## 七、✅ 动画组合速查表
-
-| 定位方式 | 可用动画类型 | 示例 |
-|---------|------------|------|
-| `transform="translate()"` | `type="scale"` | ✅ 脉冲缩放 |
-| `transform="translate()"` | `type="rotate"` | ✅ 旋转 |
-| `transform="translate()"` | `type="translate"` | ❌ **禁止！会覆盖定位** |
-| `cx/cy` 或 `x/y` 直接定位 | `type="translate"` | ✅ 浮动动画 |
-| 任意定位 | `<animate>` 属性动画 | ✅ 颜色、透明度等 |
-
-**记忆口诀**：
-> translate 定位只能配 scale/rotate，要做浮动必须用 x/y/cx/cy 直接定位！
+手动 HTML 片段与后台复核步骤见 [工具交接说明](timeline-tools.md#本地-svghtml-片段交接)。目标是让接收富文本直接包含原生 SVG/SMIL；没有实际后台保存和预览证据时，不宣称公众号已成功解析。

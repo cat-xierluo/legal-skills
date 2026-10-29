@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" data-duration="4.8" style="display:block;max-width:100%;height:auto">
+<title>按任务选用工具</title>
+<desc>原创界面交互示例：选择资料处理，按需勾选识别、转写与索引。展示能力归属和选择，不表示真实产品或自动执行流程。指针与按钮包含移入、按压、释放和结果反馈。</desc>
+<rect x="0" y="0" width="800" height="450" rx="12" fill="#F4F1EA" />
+<text x="36" y="49" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="32" fill="#1B3C59" font-weight="600" text-anchor="start">按任务选用工具</text>
+<rect x="32" y="89" width="736" height="322" rx="20" fill="#1B3C59" fill-opacity="0.018" />
+<rect x="32" y="86" width="736" height="322" rx="20" fill="#1B3C59" fill-opacity="0.025" />
+<rect x="32" y="83" width="736" height="322" rx="20" fill="#1B3C59" fill-opacity="0.035" />
+<rect x="32" y="80" width="736" height="322" rx="20" fill="#1B3C59" fill-opacity="0.035" />
+<rect x="32" y="79" width="736" height="322" rx="20" fill="#FFFFFF" stroke="#DDE2E4" stroke-width="1" />
+<path d="M33 134 H226 V400 H52 Q33 400 33 381 Z" stroke="none" stroke-width="0" fill="#F3F5F6" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M33 133 H767" stroke="#E9EDEF" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<text x="59" y="115" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#1B3C59" font-weight="600" text-anchor="start">Workspace</text>
+<circle cx="707" cy="109" r="2.7" fill="#CBD4D9" />
+<circle cx="719" cy="109" r="2.7" fill="#CBD4D9" />
+<circle cx="731" cy="109" r="2.7" fill="#CBD4D9" />
+<g data-cue="nav-button">
+<g data-cue="nav-hover" opacity="0">
+<rect x="45" y="163" width="168" height="54" rx="11" fill="#E1E7EC" />
+</g>
+<g data-cue="nav-inactive-label" opacity="1">
+<text x="69" y="198" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#1B3C59" font-weight="500" text-anchor="start">资料处理</text>
+</g>
+<g data-cue="nav-active" opacity="0">
+<rect x="45" y="163" width="168" height="54" rx="11" fill="#1B3C59" />
+<text x="69" y="198" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#FFFFFF" font-weight="500" text-anchor="start">资料处理</text>
+</g>
+</g>
+<text x="69" y="269" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#52616A" font-weight="400" text-anchor="start">内容整理</text>
+<text x="69" y="340" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#52616A" font-weight="400" text-anchor="start">文稿输出</text>
+<g data-cue="placeholder" opacity="1">
+<text x="253" y="180" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" fill="#52616A" font-weight="400" text-anchor="start">选择工作场景</text>
+<rect x="250" y="210" width="146" height="128" rx="13" fill="#F4F6F7" />
+<circle cx="323" cy="257" r="18" fill="#E7ECEF" />
+<rect x="297" y="299" width="52" height="8" rx="4" fill="#E1E7EB" />
+<rect x="412" y="210" width="146" height="128" rx="13" fill="#F4F6F7" />
+<circle cx="485" cy="257" r="18" fill="#E7ECEF" />
+<rect x="459" y="299" width="52" height="8" rx="4" fill="#E1E7EB" />
+<rect x="574" y="210" width="146" height="128" rx="13" fill="#F4F6F7" />
+<circle cx="647" cy="257" r="18" fill="#E7ECEF" />
+<rect x="621" y="299" width="52" height="8" rx="4" fill="#E1E7EB" />
+</g>
+<g data-cue="detail-title" opacity="0">
+<text x="253" y="180" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" fill="#1B3C59" font-weight="550" text-anchor="start">资料处理</text>
+</g>
+<g data-cue="card-0" opacity="0">
+<rect x="250" y="212" width="146" height="128" rx="13" fill="#1B3C59" fill-opacity=".025" />
+<rect x="250" y="210" width="146" height="128" rx="13" fill="#F4F6F8" />
+<g data-cue="selected-surface-0" opacity="0">
+<rect x="250" y="210" width="146" height="128" rx="13" fill="#E5EEF5" />
+</g>
+<rect x="296" y="232" width="54" height="54" rx="14" fill="#306A9C" />
+<rect x="311" y="242" width="25" height="34" rx="4" fill="#FFFFFF" />
+<path d="M317 252 H329 M317 259 H329 M317 266 H325" stroke="#306A9C" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<text x="323" y="317" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" fill="#1B3C59" font-weight="500" text-anchor="middle">识别</text>
+<circle cx="377" cy="227" r="10" fill="#FFFFFF" stroke="#CCD6DD" stroke-width="1" />
+<g data-cue="check-0" opacity="0">
+<circle cx="377" cy="227" r="10" fill="#1B3C59" />
+<path d="M372 227 L376 231 L382 223" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+</g>
+<g data-cue="hover-0" opacity="0">
+<circle cx="377" cy="227" r="17" fill="#306A9C" fill-opacity=".12" />
+</g>
+<g data-cue="card-1" opacity="0">
+<rect x="412" y="212" width="146" height="128" rx="13" fill="#1B3C59" fill-opacity=".025" />
+<rect x="412" y="210" width="146" height="128" rx="13" fill="#F4F6F8" />
+<g data-cue="selected-surface-1" opacity="0">
+<rect x="412" y="210" width="146" height="128" rx="13" fill="#E5EEF5" />
+</g>
+<rect x="458" y="232" width="54" height="54" rx="14" fill="#306A9C" />
+<path d="M470 255 V263" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M475 251 V267" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M480 244 V274" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M485 249 V269" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M490 253 V265" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M495 247 V271" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M500 255 V263" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<text x="485" y="317" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" fill="#1B3C59" font-weight="500" text-anchor="middle">转写</text>
+<circle cx="539" cy="227" r="10" fill="#FFFFFF" stroke="#CCD6DD" stroke-width="1" />
+<g data-cue="check-1" opacity="0">
+<circle cx="539" cy="227" r="10" fill="#1B3C59" />
+<path d="M534 227 L538 231 L544 223" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+</g>
+<g data-cue="hover-1" opacity="0">
+<circle cx="539" cy="227" r="17" fill="#306A9C" fill-opacity=".12" />
+</g>
+<g data-cue="card-2" opacity="0">
+<rect x="574" y="212" width="146" height="128" rx="13" fill="#1B3C59" fill-opacity=".025" />
+<rect x="574" y="210" width="146" height="128" rx="13" fill="#F4F6F8" />
+<g data-cue="selected-surface-2" opacity="0">
+<rect x="574" y="210" width="146" height="128" rx="13" fill="#E5EEF5" />
+</g>
+<rect x="620" y="232" width="54" height="54" rx="14" fill="#306A9C" />
+<circle cx="634" cy="249" r="2.2" fill="#FFFFFF" />
+<path d="M643 249 H660" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<circle cx="634" cy="259" r="2.2" fill="#FFFFFF" />
+<path d="M643 259 H660" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<circle cx="634" cy="269" r="2.2" fill="#FFFFFF" />
+<path d="M643 269 H660" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<text x="647" y="317" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" fill="#1B3C59" font-weight="500" text-anchor="middle">索引</text>
+<circle cx="701" cy="227" r="10" fill="#FFFFFF" stroke="#CCD6DD" stroke-width="1" />
+<g data-cue="check-2" opacity="0">
+<circle cx="701" cy="227" r="10" fill="#1B3C59" />
+<path d="M696 227 L700 231 L706 223" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+</g>
+<g data-cue="hover-2" opacity="0">
+<circle cx="701" cy="227" r="17" fill="#306A9C" fill-opacity=".12" />
+</g>
+<text x="253" y="379" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#52616A" font-weight="400" text-anchor="start">按需选用</text>
+<g data-cue="selection-result" opacity="0">
+<circle cx="563" cy="369" r="9" fill="#1B3C59" />
+<path d="M559 369 L562 372 L568 365" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<text x="590" y="378" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#52616A" font-weight="400" text-anchor="start">已选 3 项</text>
+</g>
+<g data-cue="click-ring-0" opacity="0" transform="translate(190 192)">
+<circle cx="0" cy="0" r="13" fill="none" stroke="#AB8D31" stroke-width="1.8" />
+</g>
+<g data-cue="click-ring-1" opacity="0" transform="translate(377 227)">
+<circle cx="0" cy="0" r="13" fill="none" stroke="#AB8D31" stroke-width="1.8" />
+</g>
+<g data-cue="click-ring-2" opacity="0" transform="translate(539 227)">
+<circle cx="0" cy="0" r="13" fill="none" stroke="#AB8D31" stroke-width="1.8" />
+</g>
+<g data-cue="click-ring-3" opacity="0" transform="translate(701 227)">
+<circle cx="0" cy="0" r="13" fill="none" stroke="#AB8D31" stroke-width="1.8" />
+</g>
+<g data-cue="cursor" opacity="1">
+<path d="M0 0 L0 27 L7 21 L13 35 L20 32 L14 19 L25 18 Z" stroke="#FFFFFF" stroke-width="2.2" fill="#1B3C59" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+</svg>
