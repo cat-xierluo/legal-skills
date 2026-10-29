@@ -116,6 +116,18 @@ class SourceStageTests(unittest.TestCase):
         info.filename = "alpha-skill/ascii-only.md"
         self.assertEqual(stager.decoded_entry_name(info), "alpha-skill/ascii-only.md")
 
+    def test_decoded_entry_map_preserves_original_zip_info(self):
+        """Byte reads must use the original CP437-indexed ZipInfo."""
+        original = "alpha-skill/examples/中文示例.md"
+        legacy = original.encode("utf-8").decode("cp437")
+        info = zipfile.ZipInfo(legacy)
+        info.flag_bits = 0
+        mapping = stager.decoded_entry_infos([info])
+        self.assertEqual(list(mapping), [original])
+        self.assertIs(mapping[original], info)
+        with self.assertRaisesRegex(ValueError, "Duplicate ZIP entry"):
+            stager.decoded_entry_infos([info, info])
+
     def test_stager_rejects_source_worktree_without_writing(self):
         before = (self.suite / "README.md").read_bytes()
         with self.assertRaisesRegex(ValueError, "Staging"):

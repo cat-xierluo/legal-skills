@@ -33,6 +33,17 @@ def decoded_entry_name(info: zipfile.ZipInfo) -> str:
         return info.filename
 
 
+def decoded_entry_infos(infos):
+    """Map decoded entry names to the original ZipInfo objects."""
+    result = {}
+    for info in infos:
+        name = decoded_entry_name(info)
+        if name in result:
+            raise ValueError(f"Duplicate ZIP entry after name decoding: {name}")
+        result[name] = info
+    return result
+
+
 def render(suite, tag, assets):
     if not re.fullmatch(r"[A-Za-z0-9._-]+", tag):
         raise ValueError("Invalid release tag")
@@ -58,15 +69,19 @@ def render(suite, tag, assets):
         if not path.is_file():
             raise ValueError(f"Missing current release asset: {asset}")
         with zipfile.ZipFile(path) as archive:
-            if any((info.external_attr >> 16) & 0o170000 == 0o120000 for info in archive.infolist()):
+            infos = [info for info in archive.infolist() if not info.is_dir()]
+            if any((info.external_attr >> 16) & 0o170000 == 0o120000 for info in infos):
                 raise ValueError(f"Release asset contains a symlink: {asset}")
-            names = [decoded_entry_name(info) for info in archive.infolist() if not info.is_dir()]
+            name_infos = decoded_entry_infos(infos)
+            names = list(name_infos)
             expected = {f"{member.name}/{p.relative_to(member).as_posix()}": p
                         for p in member.rglob("*") if p.is_file()}
             if len(names) != len(set(names)) or set(names) != set(expected):
                 raise ValueError(f"Asset membership does not match staged candidate: {asset}")
             for name, source in expected.items():
-                if archive.read(name) != source.read_bytes():
+                # Python indexes legacy unflagged names by the CP437-decoded
+                # string, so bytes must be read through the original ZipInfo.
+                if archive.read(name_infos[name]) != source.read_bytes():
                     raise ValueError(f"Asset content does not match staged candidate: {asset}/{name}")
         lines = member_text.splitlines()
         for index, line in enumerate(lines):
