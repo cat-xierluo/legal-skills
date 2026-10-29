@@ -476,10 +476,13 @@ def main() -> int:
 
     output_path.write_text(body)
     label = notes_cfg.get("project_label") or repo.split("/")[-1]
+    # Workflow 会把 stdout 重定向到同一 .release-notes.md；Python 另开的 stdout
+    # 文件偏移仍停在 0，若这里打印成功信息，会覆盖正文开头。状态必须走 stderr。
     print(
         f"✅ release notes 已生成:{output_path} "
         f"(本版共 {skill_count or len(recent)} 个 skill + {len(suites)} 个专家套件, "
-        f"top {len(recent)} 条最近更新, project={project_key or '(default)'} {label})"
+        f"top {len(recent)} 条最近更新, project={project_key or '(default)'} {label})",
+        file=sys.stderr,
     )
     return 0
 
