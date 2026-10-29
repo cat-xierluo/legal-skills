@@ -69,9 +69,10 @@ def render(suite, tag, assets):
         if not path.is_file():
             raise ValueError(f"Missing current release asset: {asset}")
         with zipfile.ZipFile(path) as archive:
-            infos = [info for info in archive.infolist() if not info.is_dir()]
-            if any((info.external_attr >> 16) & 0o170000 == 0o120000 for info in infos):
+            all_infos = archive.infolist()
+            if any((info.external_attr >> 16) & 0o170000 == 0o120000 for info in all_infos):
                 raise ValueError(f"Release asset contains a symlink: {asset}")
+            infos = [info for info in all_infos if not info.is_dir()]
             name_infos = decoded_entry_infos(infos)
             names = list(name_infos)
             expected = {f"{member.name}/{p.relative_to(member).as_posix()}": p

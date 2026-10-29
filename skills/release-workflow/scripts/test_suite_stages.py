@@ -128,6 +128,25 @@ class SourceStageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Duplicate ZIP entry"):
             stager.decoded_entry_infos([info, info])
 
+    def test_directory_suffixed_symlink_entry_is_rejected(self):
+        """A directory suffix cannot bypass the full-archive symlink gate."""
+        with tempfile.TemporaryDirectory() as temp:
+            import shutil
+            stage = Path(temp) / "demo-suite"
+            shutil.copytree(self.suite, stage, symlinks=False)
+            assets = Path(temp) / "assets"
+            assets.mkdir()
+            member = stage / "skills/alpha-skill"
+            with zipfile.ZipFile(assets / "alpha-skill-1.2.3.zip", "w") as archive:
+                for name in ("SKILL.md", "CHANGELOG.md", "LICENSE.txt"):
+                    archive.write(member / name, f"alpha-skill/{name}")
+                info = zipfile.ZipInfo("alpha-skill/unsafe-link/")
+                info.create_system = 3
+                info.external_attr = 0o120777 << 16
+                archive.writestr(info, b"")
+            with self.assertRaisesRegex(ValueError, "contains a symlink"):
+                stager.render(stage, "v2099.01.02", assets)
+
     def test_stager_rejects_source_worktree_without_writing(self):
         before = (self.suite / "README.md").read_bytes()
         with self.assertRaisesRegex(ValueError, "Staging"):
