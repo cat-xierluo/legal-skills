@@ -2,7 +2,7 @@
 name: svg-article-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.5"
+version: "1.1.6"
 license: MIT
 description: 根据文章内容创作动态 SVG 文章配图，以构图、图形关系和状态变化解释内容；默认输出3–5秒原生SMIL动画，静态图仅作为明确例外。支持时间轴编译、布局检查与PNG导出；不用于完整视频制作或自动发布。
 ---
@@ -13,6 +13,8 @@ description: 根据文章内容创作动态 SVG 文章配图，以构图、图�
 常规循环时长目标为 **3–5 秒**，其中 3 秒左右优先用于单一、清楚的状态变化，5 秒是文章插图上限。内容更多时先拆图、删掉无信息动作或提高关键状态密度；不得靠延长周期换取完整。任何 3–5 秒方案都要保留关键结果的可读停留，不能让形成、拆分、替换或接续变成一闪而过。
 
 静态只用于调用方明确要求静态、目标平台拒绝动画，或动画确实无解释增益的总结图。选择静态必须在配图计划和交付说明中逐图写明理由；不得因为关系图、分类图或制作方便而静默降级为静态。
+
+最终交付前用 `validate` 或 `publish` 验收，命令默认拒绝没有任何原生 SMIL 的 SVG。只有已记录逐图理由的静态例外才可显式加 `--allow-static`；不得为通过门禁改写例外理由。Markdown 内联交付也要先把每段 SVG 单独通过该门禁。
 
 ## 工作方法
 
@@ -48,6 +50,8 @@ python3 scripts/svg_motion.py compile assets/materials-demo.skeleton.svg assets/
 python3 scripts/svg_motion.py validate /tmp/materials-demo.svg
 python3 scripts/svg_motion.py preview /tmp/materials-demo.svg -o /tmp/materials-demo.html
 python3 scripts/svg_motion.py publish /tmp/materials-demo.svg -o /tmp/materials-demo.publish.svg
+# 仅用于已在计划和交付说明中写明理由的静态例外：
+python3 scripts/svg_motion.py validate /tmp/static-exception.svg --allow-static
 ```
 
 在浏览器打开生成的 HTML；播放、暂停、重置、逐秒步进与时间滑杆只服务于制作预览。其测量函数 `window.measureSvgLayout(svg)` 也可由浏览器自动化调用。此处只演示工具的输入输出，实际创作自行选择画面形态、风格、尺寸与节奏。
@@ -57,7 +61,7 @@ PNG 路径保留 `node scripts/svg2png.js input.svg [output.png] [dpi]`，需要
 ## 交付边界
 
 - XML/时序检查通过仅代表本工具支持的保守 SVG 子集通过；未知语法会拒绝，检查边界见工具参考。
-- 动态交付必须回读每段 SVG 中的 `animate` / `animateTransform`；发现无动画或仅有装饰性浮动时，先修订时间轴，不得将其称为动态配图。
+- 动态交付必须回读每段 SVG 中的 `animate` / `animateTransform`；`validate` / `publish` 默认拒绝无动画文件。发现仅有装饰性浮动时，先修订时间轴，不得将其称为解释性动态配图。
 - 布局测量基于实际 DOM，可发现边界问题与碰撞候选；不能仅凭字符估宽、一个时点或文字边界交集断言画面正确。容器、互斥状态与有意遮挡都保留可观察证据。
 - 浏览器成功不证明公众号编辑器、保存后预览或手机 WebView 成功。逐环境记录实测时间、入口与结果；未测项写 `NOT_VERIFIED`。静态 SVG 与 PNG 也要核对实际字体、裁切和发布入口。
 - 默认交回计划、源码和本地验证结果；内容发布、外部上传和安装不包含在本 Skill 的默认动作内。

@@ -45,7 +45,7 @@ python3 scripts/svg_motion.py publish /tmp/demo.svg -o /tmp/demo.publish.svg
 | 资源与引用 | href 只允许现有本地 #id；url() 只允许现有本地 #id；拒绝外链、file、data URI、CSS @规则/转义/注释；id/cue 重复、use 引用递归失败。data-/aria- 是文字元数据，不作为资源解析 |
 | CSS | 仅脚本 CSS 列出的内联属性；不支持 CSS 动画或任意样式表。此检查不替代完整 CSS 值语法验证 |
 | viewBox | 四个有限数字，宽高为正。其他图形几何、path d 与所有静态属性值不作完整语义校验，留 DOM/截图验证 |
-| 动画 | 仅 opacity animate 和 translate/scale animateTransform；要求 values、keyTimes、共同 dur（3–5 秒）、begin=0s、repeatCount、合法 calcMode；数量、严格递增、首尾、值范围、向量维数、spline 数量和范围分别核验 |
+| 动画 | 文章交付默认要求至少一组原生 SMIL；仅接受 opacity animate 和 translate/scale animateTransform，要求 values、keyTimes、共同 dur（3–5 秒）、begin=0s、repeatCount、合法 calcMode；数量、严格递增、首尾、值范围、向量维数、spline 数量和范围分别核验。无动画文件仅能经 `--allow-static` 作为已记录例外通过 |
 | 变换目标 | 空目标、定义区动画、同元素静态 transform 与 animateTransform、同属性竞争动画、additive=sum 或动画 href 均失败；使用有内容的嵌套组 |
 | 循环 | 所有动画周期/repeatCount 一致；首尾值不同只警告，因为作者可能有意隐藏后复位；仍需查跨循环画面 |
 
@@ -61,7 +61,7 @@ preview 将 SVG、布局测量函数与控制脚本嵌入单 HTML，可用 file:
 
 ## 本地 SVG/HTML 片段交接
 
-`publish input.svg -o output.svg [--force]` 接收已经编译的动态 SVG，也可接收已验证静态 SVG。先执行完整现有校验，再删除所有元素上的制作 `data-*` 属性，序列化后重新校验。保留 id、viewBox、文字、图形层级、局部引用、`animate` / `animateTransform` 及其关键属性；不重新编译时间轴，不添加 JS、CSS 动画或外链。现有输出默认拒绝覆盖，`--force` 也不能把输入路径作为输出。无效输入即使配 --force 也不改已有输出。
+`publish input.svg -o output.svg [--force]` 默认只接收含原生 SMIL 的动态 SVG；静态例外须在配图计划和交付说明中逐图记录理由后，额外加 `--allow-static`。先执行完整现有校验，再删除所有元素上的制作 `data-*` 属性，序列化后重新校验。保留 id、viewBox、文字、图形层级、局部引用、`animate` / `animateTransform` 及其关键属性；不重新编译时间轴，不添加 JS、CSS 动画或外链。现有输出默认拒绝覆盖，`--force` 也不能把输入路径作为输出。无效输入即使配 --force 也不改已有输出。
 
 这是本地交付文件整理，命令名不代表已经向公众号发布或通过其后台认证。制作源 SVG 与 timeline 另行保留；清理版不再含 DOM 布局标注，布局测量继续使用制作源，交接后核动画与视觉是否保留。
 

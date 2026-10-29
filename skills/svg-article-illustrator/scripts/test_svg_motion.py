@@ -59,7 +59,8 @@ class MotionTests(unittest.TestCase):
             self.assertFalse(validate(f'<svg xmlns="{SVG}" viewBox="0 0 100 100">{body}</svg>')['ok'],body)
         self.assertFalse(validate('<!DOCTYPE svg [<!ENTITY x "x">]>'+SKELETON)['ok'])
         self.assertFalse(validate('<svg>')['ok'])
-        self.assertTrue(validate(ROOT.joinpath('assets/layouts.svg').read_text())['ok'])
+        self.assertFalse(validate(ROOT.joinpath('assets/layouts.svg').read_text())['ok'])
+        self.assertTrue(validate(ROOT.joinpath('assets/layouts.svg').read_text(), allow_static=True)['ok'])
         self.assertTrue(validate(ROOT.joinpath('assets/animations.smil').read_text())['ok'])
 
     def test_css_escaped_presentation_resources(self):
@@ -69,7 +70,7 @@ class MotionTests(unittest.TestCase):
                     source = f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><rect width="10" height="10" {attribute}="{value}"/></svg>'
                     self.assertFalse(validate(source)['ok'])
         source = f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><defs><linearGradient id="paint"><stop offset="0" stop-color="#123456"/></linearGradient></defs><rect width="10" height="10" fill="url(#paint)" stroke="#123456"/></svg>'
-        self.assertTrue(validate(source)['ok'])
+        self.assertTrue(validate(source, allow_static=True)['ok'])
 
     def test_unicode_cues_and_single_run(self):
         p={'duration':4,'loop':False,'tracks':[{'target':'提示','attribute':'opacity','keyframes':[[0,1],[4,0]]}]}
@@ -103,7 +104,8 @@ class MotionTests(unittest.TestCase):
         self.assertTrue(any(e.get('id') == 'publish-paint' for e in after.iter()))
         self.assertTrue(validate(output)['ok'])
         self.assertEqual(publish_svg(output), output)
-        self.assertTrue(validate(publish_svg(ROOT.joinpath('assets/layouts.svg').read_text()))['ok'])
+        static = ROOT.joinpath('assets/layouts.svg').read_text()
+        self.assertTrue(validate(publish_svg(static, allow_static=True), allow_static=True)['ok'])
 
     def test_publish_cli_protection_and_invalid_input(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -145,6 +147,23 @@ class MotionTests(unittest.TestCase):
             with self.assertRaises(Invalid):compile_svg(skeleton,p)
             manual=f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><g><rect width="20" height="20"/><animate attributeName="opacity" values="0;1;0" keyTimes="0;.5;1" begin="0s" dur="{duration}s" repeatCount="indefinite"/></g></svg>'
             self.assertFalse(validate(manual)['ok'])
+
+    def test_dynamic_is_the_default_and_static_requires_explicit_exception(self):
+        static=ROOT.joinpath('assets/layouts.svg').read_text()
+        rejected=validate(static)
+        self.assertFalse(rejected['ok'])
+        self.assertTrue(any('requires at least one native SMIL' in e for e in rejected['errors']))
+        allowed=validate(static,allow_static=True)
+        self.assertTrue(allowed['ok'])
+        self.assertEqual(allowed['delivery_mode'],'static_exception')
+        dynamic=compile_svg(SKELETON,PLAN)
+        self.assertTrue(validate(dynamic)['ok'])
+        self.assertEqual(validate(dynamic)['delivery_mode'],'dynamic')
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/'static.svg';source.write_text(static)
+            command=[sys.executable,str(HERE/'svg_motion.py'),'validate',str(source)]
+            self.assertEqual(subprocess.run(command,capture_output=True,text=True).returncode,1)
+            self.assertEqual(subprocess.run(command+['--allow-static'],capture_output=True,text=True).returncode,0)
 
 
 def browser_fixture(directory):

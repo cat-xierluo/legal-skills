@@ -65,12 +65,12 @@ def visible_content(e):
         return False
     return any(visible_content(c) for c in e if tag(c) not in ANIM)
 
-def validate(source):
+def validate(source, *, allow_static=False):
     errors, warnings = [], []
     try:
         root = parse_svg(source)
     except Invalid as e:
-        return {'ok': False, 'errors': [str(e)], 'warnings': [], 'bytes': len(source.encode()), 'sha256': hashlib.sha256(source.encode()).hexdigest(), 'animations': 0, 'scope': 'conservative SVG/SMIL profile; no layout or platform certification'}
+        return {'ok': False, 'errors': [str(e)], 'warnings': [], 'bytes': len(source.encode()), 'sha256': hashlib.sha256(source.encode()).hexdigest(), 'animations': 0, 'delivery_mode': 'dynamic_required', 'scope': 'conservative SVG/SMIL profile; no layout or platform certification'}
     ids, cues, refs, animations = {}, {}, [], []
     parents = {c: p for p in root.iter() for c in p}
     for e in root.iter():
@@ -174,8 +174,10 @@ def validate(source):
         require(len({a.get('dur') for a in animations}) <= 1 and len({a.get('repeatCount') for a in animations}) <= 1, 'All animation tracks must share duration/repeatCount')
     except (Invalid, RecursionError) as e:
         errors.append(str(e))
+    if not animations and not allow_static:
+        errors.append('Article SVG delivery requires at least one native SMIL animate/animateTransform track; use --allow-static only for a documented static exception')
     durations = sorted({e.get('dur') for e in animations})
-    return {'ok': not errors, 'errors': errors, 'warnings': warnings, 'bytes': len(source.encode()), 'sha256': hashlib.sha256(source.encode()).hexdigest(), 'animations': len(animations), 'duration': durations[0] if len(durations) == 1 else durations, 'scope': 'conservative SVG/SMIL profile; layout, fonts, clipping and WeChat NOT_VERIFIED'}
+    return {'ok': not errors, 'errors': errors, 'warnings': warnings, 'bytes': len(source.encode()), 'sha256': hashlib.sha256(source.encode()).hexdigest(), 'animations': len(animations), 'duration': durations[0] if len(durations) == 1 else durations, 'delivery_mode': 'static_exception' if allow_static and not animations else 'dynamic', 'scope': 'conservative SVG/SMIL profile; layout, fonts, clipping and WeChat NOT_VERIFIED'}
 
 def ancestors(e, parents):
     while e is not None:
@@ -186,13 +188,13 @@ def number_text(v):
     require(isinstance(v, str) and NUM.fullmatch(v.strip()) is not None, f'Invalid number: {v!r}')
     return number(float(v))
 
-def checked(source):
-    report = validate(source)
+def checked(source, *, allow_static=False):
+    report = validate(source, allow_static=allow_static)
     require(report['ok'], '\n'.join(report['errors']))
     return parse_svg(source)
 
 def compile_svg(source, plan):
-    root = checked(source)
+    root = checked(source, allow_static=True)
     require(not any(tag(e) in ANIM for e in root.iter()), 'Compiler expects a static skeleton; use the original skeleton, not prior output')
     require(isinstance(plan, dict) and set(plan) <= {'duration', 'loop', 'tracks'}, 'Unknown timeline fields')
     duration = number(plan.get('duration'))
@@ -260,23 +262,23 @@ def compile_svg(source, plan):
     checked(out)
     return out
 
-def publish_svg(source):
+def publish_svg(source, *, allow_static=False):
     """Create a validated standalone SVG; local serialization only, no platform write."""
-    root = checked(source)
+    root = checked(source, allow_static=allow_static)
     for element in root.iter():
         for attribute in list(element.attrib):
             if attribute.startswith('data-'):
                 del element.attrib[attribute]
     output = ET.tostring(root, encoding='unicode')+'\n'
-    checked(output)
+    checked(output, allow_static=allow_static)
     return output
 
 def write_new(path, content, force=False):
     with Path(path).open('w' if force else 'x', encoding='utf-8') as f:
         f.write(content)
 
-def preview(source):
-    root = checked(source)
+def preview(source, *, allow_static=False):
+    root = checked(source, allow_static=allow_static)
     duration = max((number_text(e.get('dur')[:-1]) for e in root.iter() if tag(e) in ANIM), default=1)
     script = Path(__file__).with_name('measure_layout.js').read_text(encoding='utf-8')
     template = Path(__file__).parent.parent.joinpath('assets', 'preview.html').read_text(encoding='utf-8')
@@ -293,11 +295,13 @@ def main():
         if cmd != 'validate':
             p.add_argument('-o', '--output', type=Path, required=True)
             p.add_argument('--force', action='store_true', help='Explicitly allow replacing output')
+        if cmd != 'compile':
+            p.add_argument('--allow-static', action='store_true', help='Permit a documented static SVG exception')
     args = parser.parse_args()
     try:
         source = args.svg.read_text(encoding='utf-8')
         if args.cmd == 'validate':
-            report = validate(source)
+            report = validate(source, allow_static=args.allow_static)
             print(json.dumps(report, ensure_ascii=False, indent=2))
             return 0 if report['ok'] else 1
         require(args.output.resolve() != args.svg.resolve(), 'Output must differ from input SVG')
@@ -312,9 +316,9 @@ def main():
             plan = json.loads(args.timeline.read_text(encoding='utf-8'), object_pairs_hook=pairs)
             output = compile_svg(source, plan)
         elif args.cmd == 'publish':
-            output = publish_svg(source)
+            output = publish_svg(source, allow_static=args.allow_static)
         else:
-            output = preview(source)
+            output = preview(source, allow_static=args.allow_static)
         write_new(args.output, output, args.force)
         print(json.dumps({'ok': True, 'output': str(args.output), 'bytes': len(output.encode())}, ensure_ascii=False))
         return 0
