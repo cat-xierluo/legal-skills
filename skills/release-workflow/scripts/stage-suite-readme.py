@@ -17,6 +17,22 @@ def version(path):
     return match[1]
 
 
+def decoded_entry_name(info: zipfile.ZipInfo) -> str:
+    """Return a Unicode ZIP entry name even for macOS Info-ZIP UTF-8 bytes.
+
+    Apple's Info-ZIP 3.0 writes UTF-8 filename bytes while leaving the ZIP
+    UTF-8 flag unset. Python decodes those names as CP437, which breaks exact
+    membership comparison for Chinese filenames. Re-decode only unflagged
+    CP437-looking names; flagged UTF-8 names are returned unchanged.
+    """
+    if info.flag_bits & 0x800:
+        return info.filename
+    try:
+        return info.filename.encode("cp437").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return info.filename
+
+
 def render(suite, tag, assets):
     if not re.fullmatch(r"[A-Za-z0-9._-]+", tag):
         raise ValueError("Invalid release tag")
@@ -44,7 +60,7 @@ def render(suite, tag, assets):
         with zipfile.ZipFile(path) as archive:
             if any((info.external_attr >> 16) & 0o170000 == 0o120000 for info in archive.infolist()):
                 raise ValueError(f"Release asset contains a symlink: {asset}")
-            names = [info.filename for info in archive.infolist() if not info.is_dir()]
+            names = [decoded_entry_name(info) for info in archive.infolist() if not info.is_dir()]
             expected = {f"{member.name}/{p.relative_to(member).as_posix()}": p
                         for p in member.rglob("*") if p.is_file()}
             if len(names) != len(set(names)) or set(names) != set(expected):

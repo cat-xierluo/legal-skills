@@ -1,5 +1,11 @@
 # 变更日志
 
+## [1.6.6] - 2026-10-29
+
+### 修复
+
+- 专家套件发布 staging 在比对成员 ZIP 文件清单时，兼容 macOS Info-ZIP 对 UTF-8 文件名未设置 ZIP UTF-8 标志的情况；按 CP437 读出的文件名会还原为 UTF-8 再比较，避免中文示例文件造成误报 `Asset membership does not match staged candidate`。
+
 ## [1.6.5] - 2026-10-29
 
 ### 修复

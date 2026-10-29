@@ -102,6 +102,20 @@ class SourceStageTests(unittest.TestCase):
         path.write_text(original.replace("suite-demo-suite-0.1.0.zip", "suite-demo-suite-0.0.9.zip").replace("## 包含的 Skills", "> 整套源码 v0.1.0 待发布\n\n## 包含的 Skills"))
         self.source()
 
+    def test_decodes_macos_info_zip_utf8_names_without_utf8_flag(self):
+        """macOS Info-ZIP may store UTF-8 bytes while leaving the UTF-8 flag off."""
+        original = "alpha-skill/examples/中文示例.md"
+        legacy = original.encode("utf-8").decode("cp437")
+        info = zipfile.ZipInfo(legacy)
+        info.flag_bits = 0
+        self.assertEqual(stager.decoded_entry_name(info), original)
+        info.flag_bits = 0x800
+        info.filename = original
+        self.assertEqual(stager.decoded_entry_name(info), original)
+        info.flag_bits = 0
+        info.filename = "alpha-skill/ascii-only.md"
+        self.assertEqual(stager.decoded_entry_name(info), "alpha-skill/ascii-only.md")
+
     def test_stager_rejects_source_worktree_without_writing(self):
         before = (self.suite / "README.md").read_bytes()
         with self.assertRaisesRegex(ValueError, "Staging"):
