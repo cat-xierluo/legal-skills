@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-29 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.1.3 | 源码升级：提炼通用视觉与运动语言，按内容推导画面形态，示例按需查用；保留原生SMIL交接，尚未打包新ZIP。 |
+| 2026-10-29 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.1.4 | 源码升级：文章配图默认原生SMIL动效，静态为逐图说明的例外；保留内容驱动视觉语言，尚未打包新ZIP。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动改为临时目录构建、成功后整批替换，失败不破坏上一批产物；修复资产数输出的变量解析问题，并拒绝符号链接与同名目录目标；补 Bash 实际执行回归。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.6 | 专家套件发布 staging 兼容 macOS Info-ZIP 未标记 UTF-8 的中文文件名，避免成员清单误报不匹配。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
@@ -503,11 +503,11 @@
 <tr>
 <td><a href="skills/svg-article-illustrator/"><strong>svg-article-illustrator</strong></a></td>
 <td>工具·配图</td>
-<td style="word-break:break-word">按内容选择静态SVG或SMIL过程配图，提供时间轴编译、布局预览与保留原生SMIL的本地交接导出，保留PNG路径</td>
+<td style="word-break:break-word">默认输出解释性SMIL动态文章配图，静态仅作逐图说明的例外；提供时间轴编译、布局预览与保留原生SMIL的本地交接导出，保留PNG路径</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.3</td>
+<td style="text-align:center">v1.1.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/svg-article-illustrator-1.0.5.zip">已发布 v1.0.5</a></td>
-<td>源码 v1.1.3：通用视觉与运动语言，画面形态由内容推导，示例按需查用；尚未打包，下载仍为 v1.0.5。</td>
+<td>源码 v1.1.4：文章配图默认原生SMIL动效，静态为逐图说明的例外；画面形态仍由内容推导，尚未打包，下载仍为 v1.0.5。</td>
 </tr>
 <tr>
 <td><a href="skills/handdrawn-article-illustrator/"><strong>handdrawn-article-illustrator</strong></a></td>
