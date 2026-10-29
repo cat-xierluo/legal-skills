@@ -416,5 +416,101 @@ class SourceAwareRefreshTest(unittest.TestCase):
         self.assertNotIn("待发布", self.suite_readme.read_text())
 
 
+    def test_keeps_legacy_renamed_asset_in_suite_member_row(self) -> None:
+        """改名技能的旧名历史包必须保留，不能被回写成「尚无公开下载」。"""
+        import importlib
+
+        legacy = importlib.import_module("legacy_assets")
+        skill = self.root / "skills" / "renamed-skill"
+        skill.mkdir(parents=True)
+        (skill / "CHANGELOG.md").write_text(
+            "# 变更日志\n\n## [2.0.0] - 2026-10-13\n", encoding="utf-8"
+        )
+        legacy_url = ("https://github.com/cat-xierluo/legal-skills/releases/"
+                      "download/v2026.09.30/old-name-1.4.0.zip")
+        self.suite_readme.write_text(
+            "# Demo\n\n"
+            "## 包含的 Skills\n\n"
+            "| Skill | 在本套件中的作用 | 单独下载 |\n"
+            "| :--- | :--- | :--- |\n"
+            "| [renamed-skill](../../skills/renamed-skill/) | 改名技能；源码 v2.0.0 待发布 | "
+            f"[旧名历史包 v1.4.0]({legacy_url}) |\n\n"
+            "## 安装方法\n",
+            encoding="utf-8",
+        )
+        urls = MODULE.asset_url_map({"assets": []})
+        original = legacy.LEGACY_ASSET_IDS.get("renamed-skill")
+        legacy.LEGACY_ASSET_IDS["renamed-skill"] = ("old-name",)
+        try:
+            MODULE.rewrite_readme(self.suite_readme, "cat-xierluo/legal-skills", urls)
+            row = next(
+                line for line in self.suite_readme.read_text(encoding="utf-8").splitlines()
+                if line.startswith("| [renamed-skill]")
+            )
+            self.assertIn("旧名历史包 v1.4.0", row)
+            self.assertIn(legacy_url, row)
+            self.assertIn("源码 v2.0.0 待发布", row)
+            self.assertNotIn("尚无公开下载", row)
+            # 幂等：再跑一次字节不变
+            before = self.suite_readme.read_bytes()
+            MODULE.rewrite_readme(self.suite_readme, "cat-xierluo/legal-skills", urls)
+            self.assertEqual(self.suite_readme.read_bytes(), before)
+        finally:
+            if original is None:
+                legacy.LEGACY_ASSET_IDS.pop("renamed-skill", None)
+            else:
+                legacy.LEGACY_ASSET_IDS["renamed-skill"] = original
+
+    def test_replaces_legacy_asset_once_current_version_is_published(self) -> None:
+        """当前版本发布后，回写应切到同名真实资产。"""
+        import importlib
+
+        legacy = importlib.import_module("legacy_assets")
+        skill = self.root / "skills" / "renamed-skill"
+        skill.mkdir(parents=True)
+        (skill / "CHANGELOG.md").write_text(
+            "# 变更日志\n\n## [2.0.0] - 2026-10-13\n", encoding="utf-8"
+        )
+        current_url = ("https://github.com/cat-xierluo/legal-skills/releases/"
+                       "download/v2026.10.29/renamed-skill-2.0.0.zip")
+        self.suite_readme.write_text(
+            "# Demo\n\n"
+            "## 包含的 Skills\n\n"
+            "| Skill | 在本套件中的作用 | 单独下载 |\n"
+            "| :--- | :--- | :--- |\n"
+            "| [renamed-skill](../../skills/renamed-skill/) | 改名技能；源码 v2.0.0 待发布 | "
+            "[旧名历史包 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/"
+            "download/v2026.09.30/old-name-1.4.0.zip) |\n\n"
+            "## 安装方法\n",
+            encoding="utf-8",
+        )
+        urls = MODULE.asset_url_map(
+            {
+                "assets": [
+                    {
+                        "name": "renamed-skill-2.0.0.zip",
+                        "browser_download_url": current_url,
+                    }
+                ]
+            }
+        )
+        original = legacy.LEGACY_ASSET_IDS.get("renamed-skill")
+        legacy.LEGACY_ASSET_IDS["renamed-skill"] = ("old-name",)
+        try:
+            MODULE.rewrite_readme(self.suite_readme, "cat-xierluo/legal-skills", urls)
+            row = next(
+                line for line in self.suite_readme.read_text(encoding="utf-8").splitlines()
+                if line.startswith("| [renamed-skill]")
+            )
+            self.assertIn(current_url, row)
+            self.assertNotIn("旧名历史包", row)
+            self.assertNotIn("待发布", row)
+        finally:
+            if original is None:
+                legacy.LEGACY_ASSET_IDS.pop("renamed-skill", None)
+            else:
+                legacy.LEGACY_ASSET_IDS["renamed-skill"] = original
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

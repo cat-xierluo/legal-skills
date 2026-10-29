@@ -22,12 +22,9 @@ RELEASE_BASE_RE = (
     r"https://github\.com/cat-xierluo/legal-skills/releases/"
     r"(?:latest/download|download/[^/\s]+)"
 )
-# 技能改名后，旧调用名对应的已发布资产仍然有效。改名不代表资产消失，
-# 因此 source 模式必须接受「旧名历史包」作为公开下载入口，
-# 但不得据此推断当前源码版本已经发布。
-LEGACY_ASSET_IDS: dict[str, tuple[str, ...]] = {
-    "judgment-analysis": ("litigation-analysis",),
-}
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from legacy_assets import legacy_asset_ids  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -228,17 +225,28 @@ def validate_suite(
             cells = [cell.strip() for cell in row.split("|")]
             if len(cells) != 5 or not row.startswith("|"):
                 raise ValidationError(f"{skill_id} 需要标准三列成员表行")
-            public_version = _source_download_version(cells[3], skill_id)
-            if public_version is None:
-                for legacy_id in LEGACY_ASSET_IDS.get(skill_id, ()):
-                    public_version = _source_download_version(cells[3], legacy_id)
-                    if public_version is not None:
+            # 同名资产与旧名资产必须分开判定：同名资产可以与当前版本相等，
+            # 旧名资产只能代表更旧的版本，绝不能据此认为当前版本已发布。
+            same_name_version = _source_download_version(cells[3], skill_id)
+            legacy_version = None
+            if same_name_version is None:
+                for legacy_id in legacy_asset_ids(skill_id):
+                    legacy_version = _source_download_version(cells[3], legacy_id)
+                    if legacy_version is not None:
                         break
-            if public_version == member_version:
+            if same_name_version == member_version:
                 continue
             pending_versions = re.findall(r"(?:^|；)\s*源码 v(\d+\.\d+\.\d+) 待发布\s*(?=；|$)", cells[2])
             pending = pending_versions == [member_version] and row.count("待发布") == 1
-            if public_version and pending and tuple(map(int, public_version.split("."))) < tuple(map(int, member_version.split("."))):
+            if legacy_version is not None:
+                # 旧名资产必须版本严格低于当前源码版本，并保留待发布标记。
+                if pending and tuple(map(int, legacy_version.split("."))) < tuple(map(int, member_version.split("."))):
+                    continue
+                raise ValidationError(
+                    f"{readme} 的 {skill_id} 使用旧名资产 {legacy_version}，"
+                    f"但未标注当前源码 v{member_version} 待发布"
+                )
+            if same_name_version and pending and tuple(map(int, same_name_version.split("."))) < tuple(map(int, member_version.split("."))):
                 continue
             if pending and cells[3] == "尚无公开下载" and not re.search(RELEASE_BASE_RE, row):
                 continue

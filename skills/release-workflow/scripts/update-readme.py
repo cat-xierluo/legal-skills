@@ -23,6 +23,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from legacy_assets import legacy_asset_ids  # noqa: E402
+
 
 ASSET_RE = re.compile(r"^(.+)-(\d+\.\d+\.\d+)\.zip$")
 VERSION_RE = re.compile(r"^## \[?v?(\d+\.\d+\.\d+)\]?", re.MULTILINE)
@@ -241,10 +245,28 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
             return line
         name = member.group(1)
         current = source_version(source_dir(path, "skills", name))
-        target = target_for(name, cells[3])
+        # 改名技能在重新发布前，唯一的真实公开入口是旧名历史包；
+        # 普通回写不能把它抹成「尚无公开下载」。
+        legacy_ids = legacy_asset_ids(name)
+        legacy_target = None
+        if legacy_ids:
+            old = repo_link.search(cells[3])
+            if old:
+                parsed = ASSET_RE.fullmatch(old.group(1))
+                if (parsed and parsed.group(1) in legacy_ids
+                        and "/releases/download/" in old.group(0)
+                        and current
+                        and version_tuple(parsed.group(2)) < version_tuple(current)):
+                    legacy_target = old.group(0)
+        target = target_for(name, cells[3]) or legacy_target
         previous = repo_link.search(cells[3])
         if target and (not previous or previous.group(0) != target):
             stats["links"] = int(stats["links"]) + 1
+        if legacy_target and target == legacy_target:
+            published = asset_version(legacy_target)
+            cells[2] = f" {pending(cells[2].strip(), current, published)} "
+            cells[3] = f" [旧名历史包 v{published}]({legacy_target}) "
+            return "|".join(cells)
         cells[2] = f" {pending(cells[2].strip(), current, asset_version(target))} "
         cells[3] = f" {download(target, markdown=True)} " if target else " 尚无公开下载 "
         return "|".join(cells)

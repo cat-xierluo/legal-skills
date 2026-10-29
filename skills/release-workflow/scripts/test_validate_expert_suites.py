@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import sys
 import tempfile
@@ -157,15 +158,98 @@ class ExpertSuiteValidatorTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        original = MODULE.LEGACY_ASSET_IDS.get("renamed-skill")
-        MODULE.LEGACY_ASSET_IDS["renamed-skill"] = ("old-name",)
+        legacy = importlib.import_module("legacy_assets")
+        original = legacy.LEGACY_ASSET_IDS.get("renamed-skill")
+        legacy.LEGACY_ASSET_IDS["renamed-skill"] = ("old-name",)
         try:
             self.validate_source()
         finally:
             if original is None:
-                MODULE.LEGACY_ASSET_IDS.pop("renamed-skill", None)
+                legacy.LEGACY_ASSET_IDS.pop("renamed-skill", None)
             else:
-                MODULE.LEGACY_ASSET_IDS["renamed-skill"] = original
+                legacy.LEGACY_ASSET_IDS["renamed-skill"] = original
+
+    def test_rejects_legacy_asset_with_equal_version(self) -> None:
+        """旧名资产版本等于当前源码版本时，不能当作当前版本已发布。"""
+        skill = self.root / "skills" / "renamed-skill"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            "---\nname: renamed-skill\nlicense: MIT\n---\n\n# Renamed\n",
+            encoding="utf-8",
+        )
+        (skill / "CHANGELOG.md").write_text(
+            "# 变更日志\n\n## [2.0.0] - 2026-10-13\n",
+            encoding="utf-8",
+        )
+        (skill / "LICENSE.txt").write_text("MIT License\n", encoding="utf-8")
+        (self.suite / "skills" / "renamed-skill").symlink_to("../../../skills/renamed-skill")
+        readme = self.suite / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8").replace(
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |",
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |\n"
+                "| [renamed-skill](../../skills/renamed-skill/) | 改名技能；源码 v2.0.0 待发布 | "
+                "[旧名历史包 v2.0.0](https://github.com/cat-xierluo/legal-skills/releases/"
+                "download/v2026.09.30/old-name-2.0.0.zip) |",
+            ),
+            encoding="utf-8",
+        )
+        legacy = importlib.import_module("legacy_assets")
+        original = legacy.LEGACY_ASSET_IDS.get("renamed-skill")
+        legacy.LEGACY_ASSET_IDS["renamed-skill"] = ("old-name",)
+        try:
+            with self.assertRaises(MODULE.ValidationError):
+                self.validate_source()
+        finally:
+            if original is None:
+                legacy.LEGACY_ASSET_IDS.pop("renamed-skill", None)
+            else:
+                legacy.LEGACY_ASSET_IDS["renamed-skill"] = original
+
+    def test_rejects_legacy_asset_without_pending_marker(self) -> None:
+        """使用旧名资产却缺少「源码 vX.Y.Z 待发布」标记时必须拒绝。"""
+        skill = self.root / "skills" / "renamed-skill"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            "---\nname: renamed-skill\nlicense: MIT\n---\n\n# Renamed\n",
+            encoding="utf-8",
+        )
+        (skill / "CHANGELOG.md").write_text(
+            "# 变更日志\n\n## [2.0.0] - 2026-10-13\n",
+            encoding="utf-8",
+        )
+        (skill / "LICENSE.txt").write_text("MIT License\n", encoding="utf-8")
+        (self.suite / "skills" / "renamed-skill").symlink_to("../../../skills/renamed-skill")
+        readme = self.suite / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8").replace(
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |",
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |\n"
+                "| [renamed-skill](../../skills/renamed-skill/) | 改名技能 | "
+                "[旧名历史包 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/"
+                "download/v2026.09.30/old-name-1.4.0.zip) |",
+            ),
+            encoding="utf-8",
+        )
+        legacy = importlib.import_module("legacy_assets")
+        original = legacy.LEGACY_ASSET_IDS.get("renamed-skill")
+        legacy.LEGACY_ASSET_IDS["renamed-skill"] = ("old-name",)
+        try:
+            with self.assertRaises(MODULE.ValidationError):
+                self.validate_source()
+        finally:
+            if original is None:
+                legacy.LEGACY_ASSET_IDS.pop("renamed-skill", None)
+            else:
+                legacy.LEGACY_ASSET_IDS["renamed-skill"] = original
 
     def test_rejects_legacy_asset_without_declared_mapping(self) -> None:
         """没有声明旧名映射的技能，不得在成员表里借用其他 slug 的资产。"""

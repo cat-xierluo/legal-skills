@@ -22,6 +22,7 @@ mkdir -p \
     "$FIXTURE/skills/alpha-skill" \
     "$FIXTURE/expert-suites/demo-suite/skills"
 cp skills/release-workflow/scripts/validate-expert-suites.py \
+    skills/release-workflow/scripts/legacy_assets.py \
     skills/release-workflow/scripts/build-suite-zips.sh \
     skills/release-workflow/scripts/stage-suite-readme.py \
     "$FIXTURE/skills/release-workflow/scripts/"
