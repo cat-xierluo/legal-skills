@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" role="img" aria-labelledby="demo-title">
+<title id="demo-title">提交操作改变处理状态</title>
+<rect width="600" height="360" fill="#edf3f8" data-layout-id="background" data-layout-role="background"/>
+<text x="32" y="48" font-size="26" font-family="sans-serif">提交后，进入处理状态</text>
+<rect x="32" y="80" width="536" height="224" fill="#fff" stroke="#72889a" data-layout-id="panel" data-layout-role="container"/>
+<g data-cue="idle" data-state-group="status" data-state="idle" data-layout-within="panel">
+<text x="64" y="138" font-size="24" font-family="sans-serif" data-layout-id="idle-label">材料已备齐</text>
+</g>
+<g data-cue="busy" opacity="0" data-state-group="status" data-state="busy" data-layout-within="panel">
+<text x="64" y="138" font-size="24" font-family="sans-serif" data-layout-id="busy-label">正在处理</text>
+</g>
+<rect x="64" y="192" width="156" height="72" fill="#17609a" data-layout-id="button" data-layout-role="container" data-layout-within="panel"/>
+<text x="142" y="238" text-anchor="middle" font-size="24" fill="white" font-family="sans-serif" data-layout-id="button-label" data-layout-within="button">提交</text>
+<g data-cue="cursor" transform="translate(350 220)" data-layout-id="cursor" data-layout-within="panel">
+<path d="M0 0 L0 30 L8 23 L14 36 L20 33 L14 20 L26 20 Z" fill="#14293a"/>
+</g>
+</svg>

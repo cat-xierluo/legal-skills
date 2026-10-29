@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVG timeline preview</title>
+<style>
+body{font:16px system-ui,sans-serif;margin:20px;background:#e9edf0;color:#15202b}button,input,select{font:inherit}nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}input[type=range]{width:230px}#stage{width:min(800px,100%);background:white}#stage>svg{display:block;width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:40vh;overflow:auto}#status{font-variant-numeric:tabular-nums}
+</style>
+<nav><button id="play">播放</button><button id="pause">暂停</button><button id="reset">重置</button><button id="back">−1 秒</button><button id="next">+1 秒</button><input aria-label="时间秒数" id="scrub" type="range" min="0" step="0.01"><output id="status"></output><select id="width" aria-label="预览宽度"><option value="800">桌面 800px</option><option value="375">手机 375px</option></select><button id="measure">测量当前帧</button></nav>
+<div id="stage"><!-- SVG --></div><pre id="report">测量覆盖文字与标注对象；请同时检查截图。公众号真机 NOT_VERIFIED。</pre>
+<script>
+/* MEASURE */
+const svg=document.querySelector('#stage>svg'), duration=/* DURATION */ 1;
+const slider=document.querySelector('#scrub'), status=document.querySelector('#status');
+slider.max=duration;
+function update(){const t=svg.getCurrentTime();slider.value=t<=duration?t:t%duration;status.textContent=`${t.toFixed(2)}s / ${duration}s`;requestAnimationFrame(update)}
+function seek(seconds){svg.pauseAnimations();svg.setCurrentTime(Math.max(0,seconds));}
+document.querySelector('#play').onclick=()=>svg.unpauseAnimations();
+document.querySelector('#pause').onclick=()=>svg.pauseAnimations();
+document.querySelector('#reset').onclick=()=>seek(0);
+document.querySelector('#back').onclick=()=>seek(Math.max(0,svg.getCurrentTime()-1));
+document.querySelector('#next').onclick=()=>seek(svg.getCurrentTime()+1);
+slider.oninput=()=>seek(Number(slider.value));
+document.querySelector('#width').onchange=e=>document.querySelector('#stage').style.width=e.target.value+'px';
+document.querySelector('#measure').onclick=async()=>{
+  const output=document.querySelector('#report');output.textContent='测量中…';
+  try{output.textContent=JSON.stringify(await measureSvgLayout(svg),null,2);}
+  catch(error){output.textContent=JSON.stringify({status:'NOT_VERIFIED',error:error.message},null,2);}
+};
+seek(0);update();
+</script></html>
