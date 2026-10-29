@@ -89,7 +89,7 @@ expert-suites/                               # 套件定义
 │       ├── legal-ocr -> ../../../skills/legal-ocr
 │       ├── pdf-organizer -> ../../../skills/pdf-organizer
 │       └── pdf-processor -> ../../../skills/pdf-processor
-├── litigation-assessment/
+├── litigation-analysis-drafting/
 │   ├── README.md
 │   ├── CHANGELOG.md
 │   ├── LICENSE.txt
@@ -193,7 +193,7 @@ README 是专家套件的核心用户入口，不承担隐藏的机器协议。
 ### 5.1 推荐结构
 
 ```markdown
-# 诉讼案件前期研判专家套件
+# 诉讼分析及文书撰写专家套件
 
 > [下载完整专家套件](<suite-download-url>)
 
@@ -252,7 +252,7 @@ Skill | 在本套件中的作用 | 单独下载
 ## [0.1.0] - 2026-09-03
 
 ### 新增
-- 建立诉讼案件前期研判套件。
+- 建立诉讼分析及文书撰写套件。
 - 收录案件分析、法律检索和方案交付 Skills。
 ```
 
@@ -281,8 +281,7 @@ Skill | 在本套件中的作用 | 单独下载
 | 套件 | 外层许可证 |
 | :--- | :--- |
 | 法律材料与证据处理 | MIT |
-| 诉讼案件前期研判 | CC BY-NC |
-| 诉讼文书与案件推进 | CC BY-NC |
+| 诉讼分析及文书撰写 | CC BY-NC |
 | 合同审查与企业顾问 | CC BY-NC |
 | 知识产权业务 | CC BY-NC |
 | 法律研究与客户洞察 | CC BY-NC |
@@ -305,8 +304,7 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 | ID | 专家套件 | 主要成员 Skill | 主要用途 |
 | :--- | :--- | :--- | :--- |
 | `legal-material-evidence` | 法律材料与证据处理 | `legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`local-asr`、`transcription-corrector`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 把原始文档、扫描件和音视频转成可分析材料 |
-| `litigation-assessment` | 诉讼案件前期研判 | `new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`pdf-organizer`、`legal-visualization`、`md2word`、`court-sms` | 收案、事实证据、争点、检索和诉讼策略 |
-| `litigation-documents-operations` | 诉讼文书与案件推进 | `elements-complaint-generator`、`judgment-analysis`、`legal-proposal-generator`、`md2word`、`legal-case-analysis`、`yuandian-law-search`、`new-case`、`court-sms`、`legal-visualization` | 起诉答辩、裁判分析、上诉再审和客户交付 |
+| `litigation-analysis-drafting` | 诉讼分析及文书撰写 | `new-case`、`court-sms`、`legal-ocr`、`pdf-organizer`、`legal-case-analysis`、`judgment-analysis`、`yuandian-law-search`、`legal-visualization`、`elements-complaint-generator`、`legal-proposal-generator`、`md2word` | 诉讼案件材料、事实证据分析、检索、起诉答辩与方案文书撰写 |
 | `contract-business-counsel` | 合同审查与企业顾问 | `opc-legal-counsel`、`contract-copilot`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`legal-visualization`、`md2word` | 企业问题分诊、合同审查和顾问交付 |
 | `intellectual-property-practice` | 知识产权业务 | `patent-download`、`patent-analysis`、`code2patent`、`trademark-assistant`、`new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-visualization` | 专利分析、代码专利化和商标申请规划 |
 | `legal-research-client-insight` | 法律研究与客户洞察 | `yuandian-law-search`、`legal-client-brief`、`legal-industry-report`、`legal-text-format`、`wechat-article-fetch`、`legal-visualization`、`de-ai-polish`、`md2word`、`piclist-upload` | 法律研究、客户简报和行业报告 |
@@ -319,12 +317,11 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 第一批建议先建立：
 
 1. `legal-material-evidence`；
-2. `litigation-assessment`；
-3. `litigation-documents-operations`；
+2. `litigation-analysis-drafting`；
 4. `skill-development-quality`；
 5. `skill-release-distribution`。
 
-`case-progress`、`case-dashboard` 当前仍在各自 `SKILL.md` 中标为骨架版本，第一批不放入公开套件；达到可用状态后再考虑加入“诉讼文书与案件推进”。
+`case-progress`、`case-dashboard` 当前仍在各自 `SKILL.md` 中标为骨架版本，不放入公开套件；达到可用状态后再考虑加入「诉讼分析及文书撰写」。
 
 `mineru-ocr` 和 `paddle-ocr` 已在 2026-09-04 归档并由 `legal-ocr` 统一承接，因此首批“法律材料与证据处理”不再链接这两个已归档目录。
 
@@ -335,8 +332,8 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 仓库中的成员是符号链接，Release ZIP 中的成员必须是完整真实目录：
 
 ```text
-suite-litigation-assessment-0.1.0.zip
-└── litigation-assessment/
+suite-litigation-analysis-drafting-0.2.0.zip
+└── litigation-analysis-drafting/
     ├── README.md
     ├── CHANGELOG.md
     ├── LICENSE.txt

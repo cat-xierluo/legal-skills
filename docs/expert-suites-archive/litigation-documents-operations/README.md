@@ -1,3 +1,7 @@
+# ⚠️ 历史套件（已停止发布）
+
+本套件已并入「诉讼分析及文书撰写专家套件」（`litigation-analysis-drafting`）。本文件仅供历史溯源，当前安装请使用新套件。
+
 # 诉讼文书与案件推进专家套件
 
 > [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-documents-operations-0.1.0.zip)
