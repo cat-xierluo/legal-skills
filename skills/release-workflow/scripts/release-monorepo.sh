@@ -38,6 +38,26 @@ stage_assets() {
         | sed 's#.*/##' | LC_ALL=C sort
 }
 
+# check_targets <names-file>
+# 移动任何资产前逐个检查目标路径：必须是普通文件或不存在。
+# 符号链接、子目录等一律拒绝，避免 mv 沿链接写出仓库外。
+check_targets() {
+    local names_file="$1"
+    local name target
+    while IFS= read -r name; do
+        [ -n "$name" ] || continue
+        target="$PACK_DIR/$name"
+        if [ -L "$target" ]; then
+            echo "ERROR: 目标路径是符号链接，拒绝写入: $target" >&2
+            return 1
+        fi
+        if [ -e "$target" ] && [ ! -f "$target" ]; then
+            echo "ERROR: 目标路径已存在且不是普通文件，拒绝写入: $target" >&2
+            return 1
+        fi
+    done <"$names_file"
+}
+
 # promote_assets <names-file>
 # 把已校验的整批资产移入目标目录，并只清理同标识的过期版本。
 promote_assets() {
@@ -49,6 +69,8 @@ promote_assets() {
         [ -n "$name" ] || continue
         built+=("$name")
     done <"$names_file"
+
+    check_targets "$names_file" || return 1
 
     for name in "${built[@]}"; do
         mv -f "$STAGE_DIR/$name" "$PACK_DIR/$name"

@@ -88,7 +88,48 @@ printf 'note\n' >"$repo/pack-skills/notes.txt"
 [ ! -d "$repo/pack-skills/.staging" ] || fail "临时目录未清理"
 pass "成功时替换同标识旧版本并保留未知文件"
 
-# ---------- 4. 输出目录是符号链接时拒绝写入 ----------
+# ---------- 4. 目标文件是符号链接时拒绝写入 ----------
+repo="$WORK/target-link-repo"
+make_repo "$repo"
+mkdir -p "$repo/pack-skills" "$WORK/outside-target"
+printf 'external\n' >"$WORK/outside-target/payload.txt"
+ln -s "$WORK/outside-target" "$repo/pack-skills/skill-1.0.0.zip"
+printf 'old batch\n' >"$repo/pack-skills/other-0.1.0.zip"
+set +e
+(cd "$repo" && RELEASE_OUTPUT_DIR=pack-skills \
+    BUILD_SKILL_ZIPS=skills/release-workflow/scripts/build-stub-ok.sh \
+    BUILD_SUITE_ZIPS=skills/release-workflow/scripts/build-stub-suite.sh \
+    bash skills/release-workflow/scripts/release-monorepo.sh v2099.01.01 --dry-run) \
+    >"$WORK/target-link.log" 2>&1
+status=$?
+set -e
+[ "$status" -ne 0 ] || fail "目标为符号链接时应当被拒绝"
+grep -q '符号链接' "$WORK/target-link.log" || fail "缺少符号链接目标拒绝说明"
+[ -f "$WORK/outside-target/payload.txt" ] || fail "外部目录内容被破坏"
+[ "$(ls -A "$WORK/outside-target" | wc -l | tr -d ' ')" = "1" ] || fail "沿符号链接写入了新资产"
+[ -L "$repo/pack-skills/skill-1.0.0.zip" ] || fail "原符号链接被替换"
+[ -f "$repo/pack-skills/other-0.1.0.zip" ] || fail "旧批次在拒绝时被删除"
+pass "目标路径为符号链接时拒绝写入且外部目录不变"
+
+# ---------- 5. 目标文件是同名目录时拒绝写入 ----------
+repo="$WORK/target-dir-repo"
+make_repo "$repo"
+mkdir -p "$repo/pack-skills/skill-1.0.0.zip"
+printf 'keep\n' >"$repo/pack-skills/skill-1.0.0.zip/inner.txt"
+set +e
+(cd "$repo" && RELEASE_OUTPUT_DIR=pack-skills \
+    BUILD_SKILL_ZIPS=skills/release-workflow/scripts/build-stub-ok.sh \
+    BUILD_SUITE_ZIPS=skills/release-workflow/scripts/build-stub-suite.sh \
+    bash skills/release-workflow/scripts/release-monorepo.sh v2099.01.01 --dry-run) \
+    >"$WORK/target-dir.log" 2>&1
+status=$?
+set -e
+[ "$status" -ne 0 ] || fail "目标为目录时应当被拒绝"
+grep -q '不是普通文件' "$WORK/target-dir.log" || fail "缺少目录目标拒绝说明"
+[ -f "$repo/pack-skills/skill-1.0.0.zip/inner.txt" ] || fail "目录目标内容被破坏"
+pass "目标路径为同名目录时拒绝写入"
+
+# ---------- 6. 输出目录是符号链接时拒绝写入 ----------
 repo="$WORK/link-repo"
 make_repo "$repo"
 mkdir -p "$WORK/link-target"
