@@ -16,6 +16,8 @@ XLINK = 'http://www.w3.org/1999/xlink'
 ET.register_namespace('', SVG)
 ET.register_namespace('xlink', XLINK)
 ANIM = {'animate', 'animateTransform'}
+MOTION_MIN_DURATION = 3
+MOTION_MAX_DURATION = 5
 DRAW = {'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path', 'text', 'use'}
 TAGS = DRAW | ANIM | {'svg', 'g', 'defs', 'title', 'desc', 'tspan', 'textPath', 'clipPath', 'mask', 'marker', 'linearGradient', 'radialGradient', 'stop', 'symbol'}
 ATTRS = set('pointer-events id viewBox width height x y x1 y1 x2 y2 cx cy r rx ry dx dy d points transform fill fill-opacity fill-rule stroke stroke-width stroke-opacity stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-miterlimit opacity font-family font-size font-weight font-style text-anchor dominant-baseline alignment-baseline letter-spacing word-spacing textLength lengthAdjust pathLength preserveAspectRatio vector-effect clip-path clip-rule mask marker-start marker-mid marker-end markerWidth markerHeight markerUnits refX refY orient gradientUnits gradientTransform spreadMethod offset stop-color stop-opacity fx fy fr href role focusable style display visibility color overflow clipPathUnits maskUnits maskContentUnits startOffset attributeName values keyTimes keySplines calcMode begin dur repeatCount fill type additive'.split())
@@ -114,7 +116,9 @@ def validate(source):
                 require(e.get('repeatCount') in {'1', 'indefinite'}, 'repeatCount must be 1 or indefinite')
                 require(e.get('fill', 'freeze') == 'freeze', 'Only fill="freeze" supported')
                 dur = e.get('dur', '')
-                require(dur.endswith('s') and number_text(dur[:-1]) > 0, 'dur must be positive seconds')
+                require(dur.endswith('s'), 'dur must use seconds')
+                seconds = number_text(dur[:-1])
+                require(MOTION_MIN_DURATION <= seconds <= MOTION_MAX_DURATION, f'dur must be {MOTION_MIN_DURATION}-{MOTION_MAX_DURATION} seconds for article SVG')
                 mode = e.get('calcMode', 'linear')
                 require(mode in {'linear', 'discrete', 'spline'}, 'Unsupported calcMode')
                 values = e.get('values', '').split(';')
@@ -170,7 +174,8 @@ def validate(source):
         require(len({a.get('dur') for a in animations}) <= 1 and len({a.get('repeatCount') for a in animations}) <= 1, 'All animation tracks must share duration/repeatCount')
     except (Invalid, RecursionError) as e:
         errors.append(str(e))
-    return {'ok': not errors, 'errors': errors, 'warnings': warnings, 'bytes': len(source.encode()), 'sha256': hashlib.sha256(source.encode()).hexdigest(), 'animations': len(animations), 'scope': 'conservative SVG/SMIL profile; layout, fonts, clipping and WeChat NOT_VERIFIED'}
+    durations = sorted({e.get('dur') for e in animations})
+    return {'ok': not errors, 'errors': errors, 'warnings': warnings, 'bytes': len(source.encode()), 'sha256': hashlib.sha256(source.encode()).hexdigest(), 'animations': len(animations), 'duration': durations[0] if len(durations) == 1 else durations, 'scope': 'conservative SVG/SMIL profile; layout, fonts, clipping and WeChat NOT_VERIFIED'}
 
 def ancestors(e, parents):
     while e is not None:
@@ -191,7 +196,7 @@ def compile_svg(source, plan):
     require(not any(tag(e) in ANIM for e in root.iter()), 'Compiler expects a static skeleton; use the original skeleton, not prior output')
     require(isinstance(plan, dict) and set(plan) <= {'duration', 'loop', 'tracks'}, 'Unknown timeline fields')
     duration = number(plan.get('duration'))
-    require(duration > 0, 'duration must be positive')
+    require(MOTION_MIN_DURATION <= duration <= MOTION_MAX_DURATION, f'duration must be {MOTION_MIN_DURATION}-{MOTION_MAX_DURATION} seconds for article SVG')
     loop = plan.get('loop', True)
     require(isinstance(loop, bool), 'loop must be boolean')
     tracks = plan.get('tracks')

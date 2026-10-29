@@ -21,8 +21,8 @@ class MotionTests(unittest.TestCase):
         root = ET.fromstring(output)
         animations = [e for e in root.iter() if e.tag.endswith(('}animate', '}animateTransform'))]
         self.assertEqual(len(animations),4)
-        self.assertEqual({e.get('dur') for e in animations},{'6s'})
-        for actual, expected in zip([float(v) for v in animations[0].get('keyTimes').split(';')],[0,.4,5.6/6,1]): self.assertAlmostEqual(actual,expected,places=12)
+        self.assertEqual({e.get('dur') for e in animations},{'5s'})
+        for actual, expected in zip([float(v) for v in animations[0].get('keyTimes').split(';')],[0,.4,.88,1]): self.assertAlmostEqual(actual,expected,places=12)
         target = next(e for e in root.iter() if e.get('data-cue')=='cursor')
         self.assertEqual(target.get('transform'),'translate(350 220)')
         self.assertEqual(target[0].get('data-motion-layer'),'translate')
@@ -41,14 +41,14 @@ class MotionTests(unittest.TestCase):
         self.assertFalse(validate(good.replace('.4 0 .2 1','2 0 0 1').replace('0.4 0 0.2 1','2 0 0 1'))['ok'])
 
     def test_empty_sibling_animation_and_same_layer_transform(self):
-        animation='<animateTransform attributeName="transform" type="scale" values="1;2;1" keyTimes="0;.5;1" begin="0s" dur="2s" repeatCount="indefinite"/>'
+        animation='<animateTransform attributeName="transform" type="scale" values="1;2;1" keyTimes="0;.5;1" begin="0s" dur="4s" repeatCount="indefinite"/>'
         for body in [f'<text x="20" y="30">label</text><g>{animation}</g>',f'<g transform="translate(30 40)"><circle r="10"/>{animation}</g>']:
             self.assertFalse(validate(f'<svg xmlns="{SVG}" viewBox="0 0 100 100">{body}</svg>')['ok'])
         skeleton=f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><g data-cue="empty"/></svg>'
-        with self.assertRaises(Invalid):compile_svg(skeleton,{'duration':2,'tracks':[{'target':'empty','attribute':'opacity','keyframes':[[0,0],[2,1]]}]})
+        with self.assertRaises(Invalid):compile_svg(skeleton,{'duration':4,'tracks':[{'target':'empty','attribute':'opacity','keyframes':[[0,0],[4,1]]}]})
 
     def test_input_contract_faults(self):
-        for mutate in [lambda p:p.update(typo=True),lambda p:p.update(duration=True),lambda p:p.update(duration=float('nan')),lambda p:p['tracks'][0].update(target='missing'),lambda p:p['tracks'][0].update(calcMode='linar'),lambda p:p['tracks'][0].update(keyframes=[[0,0],[2,1],[1,0],[6,0]]),lambda p:p['tracks'].append(copy.deepcopy(p['tracks'][0]))]:
+        for mutate in [lambda p:p.update(typo=True),lambda p:p.update(duration=True),lambda p:p.update(duration=float('nan')),lambda p:p.update(duration=2.9),lambda p:p.update(duration=5.1),lambda p:p['tracks'][0].update(target='missing'),lambda p:p['tracks'][0].update(calcMode='linar'),lambda p:p['tracks'][0].update(keyframes=[[0,0],[2,1],[1,0],[5,0]]),lambda p:p['tracks'].append(copy.deepcopy(p['tracks'][0]))]:
             p=copy.deepcopy(PLAN);mutate(p)
             with self.assertRaises(Invalid):compile_svg(SKELETON,p)
         bad=SKELETON.replace('data-cue="busy"','data-cue="idle"')
@@ -72,7 +72,7 @@ class MotionTests(unittest.TestCase):
         self.assertTrue(validate(source)['ok'])
 
     def test_unicode_cues_and_single_run(self):
-        p={'duration':2,'loop':False,'tracks':[{'target':'提示','attribute':'opacity','keyframes':[[0,1],[2,0]]}]}
+        p={'duration':4,'loop':False,'tracks':[{'target':'提示','attribute':'opacity','keyframes':[[0,1],[4,0]]}]}
         s=f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><text data-cue="提示" x="10" y="30">中文 and English</text></svg>'
         out=compile_svg(s,p)
         self.assertTrue(validate(out)['ok']);self.assertIn('repeatCount="1"',out)
@@ -132,7 +132,19 @@ class MotionTests(unittest.TestCase):
             self.assertIn(f'id="{control}"',html)
         self.assertNotIn('<!-- SVG -->',html)
         self.assertNotIn('/* MEASURE */',html)
-        self.assertIn('duration=6',html)
+        self.assertIn('duration=5',html)
+
+    def test_duration_contract_accepts_three_to_five_and_rejects_outside(self):
+        skeleton=f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><g data-cue="state"><rect width="20" height="20"/></g></svg>'
+        for duration in (3,4,5):
+            p={'duration':duration,'tracks':[{'target':'state','attribute':'opacity','keyframes':[[0,0],[duration/2,1],[duration,0]]}]}
+            out=compile_svg(skeleton,p)
+            self.assertEqual(validate(out)['duration'],f'{duration}s')
+        for duration in (2.9,5.1):
+            p={'duration':duration,'tracks':[{'target':'state','attribute':'opacity','keyframes':[[0,0],[duration/2,1],[duration,0]]}]}
+            with self.assertRaises(Invalid):compile_svg(skeleton,p)
+            manual=f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><g><rect width="20" height="20"/><animate attributeName="opacity" values="0;1;0" keyTimes="0;.5;1" begin="0s" dur="{duration}s" repeatCount="indefinite"/></g></svg>'
+            self.assertFalse(validate(manual)['ok'])
 
 
 def browser_fixture(directory):

@@ -12,13 +12,13 @@ python3 scripts/svg_motion.py publish /tmp/demo.svg -o /tmp/demo.publish.svg
 ## JSON 契约
 
 ```json
-{"duration":12,"loop":true,"tracks":[
-  {"target":"status","attribute":"opacity","calcMode":"linear","keyframes":[[0,0],[1,0],[1.3,1],[10.8,1],[11.2,0],[12,0]]},
-  {"target":"cursor","attribute":"transform","type":"translate","keyframes":[[0,"600 320"],[2,"200 220"],[12,"600 320"]]}
+{"duration":5,"loop":true,"tracks":[
+  {"target":"status","attribute":"opacity","calcMode":"linear","keyframes":[[0,0],[0.6,0],[1,1],[4.4,1],[4.8,0],[5,0]]},
+  {"target":"cursor","attribute":"transform","type":"translate","keyframes":[[0,"600 320"],[1.2,"200 220"],[4.6,"200 220"],[5,"600 320"]]}
 ]}
 ```
 
-- 顶层仅接受 `duration`（正的有限秒数）、可选 `loop`（boolean，默认 true）、非空 `tracks`。
+- 顶层仅接受 `duration`（有限秒数）、可选 `loop`（boolean，默认 true）、非空 `tracks`。文章插图要求 `duration` 在 **3–5 秒**；低于 3 秒通常难以保留可读停留，高于 5 秒应先拆图或压缩过程。
 - 每轨 `target` 对应骨架唯一且非空的 `data-cue`，支持中文。目标要有实际图形或文字。transform 目标限非空 `<g>`；opacity 可用于图形或组。
 - `attribute` 仅 `opacity` 或 `transform`。transform 的 `type` 仅 `translate`、`scale`。同 target/attribute/type 不得重复，opacity 与多个不同类型的 transform 可共存。
 - `keyframes` 为至少两个 `[秒数,值]`。首点 0、末点 duration，秒数严格递增，不自动 clamp 或纠正错误时码。静止段写两点相同值；瞬间切换用 discrete，不写重复时点。
@@ -45,7 +45,7 @@ python3 scripts/svg_motion.py publish /tmp/demo.svg -o /tmp/demo.publish.svg
 | 资源与引用 | href 只允许现有本地 #id；url() 只允许现有本地 #id；拒绝外链、file、data URI、CSS @规则/转义/注释；id/cue 重复、use 引用递归失败。data-/aria- 是文字元数据，不作为资源解析 |
 | CSS | 仅脚本 CSS 列出的内联属性；不支持 CSS 动画或任意样式表。此检查不替代完整 CSS 值语法验证 |
 | viewBox | 四个有限数字，宽高为正。其他图形几何、path d 与所有静态属性值不作完整语义校验，留 DOM/截图验证 |
-| 动画 | 仅 opacity animate 和 translate/scale animateTransform；要求 values、keyTimes、共同正秒数 dur、begin=0s、repeatCount、合法 calcMode；数量、严格递增、首尾、值范围、向量维数、spline 数量和范围分别核验 |
+| 动画 | 仅 opacity animate 和 translate/scale animateTransform；要求 values、keyTimes、共同 dur（3–5 秒）、begin=0s、repeatCount、合法 calcMode；数量、严格递增、首尾、值范围、向量维数、spline 数量和范围分别核验 |
 | 变换目标 | 空目标、定义区动画、同元素静态 transform 与 animateTransform、同属性竞争动画、additive=sum 或动画 href 均失败；使用有内容的嵌套组 |
 | 循环 | 所有动画周期/repeatCount 一致；首尾值不同只警告，因为作者可能有意隐藏后复位；仍需查跨循环画面 |
 
