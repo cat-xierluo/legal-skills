@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动构建前清理旧 ZIP，避免残留资产混入；修复资产数输出在全角括号前的变量解析问题。 |
 | 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.6 | 专家套件发布 staging 兼容 macOS Info-ZIP 未标记 UTF-8 的中文文件名，避免成员清单误报不匹配。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
@@ -742,9 +743,9 @@
 <td>工具·发布</td>
 <td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号、Release Notes、CI 与发布验证；支持 monorepo 单 Skill ZIP 和基于符号链接定义、Release 时展开的专家套件 ZIP</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.6</td>
+<td style="text-align:center">v1.6.7</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/release-workflow-1.6.6.zip">已发布 v1.6.6</a></td>
-<td>所属套件：[Skill 发布与分发](expert-suites/skill-release-distribution/)</td></tr>
+<td>所属套件：[Skill 发布与分发](expert-suites/skill-release-distribution/)；源码 v1.6.7 待发布</td></tr>
 <tr>
 <td><a href="skills/github-star-manager/"><strong>github-star-manager</strong></a></td>
 <td>工具·Star管理</td>

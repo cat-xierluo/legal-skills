@@ -19,6 +19,11 @@ fi
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
 
+mkdir -p pack-skills
+# A reused output directory can retain a same-named old package (for example,
+# after a version bump). Never mix those bytes into the next release staging.
+find pack-skills -mindepth 1 -maxdepth 1 -type f -name '*.zip' -delete
+
 echo "[1/6] build skill zips..."
 bash skills/release-workflow/scripts/build-zips.sh "$REPO_TAG"
 
@@ -129,7 +134,7 @@ release_asset_count="$(gh release view "$REPO_TAG" --json assets --jq '.assets |
 
 repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 echo "release URL: https://github.com/$repo/releases/tag/$REPO_TAG"
-echo "assets: $release_asset_count（含专家套件 $suite_zip_count）"
+echo "assets: ${release_asset_count}（含专家套件 $suite_zip_count）"
 echo "下载链接继续使用 releases/latest；显式 tag 链接由 update-readme workflow 更新"
 
 project_key="${PROJECT_KEY:-legal-skills}"
