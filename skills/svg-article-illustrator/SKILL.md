@@ -2,7 +2,7 @@
 name: svg-article-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.6"
+version: "1.1.7"
 license: MIT
 description: 根据文章内容创作动态 SVG 文章配图，以构图、图形关系和状态变化解释内容；默认输出3–5秒原生SMIL动画，静态图仅作为明确例外。支持时间轴编译、布局检查与PNG导出；不用于完整视频制作或自动发布。
 ---
@@ -19,10 +19,10 @@ description: 根据文章内容创作动态 SVG 文章配图，以构图、图�
 ## 工作方法
 
 1. **内容 → 配图计划**：为每张图记录对应段落、读者需要理解的关系/变化、图的作用、插入点、输出模式。按信息增益决定数量，不按标题数或固定张数配图。
-2. **计划 → 视觉表达**：用一句话说清读者将看到哪些对象、它们有什么关系或变化，再选择画面形态。组织主体、层次、留白及空间关系，见 [视觉设计](references/visual-design.md)。创意从本次内容出发，不按示例外观或固定类型映射套版。
+2. **计划 → 视觉表达**：用一句话说清读者将看到哪些对象、它们有什么关系或变化，再选择画面形态。在计划中说明读者先注意哪里、哪次变化把注意力交给下一处、最后应看懂什么；同时记录必须保留的事实与对象辨识细节，见[阅读编排](references/reading-sequence.md)和[视觉设计](references/visual-design.md)。创意从本次内容出发，不按示例外观或固定类型映射套版。
 3. **对象/状态 → 时间轴**：列出对象、标签、容器、坐标系、初末状态和互斥关系。让运动说明对象如何变化、为何变化；在 3–5 秒内安排出现、移动、反馈、阅读停留和复位。先布置关键停留帧，再安排运动；过程复杂就拆图或压缩无关动作。确认为静态例外时，仍记录该图缺少动效的解释理由。
 4. **骨架 + 时间轴 → SVG**：使用唯一 `data-cue` 定位实际图形；通过 [时间轴工具](references/timeline-tools.md) 编译，不手算大量 keyTimes。静态例外直接输出可读 SVG。变换坐标合同和修正示例见 [动态规范](references/dynamic-svg.md)。
-5. **SVG → 实测**：运行结构校验；打开自包含 HTML，在桌面与 375 CSS px 宽度测量真实文字与对象，检查截图。覆盖初态、停留、运动中段、循环末与下一轮；实际播放两个完整周期。测量方法及边界见 [布局验收](references/layout-verification.md)。
+5. **SVG → 实测**：运行结构校验；打开自包含 HTML，在桌面与 375 CSS px 宽度测量真实文字与对象，检查截图。覆盖初态、停留、运动中段、循环末与下一轮；实际播放两个完整周期。另按[阅读编排](references/reading-sequence.md)复核焦点、对象连续性和变化的解释作用，记录具体时点与所见，不以动画存在或无碰撞替代。多图先审有代表性的一张，再扩展。测量方法及边界见 [布局验收](references/layout-verification.md)。
 6. **实测 → 交付**：按调用项目要求内联 SVG、保存文件或插入 PNG；回读实际交付内容，确认动画、ID 引用和文本仍完整。通过 publish 剥离制作标记，保留原生 SMIL；预览 HTML 的 JS 不进入发布 SVG。本地 HTML 片段交接见工具参考。提供源骨架、时间轴和验证记录以便修改。
 
 ## 按需加载
@@ -31,6 +31,7 @@ description: 根据文章内容创作动态 SVG 文章配图，以构图、图�
 |---|---|
 | 选画幅、安排文字与对象 | [共享原则](references/core-principles.md) |
 | 提升设计感、选择构图与图形语言、避免套模板 | [视觉设计](references/visual-design.md) |
+| 设计读者观看顺序、动作接续及新旧版本对照 | [阅读编排](references/reading-sequence.md) |
 | 操作演示、机制或状态变化 | [动态 SVG](references/dynamic-svg.md) |
 | 编译 JSON、校验与预览 CLI | [时间轴工具](references/timeline-tools.md) |
 | DOM 测量、长文本、重叠反馈 | [布局验收](references/layout-verification.md) |
