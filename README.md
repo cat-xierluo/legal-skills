@@ -35,16 +35,13 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动改为临时目录构建、成功后整批替换，失败不破坏上一批产物；修复资产数输出的变量解析问题，并拒绝符号链接与同名目录目标；补 Bash 实际执行回归。 |
-| 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.6 | 专家套件发布 staging 兼容 macOS Info-ZIP 未标记 UTF-8 的中文文件名，避免成员清单误报不匹配。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
+| 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
 | 2026-10-27 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.4 | README 回写区分源码版本与真实 ZIP 版本，支持部分热补、首次发布与幂等重跑；法律套件在根索引中排前。 |
 | 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.11 | 新增固定三角色庭审审计与 WorkBuddy 原生 trace 审计；主控私有词项预检和法官保密复核约束公开概述，交付缺陷按四分类处理。 |
 | 2026-10-27 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.1 | 修复畸形枚举反馈中断整轮索引：先验类型、保留无效报告的重评标记与合法旧卡。 |
 | 2026-10-27 | 更新 | [skill-publicizer](skills/skill-publicizer/) | v1.1.0 | 明确单源实现、权威仓库与完整功能合同；按能力前向验证安装、演示隔离与产物保留；结构校验先对齐目标仓规范。 |
-| 2026-10-27 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.7.0 | 并入官方社区 magpie-setup / magpie-quota 的命令面与额度读数合同（MIT，已署名）：单 Skill 覆盖配置到额度到治理全链路。 |
-| 2026-10-21 | 更新 | [dsh-plugin-dev](skills/dsh-plugin-dev/) | v0.6.5 | locale 静态解析对嵌套 spread、重复键和重叠属性返回 NOT_VERIFIED，不再伪装成 JavaScript 浅覆盖语义。 |
-| 2026-10-19 | 更新 | [local-asr](skills/local-asr/) | v2.3.5 | 修复听悟议程引用行被误判为发言人，避免 AI 摘要 verify 与说话人归属污染。 |
 
 </details>
 
@@ -102,7 +99,7 @@
 | [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.2.1 | [已发布 v0.2.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/suite-skill-development-quality-0.2.1.zip) |
 | [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 10 | v0.1.4 | [已发布 v0.1.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/suite-skill-release-distribution-0.1.4.zip) |
 
-“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但旧包仍可下载。四个待首次发布套件在下一版 Release 前可通过 PR Preview 产物检查，不应视为现有 Release 资产。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
+“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但旧包仍可下载。上述 8 个套件已随 `v2026.10.29` 发布，表内入口对应实际 Release 资产。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
 
 ## 🛠️ 技能列表
 
@@ -262,7 +259,7 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v0.2.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/express-tracking-0.2.1.zip">已发布 v0.2.1</a></td>
-<td>首次公开登记，源码与发布包待发布</td>
+<td>首次公开登记，已随 v2026.10.29 发布</td>
 </tr>
 <tr>
 <td><a href="skills/legal-proposal-generator/"><strong>legal-proposal-generator</strong></a></td>
@@ -728,6 +725,15 @@
 <td style="text-align:center">v1.0.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/cross-agent-coordination-1.0.0.zip">已发布 v1.0.0</a></td>
 <td>所属套件：[Skill 开发与质量保障](expert-suites/skill-development-quality/)</td>
+</tr>
+<tr>
+<td><a href="skills/night-autopilot/"><strong>night-autopilot</strong></a></td>
+<td>工具·Agent协作</td>
+<td style="word-break:break-word">在已授权的定时触发下整理任务、派发或完成有界工作、监测与验收，并记录交接；保留法律材料的律师终审门</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.2.1</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/night-autopilot-0.2.1.zip">已发布 v0.2.1</a></td>
+<td>SKILL.md 声明 MIT；当前源码与 v0.2.1 包缺少独立 LICENSE.txt，完整许可文本待补；Claude Code 与 Codex 宿主映射待实测</td>
 </tr>
 <tr>
 <td><a href="skills/multi-agent-orca/"><strong>multi-agent-orca</strong></a></td>
