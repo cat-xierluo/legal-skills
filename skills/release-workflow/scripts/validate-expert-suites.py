@@ -22,6 +22,12 @@ RELEASE_BASE_RE = (
     r"https://github\.com/cat-xierluo/legal-skills/releases/"
     r"(?:latest/download|download/[^/\s]+)"
 )
+# 技能改名后，旧调用名对应的已发布资产仍然有效。改名不代表资产消失，
+# 因此 source 模式必须接受「旧名历史包」作为公开下载入口，
+# 但不得据此推断当前源码版本已经发布。
+LEGACY_ASSET_IDS: dict[str, tuple[str, ...]] = {
+    "judgment-analysis": ("litigation-analysis",),
+}
 
 
 @dataclass(frozen=True)
@@ -223,6 +229,11 @@ def validate_suite(
             if len(cells) != 5 or not row.startswith("|"):
                 raise ValidationError(f"{skill_id} 需要标准三列成员表行")
             public_version = _source_download_version(cells[3], skill_id)
+            if public_version is None:
+                for legacy_id in LEGACY_ASSET_IDS.get(skill_id, ()):
+                    public_version = _source_download_version(cells[3], legacy_id)
+                    if public_version is not None:
+                        break
             if public_version == member_version:
                 continue
             pending_versions = re.findall(r"(?:^|；)\s*源码 v(\d+\.\d+\.\d+) 待发布\s*(?=；|$)", cells[2])

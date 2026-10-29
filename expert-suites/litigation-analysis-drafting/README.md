@@ -26,7 +26,7 @@
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-ocr-1.6.0.zip) |
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页码和证据索引，拆分、合并并规范材料；源码 v0.6.1 待发布 | [已发布 v0.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-organizer-0.6.0.zip) |
 | [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、起诉状证据初评、庭审复盘和上诉再审判断，形成风险与诉讼策略；源码 v1.1.2 待发布 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
-| [judgment-analysis](../../skills/judgment-analysis/) | 深析单份判决的事实认定、裁判理由、主文和文内疑点；源码 v2.0.0 待发布 | 尚无公开下载 |
+| [judgment-analysis](../../skills/judgment-analysis/) | 深析单份判决的事实认定、裁判理由、主文和文内疑点；源码 v2.0.0 待发布 | [旧名历史包 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/litigation-analysis-1.4.0.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索命题并核验法规、正反类案和文内法律依据；源码 v1.10.1 待发布 | [已发布 v1.10.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵和庭审路线图 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-visualization-0.8.2.zip) |
 | [elements-complaint-generator](../../skills/elements-complaint-generator/) | 把已写好的常规起诉状或答辩材料转成官方要素式示范文本结构；源码 v0.16.1 待发布 | [已发布 v0.16.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/elements-complaint-generator-0.16.0.zip) |

@@ -35,6 +35,7 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
+| 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
 | 2026-10-27 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.4 | README 回写区分源码版本与真实 ZIP 版本，支持部分热补、首次发布与幂等重跑；法律套件在根索引中排前。 |
 | 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.11 | 新增固定三角色庭审审计与 WorkBuddy 原生 trace 审计；主控私有词项预检和法官保密复核约束公开概述，交付缺陷按四分类处理。 |
 | 2026-10-27 | 更新 | [github-star-manager](skills/github-star-manager/) | v0.17.1 | 修复畸形枚举反馈中断整轮索引：先验类型、保留无效报告的重评标记与合法旧卡。 |
@@ -740,9 +741,9 @@
 <td>工具·发布</td>
 <td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号、Release Notes、CI 与发布验证；支持 monorepo 单 Skill ZIP 和基于符号链接定义、Release 时展开的专家套件 ZIP</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.4</td>
+<td style="text-align:center">v1.6.5</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/release-workflow-1.6.0.zip">已发布 v1.6.0</a></td>
-<td>所属套件：[Skill 发布与分发](expert-suites/skill-release-distribution/)；源码 v1.6.4 待发布</td></tr>
+<td>所属套件：[Skill 发布与分发](expert-suites/skill-release-distribution/)；源码 v1.6.5 待发布</td></tr>
 <tr>
 <td><a href="skills/github-star-manager/"><strong>github-star-manager</strong></a></td>
 <td>工具·Star管理</td>

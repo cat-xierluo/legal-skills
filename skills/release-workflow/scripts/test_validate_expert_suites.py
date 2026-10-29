@@ -62,6 +62,9 @@ class ExpertSuiteValidatorTest(unittest.TestCase):
     def validate(self) -> list[object]:
         return MODULE.validate_repository(self.root, check_git=False)
 
+    def validate_source(self) -> list[object]:
+        return MODULE.validate_repository(self.root, check_git=False, mode="source")
+
     def test_valid_suite(self) -> None:
         summaries = self.validate()
         self.assertEqual(summaries[0].members, ("alpha-skill",))
@@ -124,6 +127,77 @@ class ExpertSuiteValidatorTest(unittest.TestCase):
                     readme.write_text(original.replace(asset, asset + suffix), encoding="utf-8")
                     with self.assertRaises(MODULE.ValidationError):
                         self.validate()
+
+    def test_accepts_legacy_renamed_asset_as_public_version(self) -> None:
+        """技能改名后，旧名历史包仍是有效公开入口，不能被当成未发布。"""
+        skill = self.root / "skills" / "renamed-skill"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            "---\nname: renamed-skill\nlicense: MIT\n---\n\n# Renamed\n",
+            encoding="utf-8",
+        )
+        (skill / "CHANGELOG.md").write_text(
+            "# 变更日志\n\n## [2.0.0] - 2026-10-13\n",
+            encoding="utf-8",
+        )
+        (skill / "LICENSE.txt").write_text("MIT License\n", encoding="utf-8")
+        (self.suite / "skills" / "renamed-skill").symlink_to("../../../skills/renamed-skill")
+        readme = self.suite / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8").replace(
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |",
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |\n"
+                "| [renamed-skill](../../skills/renamed-skill/) | 改名技能；源码 v2.0.0 待发布 | "
+                "[旧名历史包 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/"
+                "download/v2026.09.30/old-name-1.4.0.zip) |",
+            ),
+            encoding="utf-8",
+        )
+        original = MODULE.LEGACY_ASSET_IDS.get("renamed-skill")
+        MODULE.LEGACY_ASSET_IDS["renamed-skill"] = ("old-name",)
+        try:
+            self.validate_source()
+        finally:
+            if original is None:
+                MODULE.LEGACY_ASSET_IDS.pop("renamed-skill", None)
+            else:
+                MODULE.LEGACY_ASSET_IDS["renamed-skill"] = original
+
+    def test_rejects_legacy_asset_without_declared_mapping(self) -> None:
+        """没有声明旧名映射的技能，不得在成员表里借用其他 slug 的资产。"""
+        skill = self.root / "skills" / "renamed-skill"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            "---\nname: renamed-skill\nlicense: MIT\n---\n\n# Renamed\n",
+            encoding="utf-8",
+        )
+        (skill / "CHANGELOG.md").write_text(
+            "# 变更日志\n\n## [2.0.0] - 2026-10-13\n",
+            encoding="utf-8",
+        )
+        (skill / "LICENSE.txt").write_text("MIT License\n", encoding="utf-8")
+        (self.suite / "skills" / "renamed-skill").symlink_to("../../../skills/renamed-skill")
+        readme = self.suite / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8").replace(
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |",
+                "| [alpha-skill](../../skills/alpha-skill/) | 示例 | "
+                "[下载](https://github.com/cat-xierluo/legal-skills/releases/latest/"
+                "download/alpha-skill-1.2.3.zip) |\n"
+                "| [renamed-skill](../../skills/renamed-skill/) | 改名技能；源码 v2.0.0 待发布 | "
+                "[旧名历史包 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/"
+                "download/v2026.09.30/old-name-1.4.0.zip) |",
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaises(MODULE.ValidationError):
+            self.validate_source()
 
     def test_accepts_exact_assets_with_query_fragment_and_pinned_tag(self) -> None:
         readme = self.suite / "README.md"
