@@ -2,7 +2,7 @@
 name: svg-article-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.1"
+version: "1.1.2"
 license: MIT
 description: 根据文章内容创作静态SVG、SMIL过程动画或界面操作配图，提供秒数时间轴编译、离线预览与浏览器布局测量，也支持PNG导出。用于文章配图、SVG插图或SVG转PNG；不用于完整视频制作或自动发布。
 ---
@@ -13,8 +13,8 @@ description: 根据文章内容创作静态SVG、SMIL过程动画或界面操作
 ## 工作方法
 
 1. **内容 → 配图计划**：为每张图记录对应段落、读者需要理解的关系/变化、图的作用、插入点、输出模式。按信息增益决定数量，不按标题数或固定张数配图。
-2. **计划 → 对象/状态**：列出对象、标签、容器、坐标系、初末状态和互斥关系。先布置关键停留帧；界面演示要表现操作与反馈，机制图要表现条件、流转或状态改变。
-3. **状态 → 秒数时间轴**：写清出现、移动、反馈、阅读停留和复位的秒数。先给读者看清变化的时间，再安排运动。静态图跳过时间轴步骤。
+2. **计划 → 视觉表达**：按内容选择构图和图形语言，先安排主体、层级、留白及对象关系，见 [视觉设计](references/visual-design.md)。概念、机制、数据、材料和真实操作各有适合的表达；“更精致”不自动变成网页、手机或卡片 UI。
+3. **对象/状态 → 时间轴**：列出对象、标签、容器、坐标系、初末状态和互斥关系，写清出现、移动、反馈、阅读停留和复位的秒数。先布置关键停留帧，再安排运动；静态图跳过时间轴。涉及界面时按需读 [UI 与微交互](references/ui-interaction.md)，鼠标只在有助于解释操作时使用。
 4. **骨架 + 时间轴 → SVG**：动态使用唯一 `data-cue` 定位实际图形；通过 [时间轴工具](references/timeline-tools.md) 编译，不手算大量 keyTimes。静态直接输出可读 SVG。变换坐标合同和修正示例见 [动态规范](references/dynamic-svg.md)。
 5. **SVG → 实测**：运行结构校验；打开自包含 HTML，在桌面与 375 CSS px 宽度测量真实文字与对象，检查截图。覆盖初态、停留、运动中段、循环末与下一轮；实际播放两个完整周期。测量方法及边界见 [布局验收](references/layout-verification.md)。
 6. **实测 → 交付**：按调用项目要求内联 SVG、保存文件或插入 PNG；回读实际交付内容，确认动画、ID 引用和文本仍完整。通过 publish 剥离制作标记，保留原生 SMIL；预览 HTML 的 JS 不进入发布 SVG。本地 HTML 片段交接见工具参考。提供源骨架、时间轴和验证记录以便修改。
@@ -24,6 +24,8 @@ description: 根据文章内容创作静态SVG、SMIL过程动画或界面操作
 | 任务 | 参考 |
 |---|---|
 | 选画幅、安排文字与对象 | [共享原则](references/core-principles.md) |
+| 提升设计感、选择构图与图形语言、避免套模板 | [视觉设计](references/visual-design.md) |
+| 内容涉及界面操作或控件状态，需要精细 UI/交互 | [UI 与微交互](references/ui-interaction.md)；鼠标可省略 |
 | 操作演示、机制或状态变化 | [动态 SVG](references/dynamic-svg.md) |
 | 编译 JSON、校验与预览 CLI | [时间轴工具](references/timeline-tools.md) |
 | DOM 测量、长文本、重叠反馈 | [布局验收](references/layout-verification.md) |
@@ -35,16 +37,16 @@ description: 根据文章内容创作静态SVG、SMIL过程动画或界面操作
 
 ## 工具入口
 
-以下命令在 Skill 目录运行，输出路径可指定；已有文件默认拒绝覆盖，确认替换时加 `--force`。Python 工具仅使用标准库，不安装第三方套件。
+以下以非 UI 材料机制样例演示工具，在 Skill 目录运行，输出路径可指定；已有文件默认拒绝覆盖，确认替换时加 `--force`。Python 工具仅使用标准库，不安装第三方套件。
 
 ```bash
-python3 scripts/svg_motion.py compile assets/demo.skeleton.svg assets/demo.timeline.json -o /tmp/demo.svg
-python3 scripts/svg_motion.py validate /tmp/demo.svg
-python3 scripts/svg_motion.py preview /tmp/demo.svg -o /tmp/demo.html
-python3 scripts/svg_motion.py publish /tmp/demo.svg -o /tmp/demo.publish.svg
+python3 scripts/svg_motion.py compile assets/materials-demo.skeleton.svg assets/materials-demo.timeline.json -o /tmp/materials-demo.svg
+python3 scripts/svg_motion.py validate /tmp/materials-demo.svg
+python3 scripts/svg_motion.py preview /tmp/materials-demo.svg -o /tmp/materials-demo.html
+python3 scripts/svg_motion.py publish /tmp/materials-demo.svg -o /tmp/materials-demo.publish.svg
 ```
 
-在浏览器打开生成的 HTML；播放、暂停、重置、逐秒步进与时间滑杆只服务于制作预览。其测量函数 `window.measureSvgLayout(svg)` 也可由浏览器自动化调用。示例是小型操作状态演示，风格、尺寸与节奏不是通用模板。
+在浏览器打开生成的 HTML；播放、暂停、重置、逐秒步进与时间滑杆只服务于制作预览。其测量函数 `window.measureSvgLayout(svg)` 也可由浏览器自动化调用。材料机制与可选 UI 示例展示不同表达，风格、尺寸与节奏均不是通用模板。
 
 PNG 路径保留 `node scripts/svg2png.js input.svg [output.png] [dpi]`，需要既有 Node.js、Puppeteer和浏览器；缺少时按环境约定准备项目本地依赖，不自动做全局安装。
 

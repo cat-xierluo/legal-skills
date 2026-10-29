@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="散页归拢为可回查的材料册">
+  <title>散页归拢为可回查的材料册</title><desc>非UI机制示例：几张不同来源的散页归拢为可翻阅、有页签的材料册，用实体材料隐喻整理与回查。未表示软件界面、按钮或自动执行。</desc><rect x="0" y="0" width="800" height="450" rx="12" fill="#f3f0e8" />
+  <path d="M72 356H728" stroke="#d2c9b9" stroke-width="1" />
+  <text x="86" y="100" fill="#6A6055" font-size="26" font-family="PingFang SC, Microsoft YaHei, sans-serif" letter-spacing="1">散页</text>
+  <text x="596" y="100" fill="#6A6055" font-size="26" font-family="PingFang SC, Microsoft YaHei, sans-serif" letter-spacing="1">可回查</text>
+
+  <g data-cue="sheet-back" transform="translate(215 208)">
+    <g transform="rotate(-13)">
+      <path d="M-70-83H63L72-74V89H-70Z" fill="#c0c8bd" />
+      <path d="M-70-88H63L72-79V84H-70Z" fill="#e1e5db" />
+      <path d="M63-88V-79H72" fill="#c4cdc0" />
+      <path d="M-49-53H42M-49-40H17M-49-13H39M-49 0H27M-49 13H34" stroke="#9daaa0" stroke-width="3" />
+      <path d="M-49 42H-10" stroke="#b2765d" stroke-width="5" />
+    </g>
+  </g>
+  <g data-cue="sheet-mid" transform="translate(276 237)">
+    <g transform="rotate(9)">
+      <path d="M-72-88H68V90H-72Z" fill="#beb5a7" />
+      <path d="M-72-93H68V85H-72Z" fill="#fffdf7" />
+      <path d="M-50-59H-3V-52H-50Z" fill="#bb7860" />
+      <path d="M-50-30H45M-50-17H30M-50-4H42M-50 20H35M-50 33H16" stroke="#c2b7a8" stroke-width="3" />
+      <path d="M-50 56H0" stroke="#d7c9b6" stroke-width="6" />
+    </g>
+  </g>
+  <g data-cue="sheet-front" transform="translate(173 269)">
+    <g transform="rotate(-5)">
+      <path d="M-62-72H66V83H-62Z" fill="#c8b59f" />
+      <path d="M-62-77H66V78H-62Z" fill="#eee1cc" />
+      <path d="M-42-50H31M-42-37H16M-42-12H39M-42 1H28M-42 14H36" stroke="#b9a894" stroke-width="3" />
+      <circle cx="-32" cy="48" r="11" fill="#c77c5c" />
+      <path d="M-13 48H30" stroke="#c8b8a2" stroke-width="3" />
+    </g>
+  </g>
+
+  <g data-cue="book" transform="translate(475 226)">
+    <path d="M-169-89Q-83-113 0-83Q83-113 169-89V109Q84 83 0 115Q-84 83-169 109Z" fill="#596a5e" />
+    <path d="M-160-94Q-80-115 0-84Q80-115 160-94V100Q80 77 0 109Q-80 77-160 100Z" fill="#d3c5af" />
+    <path d="M-154-98Q-78-117 0-86V103Q-76 74-154 96Z" fill="#faf6ed" />
+    <path d="M0-86Q78-117 154-98V96Q76 74 0 103Z" fill="#fffdf8" />
+    <path d="M0-86V103" stroke="#b6a99a" stroke-width="2" />
+    <path d="M-132-64Q-72-75-24-59M-132-50Q-72-61-24-45M-132-26Q-72-37-24-21M-132-12Q-72-23-24-7M-132 12Q-72 1-45 8" fill="none" stroke="#c6bbad" stroke-width="3" />
+    <path d="M25-59Q73-74 130-64M25-45Q73-60 130-50M25-19Q73-34 130-24M25-5Q73-20 115-13M25 9Q73-6 130 4" fill="none" stroke="#c6bbad" stroke-width="3" />
+    <path d="M25 35Q73 20 103 25" fill="none" stroke="#bd765c" stroke-width="5" />
+    <path d="M151-72H171V-46H154Z" fill="#bd765c" />
+    <path d="M154-30H178V-4H154Z" fill="#9caa99" />
+    <path d="M154 12H171V38H154Z" fill="#d0b38b" />
+    <path d="M-4 105L0 119L4 105" fill="#596a5e" />
+  </g>
+
+  <g data-cue="turn-page" transform="translate(475 226)">
+    <path d="M0-86Q78-117 154-98V96Q76 74 0 103Z" fill="#ece4d7" />
+    <path d="M20-61Q75-77 127-67M20-47Q75-63 127-53M20-22Q75-38 127-28M20-8Q75-24 109-18" fill="none" stroke="#c8bbab" stroke-width="3" />
+  </g>
+</svg>
