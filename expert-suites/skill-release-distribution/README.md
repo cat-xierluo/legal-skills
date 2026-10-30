@@ -1,6 +1,6 @@
 # Skill 发布与分发专家套件
 
-> [已发布 v0.1.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/suite-skill-release-distribution-0.1.4.zip)
+> [已发布 v0.1.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/suite-skill-release-distribution-0.1.4.zip)
 
 用于整理提交、管理版本与 GitHub Release、同步多渠道、发布独立子树，并在分发前完成质量和验证门禁。
 
@@ -20,16 +20,16 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [git-batch-commit](../../skills/git-batch-commit/) | 把混合改动拆成聚焦且可追溯的提交 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/git-batch-commit-1.5.0.zip) |
-| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [已发布 v1.24.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/git-workflow-1.24.2.zip) |
-| [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证；源码 v1.6.8 待发布 | [已发布 v1.6.6](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/release-workflow-1.6.6.zip) |
-| [skill-publish-sync](../../skills/skill-publish-sync/) | 同步 Skill 到多个发布平台 | [已发布 v1.7.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/skill-publish-sync-1.7.2.zip) |
-| [subtree-publish](../../skills/subtree-publish/) | 把 monorepo 子目录增量推送到独立仓库 | [已发布 v1.7.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/subtree-publish-1.7.1.zip) |
-| [skill-manager](../../skills/skill-manager/) | 管理多 Agent 平台的 Skill 安装、同步和状态 | [已发布 v1.9.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/skill-manager-1.9.1.zip) |
-| [skill-lint](../../skills/skill-lint/) | 在发布前审查 Skill 结构、安全和质量 | [已发布 v2.9.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/skill-lint-2.9.3.zip) |
-| [skill-publicizer](../../skills/skill-publicizer/) | 把个人自用 Skill 剥离私有配置并整理成公开候选 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/skill-publicizer-1.1.0.zip) |
-| [self-evolve](../../skills/self-evolve/) | 从多 Runtime 会话做增量初筛、证据化复盘和 Skill 沉淀，生成本地七页报告与采用账本 | [已发布 v1.28.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/self-evolve-1.28.1.zip) |
-| [verification-gate](../../skills/verification-gate/) | 为脚本和发布链路生成真实验证证据 | [已发布 v1.3.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/verification-gate-1.3.0.zip) |
+| [git-batch-commit](../../skills/git-batch-commit/) | 把混合改动拆成聚焦且可追溯的提交 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/git-batch-commit-1.5.0.zip) |
+| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [已发布 v1.24.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/git-workflow-1.24.2.zip) |
+| [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证 | [已发布 v1.6.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/release-workflow-1.6.8.zip) |
+| [skill-publish-sync](../../skills/skill-publish-sync/) | 同步 Skill 到多个发布平台 | [已发布 v1.7.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/skill-publish-sync-1.7.2.zip) |
+| [subtree-publish](../../skills/subtree-publish/) | 把 monorepo 子目录增量推送到独立仓库 | [已发布 v1.7.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/subtree-publish-1.7.1.zip) |
+| [skill-manager](../../skills/skill-manager/) | 管理多 Agent 平台的 Skill 安装、同步和状态 | [已发布 v1.9.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/skill-manager-1.9.1.zip) |
+| [skill-lint](../../skills/skill-lint/) | 在发布前审查 Skill 结构、安全和质量 | [已发布 v2.9.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/skill-lint-2.9.3.zip) |
+| [skill-publicizer](../../skills/skill-publicizer/) | 把个人自用 Skill 剥离私有配置并整理成公开候选 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/skill-publicizer-1.1.0.zip) |
+| [self-evolve](../../skills/self-evolve/) | 从多 Runtime 会话做增量初筛、证据化复盘和 Skill 沉淀，生成本地七页报告与采用账本 | [已发布 v1.28.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/self-evolve-1.28.1.zip) |
+| [verification-gate](../../skills/verification-gate/) | 为脚本和发布链路生成真实验证证据 | [已发布 v1.3.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/verification-gate-1.3.0.zip) |
 
 ## 建议使用方式
 

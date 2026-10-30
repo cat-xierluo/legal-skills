@@ -1,6 +1,6 @@
 # 诉讼分析及文书撰写专家套件
 
-> [已发布 v0.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/suite-litigation-analysis-drafting-0.2.0.zip)
+> [已发布 v0.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/suite-litigation-analysis-drafting-0.2.0.zip)
 
 面向具体诉讼案件的一体化工作流：接收和整理材料，形成事实、证据、争点与策略判断，再生成起诉、答辩、方案和客户交付文书。分析和写作是同一案件中的连续工作，不在两个套件之间切换。
 
@@ -21,17 +21,17 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [new-case](../../skills/new-case/) | 建立标准案件目录、信息底板和期限结构 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/new-case-1.5.0.zip) |
-| [court-sms](../../skills/court-sms/) | 解析法院短信、获取法院文书并回填案件材料 | [已发布 v1.5.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/court-sms-1.5.4.zip) |
-| [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-ocr-1.6.0.zip) |
-| [pdf-organizer](../../skills/pdf-organizer/) | 建立页码和证据索引，拆分、合并并规范材料 | [已发布 v0.6.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/pdf-organizer-0.6.1.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、起诉状证据初评、庭审复盘和上诉再审判断，形成风险与诉讼策略 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-case-analysis-1.1.2.zip) |
-| [judgment-analysis](../../skills/judgment-analysis/) | 深析单份判决的事实认定、裁判理由、主文和文内疑点 | [已发布 v2.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/judgment-analysis-2.0.0.zip) |
-| [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索命题并核验法规、正反类案和文内法律依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/yuandian-law-search-1.10.1.zip) |
-| [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵和庭审路线图 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-visualization-0.8.2.zip) |
-| [elements-complaint-generator](../../skills/elements-complaint-generator/) | 把已写好的常规起诉状或答辩材料转成官方要素式示范文本结构 | [已发布 v0.16.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/elements-complaint-generator-0.16.1.zip) |
-| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 把案件判断转成诉讼方案、建议书、咨询报告、结案汇报和客户沟通材料 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-proposal-generator-0.4.1.zip) |
-| [md2word](../../skills/md2word/) | 把审定后的 Markdown 转成正式 Word 文档 | [已发布 v1.3.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/md2word-1.3.8.zip) |
+| [new-case](../../skills/new-case/) | 建立标准案件目录、信息底板和期限结构 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/new-case-1.5.0.zip) |
+| [court-sms](../../skills/court-sms/) | 解析法院短信、获取法院文书并回填案件材料 | [已发布 v1.5.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/court-sms-1.5.4.zip) |
+| [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-ocr-1.6.0.zip) |
+| [pdf-organizer](../../skills/pdf-organizer/) | 建立页码和证据索引，拆分、合并并规范材料 | [已发布 v0.6.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/pdf-organizer-0.6.1.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、起诉状证据初评、庭审复盘和上诉再审判断，形成风险与诉讼策略 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-case-analysis-1.1.2.zip) |
+| [judgment-analysis](../../skills/judgment-analysis/) | 深析单份判决的事实认定、裁判理由、主文和文内疑点 | [已发布 v2.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/judgment-analysis-2.0.0.zip) |
+| [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索命题并核验法规、正反类案和文内法律依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/yuandian-law-search-1.10.1.zip) |
+| [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵和庭审路线图 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-visualization-0.8.2.zip) |
+| [elements-complaint-generator](../../skills/elements-complaint-generator/) | 把已写好的常规起诉状或答辩材料转成官方要素式示范文本结构 | [已发布 v0.16.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/elements-complaint-generator-0.16.1.zip) |
+| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 把案件判断转成诉讼方案、建议书、咨询报告、结案汇报和客户沟通材料 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-proposal-generator-0.4.1.zip) |
+| [md2word](../../skills/md2word/) | 把审定后的 Markdown 转成正式 Word 文档 | [已发布 v1.3.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/md2word-1.3.8.zip) |
 
 ## 工作流
 

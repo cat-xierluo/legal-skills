@@ -1,6 +1,6 @@
 # 法律研究与客户洞察专家套件
 
-> [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/suite-legal-research-client-insight-0.1.0.zip)
+> [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/suite-legal-research-client-insight-0.1.0.zip)
 
 区分既有客户的高频增量触达与月季行业全景研究，把信息获取、法律核验、内容组织和文本规范放在一个轻量入口中。
 
@@ -22,11 +22,11 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [legal-client-brief](../../skills/legal-client-brief/) | 面向既有客户生成每日、每周或事件触发的增量简报草稿及渠道稿 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-client-brief-1.1.0.zip) |
-| [legal-industry-report](../../skills/legal-industry-report/) | 面向月度、季度研究形成正式行业报告待复核稿 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-industry-report-1.1.0.zip) |
-| [yuandian-law-search](../../skills/yuandian-law-search/) | 核验法规、政策与案例，形成可追溯研究依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/yuandian-law-search-1.10.1.zip) |
-| [wechat-article-fetch](../../skills/wechat-article-fetch/) | 获取用户选定的公众号文章作为研究线索与材料 | [已发布 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/wechat-article-fetch-1.4.0.zip) |
-| [legal-text-format](../../skills/legal-text-format/) | 规范法律文本的标点、层级和表达格式 | [已发布 v1.2.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-text-format-1.2.3.zip) |
+| [legal-client-brief](../../skills/legal-client-brief/) | 面向既有客户生成每日、每周或事件触发的增量简报草稿及渠道稿 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-client-brief-1.1.0.zip) |
+| [legal-industry-report](../../skills/legal-industry-report/) | 面向月度、季度研究形成正式行业报告待复核稿 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-industry-report-1.1.0.zip) |
+| [yuandian-law-search](../../skills/yuandian-law-search/) | 核验法规、政策与案例，形成可追溯研究依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/yuandian-law-search-1.10.1.zip) |
+| [wechat-article-fetch](../../skills/wechat-article-fetch/) | 获取用户选定的公众号文章作为研究线索与材料 | [已发布 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/wechat-article-fetch-1.4.0.zip) |
+| [legal-text-format](../../skills/legal-text-format/) | 规范法律文本的标点、层级和表达格式 | [已发布 v1.2.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-text-format-1.2.3.zip) |
 
 ## 建议使用方式
 
