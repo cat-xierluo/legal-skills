@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 将“文件写入”“新会话加载”“行为符合”拆成三个可审计状态。
-# session evidence 使用 key=value；必须来自新启动的目标 harness 会话，而非当前写入进程自报。
+# 将“文件写入”和“人工新会话观察声明”拆成可审计状态。
+# key=value 证据只能产生 DECLARED 状态；没有 runtime 绑定采集器时不得输出 VERIFIED。
 
 set -u
 
@@ -86,7 +86,8 @@ if [ -s "$TARGET" ]; then
     fi
 fi
 
-instructions_loaded=false
+instructions_declared=false
+behavior_declared=false
 behavior_verified=false
 evidence_note="未提供新会话证据"
 if [ -n "$EVIDENCE_FILE" ]; then
@@ -100,24 +101,24 @@ if [ -n "$EVIDENCE_FILE" ]; then
         && [ "$evidence_loaded" = true ] \
         && [ "$evidence_source" = "$TARGET" ] \
         && [ "$evidence_sha" = "$target_sha" ]; then
-        instructions_loaded=true
-        evidence_note="新会话报告了精确来源路径"
+        instructions_declared=true
+        evidence_note="人工证据声明新会话加载了精确来源路径；未接入 runtime 采集器，不能自动升级为已加载"
         if [ "$(evidence_value probe_permission "$EVIDENCE_FILE")" = pass ] \
             && [ "$(evidence_value probe_confidentiality "$EVIDENCE_FILE")" = pass ] \
             && [ "$(evidence_value probe_information_gap "$EVIDENCE_FILE")" = pass ] \
             && [ "$(evidence_value probe_traceability "$EVIDENCE_FILE")" = pass ]; then
-            behavior_verified=true
-            evidence_note="新会话加载成功且四类行为探针全部通过"
+            behavior_declared=true
+            evidence_note="人工证据声明四类行为探针全部通过；仍需人工复核原始会话，不能自动升级为已验证"
         fi
     else
         evidence_note="配置结构或证据未满足 config_written=true、new_session=true、loaded=true、精确 source_path 与当前 config_sha256"
     fi
 fi
 
-if [ "$behavior_verified" = true ]; then
-    status="BEHAVIOR_VERIFIED"
-elif [ "$instructions_loaded" = true ]; then
-    status="INSTRUCTIONS_LOADED"
+if [ "$behavior_declared" = true ]; then
+    status="BEHAVIOR_DECLARED"
+elif [ "$instructions_declared" = true ]; then
+    status="INSTRUCTIONS_DECLARED"
 elif [ "$config_written" = true ]; then
     status="CONFIG_WRITTEN"
 else
@@ -125,7 +126,7 @@ else
 fi
 
 cat <<EOF
-{"schema_version":"1","status":"$(json_escape "$status")","config_written":$config_written,"instructions_loaded":$instructions_loaded,"behavior_verified":$behavior_verified,"target":"$(json_escape "$TARGET")","target_sha256":"$(json_escape "$target_sha")","block_id":"$(json_escape "$BLOCK_ID")","note":"$(json_escape "$evidence_note")"}
+{"schema_version":"2","status":"$(json_escape "$status")","config_written":$config_written,"instructions_declared":$instructions_declared,"behavior_declared":$behavior_declared,"instructions_loaded":false,"behavior_verified":false,"evidence_kind":"manual","target":"$(json_escape "$TARGET")","target_sha256":"$(json_escape "$target_sha")","block_id":"$(json_escape "$BLOCK_ID")","note":"$(json_escape "$evidence_note")"}
 EOF
 
 [ "$config_written" = true ]

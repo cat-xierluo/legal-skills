@@ -1,0 +1,31 @@
+{
+  "config_text": "<!-- legal-harness-init:legal-safety-baseline:start -->\n# 项目：LIT-YYYY-001\n<!-- legal-harness-init:legal-safety-baseline:end -->\n",
+  "target_paths": [
+    "AGENTS.md"
+  ],
+  "config_artifacts": [
+    {
+      "target": "AGENTS.md",
+      "path": "stability-missing-init-environment/AGENTS.md"
+    }
+  ],
+  "privacy_mode": "strict",
+  "guide_mode": "team",
+  "session_evidence": {
+    "new_session": false,
+    "loaded": false
+  },
+  "precedence": [
+    "legal_safety",
+    "organization",
+    "project",
+    "individual"
+  ],
+  "status": "CONFIG_WRITTEN",
+  "init_environment": {
+    "recorded": false,
+    "config_sha256": [
+      "fb2c4d8c0c8d793cc6fbf2e14eaabb2cb5925bc16174813f45a32dddacba17fe"
+    ]
+  }
+}

@@ -26,7 +26,8 @@
 #   - 自动采集 init skill version：从本 skill 根的 SKILL.md frontmatter 读 version。
 #   - 写：在 --target 的 init-environment 受管区块 append 一行表格行；
 #     受管区块不存在则创建（带表头）。
-#   - 失败关闭：参数非法、target 不存在、candidate marker 不完整或整体结构异常均拒绝。
+#   - 失败关闭：参数非法、target 类型异常、候选或备注校验失败、marker 不完整均拒绝。
+#   - 真实写入前创建原始备份与本次快照；dry-run 不改变内容、权限或备份。
 #
 # 退出码：0 = 成功 / unchanged / dry_run；1 = 写入失败；2 = 参数错误。
 #
@@ -37,7 +38,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib_platforms.sh
-. "${SCRIPT_DIR}/lib_platforms.sh"
+. "${SCRIPT_DIR}/lib_platforms.sh" || exit 1
+. "${SCRIPT_DIR}/lib_safety.sh" || exit 1
 
 BLOCK_ID="init-environment"
 START_MARKER="<!-- legal-harness-init:${BLOCK_ID}:start -->"
@@ -63,8 +65,23 @@ json_escape() {
 # 等）是 ASCII 标识符,理论上不含 |,这里不动以减少误转义。
 escape_markdown_cell() {
     local s="${1-}"
+    s=${s//\\/\\\\}
     s=${s//|/\\|}
     printf '%s' "$s"
+}
+
+
+
+
+safe_identifier() {
+    local value="$1" label="$2"
+    # grep matches line-by-line, so reject record separators before the regex.
+    case "$value" in
+        ''|*$'\n'*|*$'\r'*) die "$label 必须是非空单行" ;;
+    esac
+    if ! printf '%s' "$value" | LC_ALL=C grep -Eq '^[A-Za-z0-9._/:+()-]+(\[[A-Za-z0-9._/:+-]*\])?$'; then
+        die "$label 含未授权字符；只允许字母、数字和 . _ / : + - ( ) [ ]"
+    fi
 }
 
 # 探测一个命令，2s 超时，失败返回空（绝不读凭证，绝不循环）
@@ -75,7 +92,7 @@ probe_with_timeout() {
     elif command -v gtimeout >/dev/null 2>&1; then
         gtimeout 2s sh -c "$cmd" 2>/dev/null | head -1 || true
     else
-        sh -c "$cmd" 2>/dev/null | head -1 || true
+        printf ''
     fi
 }
 
@@ -85,6 +102,7 @@ MODEL=""
 ACTION="init"
 HARNESS_OVERRIDE=""
 PROBE_FROM_SESSION=false
+SESSION_FILE=""
 HARNESS_VERSION_OVERRIDE=""
 SKILL_VERSION_OVERRIDE=""
 NOTE=""
@@ -100,6 +118,7 @@ while [ $# -gt 0 ]; do
         --skill-version) [ $# -ge 2 ] || { die "--skill-version 需要参数"; }; SKILL_VERSION_OVERRIDE="$2"; shift 2 ;;
         --note) [ $# -ge 2 ] || { die "--note 需要参数"; }; NOTE="$2"; shift 2 ;;
         --probe-from-session) PROBE_FROM_SESSION=true; shift ;;
+        --session-file) [ $# -ge 2 ] || die "--session-file 需要参数"; SESSION_FILE="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
         -h|--help) sed -n '3,30p' "$0"; exit 0 ;;
         *) die "未知参数：$1" ;;
@@ -107,8 +126,20 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$TARGET" ] || die "缺 --target"
+if [ -L "$TARGET" ]; then
+    die "目标是符号链接；为避免替换链接本身，请改用真实文件路径"
+fi
 [ -f "$TARGET" ] || die "目标文件不存在：$TARGET"
+case "$(basename -- "$TARGET")" in
+    AGENTS.md|CLAUDE.md) ;;
+    *) die "target 必须是 AGENTS.md 或 CLAUDE.md" ;;
+esac
 case "$ACTION" in init|update|append) ;; *) die "--action 必须是 init / update / append" ;; esac
+if [ -n "$NOTE" ]; then
+    case "$NOTE" in
+        *$'\n'*|*$'\r'*) die "--note 必须是单行" ;;
+    esac
+fi
 
 # === 采集 harness name ===
 HARNESS_NAME=""
@@ -135,7 +166,9 @@ else
         *)           HARNESS_VERSION="unknown" ;;
     esac
     # 标准化：剥前缀和空行
-    HARNESS_VERSION=$(printf '%s' "$HARNESS_VERSION" | sed -E 's/^(claude-code|codex)[[:space:]]+//;s/^$//')
+    if [ "$HARNESS_VERSION" != "n/a" ] && [ "$HARNESS_VERSION" != "unknown" ]; then
+        HARNESS_VERSION=$(printf '%s' "$HARNESS_VERSION" | grep -Eo '[0-9]+(\.[0-9]+)+([a-zA-Z0-9.+-]*)?' | head -1)
+    fi
     [ -n "$HARNESS_VERSION" ] || HARNESS_VERSION="unknown"
 fi
 
@@ -151,7 +184,7 @@ fi
 if [ -z "$MODEL" ]; then
     for envname in ANTHROPIC_MODEL OPENAI_MODEL CLAUDE_MODEL GLM_MODEL CODEX_MODEL OPENAI_MODEL_GLM MYAGENTS_MODEL QWEN_MODEL MY_MODEL; do
         if [ -n "${!envname+x}" ] && [ -n "${!envname}" ]; then
-            MODEL=$(printf '%s' "${!envname}" | head -1)
+            MODEL="${!envname}"
             break
         fi
     done
@@ -161,10 +194,12 @@ fi
 # 仅在 --probe-from-session 显式开启时启用——避免默认行为意外变重
 if [ -z "$MODEL" ] && [ "$PROBE_FROM_SESSION" = true ]; then
     probe_script="${SCRIPT_DIR}/probe-session-model.sh"
-    if [ -x "$probe_script" ]; then
+    if [ -r "$probe_script" ]; then
         # 显式 pwd 一次：env -i 清空 PWD,probe 需要 cwd 找 jsonl
         cwd_arg="${CWD:-$(pwd)}"
-        probed=$(env -i HOME="$HOME" bash "$probe_script" --harness "${HARNESS_NAME:-claude-code}" --cwd "$cwd_arg" 2>/dev/null || true)
+        probe_args=(--harness "$HARNESS_NAME" --cwd "$cwd_arg")
+        [ -n "$SESSION_FILE" ] && probe_args+=(--session-file "$SESSION_FILE")
+        probed=$(bash "$probe_script" "${probe_args[@]}" 2>/dev/null) || probed=""
         if [ -n "$probed" ]; then
             MODEL="$probed"
         fi
@@ -193,6 +228,19 @@ CODEX_MODEL / OPENAI_MODEL_GLM / MYAGENTS_MODEL / QWEN_MODEL / MY_MODEL)
 EOF
     die "model 未提供"
 fi
+# 备注可能承载自由文本，因此必须通过与正文候选相同的隐私校验；模型/版本是白名单标识符。
+if [ -n "$NOTE" ]; then
+    validator="${SCRIPT_DIR}/validate-content.sh"
+    [ -f "$validator" ] && [ -r "$validator" ] || die "内容校验器缺失或不可读：$validator"
+    note_file=$(mktemp "${TMPDIR:-/tmp}/legal-harness-init-note.XXXXXX") || die "无法创建备注校验文件"
+    trap 'rm -f -- "$note_file"' EXIT INT TERM
+    printf '%s\n' "$NOTE" > "$note_file"
+    bash "$validator" --file "$note_file" --privacy-mode strict >/dev/null || {
+        rm -f "$note_file"
+        die "--note 未通过 strict 隐私校验"
+    }
+    rm -f "$note_file"
+fi
 
 # === 采集 init skill version（SKILL.md frontmatter）===
 SKILL_VERSION=""
@@ -202,10 +250,13 @@ else
     skill_root=$(cd "${SCRIPT_DIR}/.." && pwd)
     skill_md="${skill_root}/SKILL.md"
     if [ -f "$skill_md" ]; then
-        SKILL_VERSION=$(awk '/^version:[[:space:]]*"/ { gsub(/^version:[[:space:]]*"|"[[:space:]]*$/, ""); print; exit }' "$skill_md")
+        SKILL_VERSION=$(awk '/^[[:space:]]*version:[[:space:]]*"/ { gsub(/^[[:space:]]*version:[[:space:]]*"|"[[:space:]]*$/, ""); print; exit }' "$skill_md")
     fi
 fi
 [ -n "$SKILL_VERSION" ] || SKILL_VERSION="unknown"
+safe_identifier "$MODEL" "--model/model"
+safe_identifier "$HARNESS_VERSION" "harness version"
+safe_identifier "$SKILL_VERSION" "skill version"
 
 # === 采集时间 ===
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M' 2>/dev/null || printf 'unknown-time')
@@ -216,7 +267,17 @@ if [ -n "$NOTE" ]; then
     NOTE_ESCAPED=$(escape_markdown_cell "$NOTE")
     NOTE_CELL=" · ${NOTE_ESCAPED}"
 fi
-NEW_ROW="| ${TIMESTAMP} | ${HARNESS_NAME} | ${HARNESS_VERSION} | ${MODEL} | legal-harness-init | ${SKILL_VERSION} | ${ACTION}${NOTE_CELL} |"
+CONFIG_DIGEST=$(configuration_sha256 "$TARGET") || die "无法计算正文配置哈希"
+NEW_ROW="| ${TIMESTAMP} | ${HARNESS_NAME} | ${HARNESS_VERSION} | ${MODEL} | legal-harness-init | ${SKILL_VERSION} | ${ACTION} · config-sha256=${CONFIG_DIGEST}${NOTE_CELL} |"
+validator="${SCRIPT_DIR}/validate-content.sh"
+[ -f "$validator" ] && [ -r "$validator" ] || die "内容校验器缺失或不可读"
+row_file=$(mktemp "${TMPDIR:-/tmp}/legal-harness-init-row.XXXXXX") || die "无法创建元数据校验文件"
+printf '%s\n' "$NEW_ROW" > "$row_file"
+if ! bash "$validator" --file "$row_file" --privacy-mode strict >/dev/null; then
+    rm -f "$row_file"
+    die "元数据未通过 strict 隐私校验"
+fi
+rm -f "$row_file"
 
 # === 判断 init-environment 区块状态 ===
 #   - start/end 都成对存在 → append
@@ -224,6 +285,7 @@ NEW_ROW="| ${TIMESTAMP} | ${HARNESS_NAME} | ${HARNESS_VERSION} | ${MODEL} | lega
 #   - 只存在一个（残缺）→ die（避免破坏不完整区块）
 start_count=$(grep -Fxc -- "$START_MARKER" "$TARGET" 2>/dev/null || true)
 end_count=$(grep -Fxc -- "$END_MARKER" "$TARGET" 2>/dev/null || true)
+validate_managed_markers "$TARGET" || die "目标文件已有受管 marker 结构异常；请人工修复后再记录"
 if [ "$start_count" -eq 1 ] && [ "$end_count" -eq 1 ]; then
     MODE="append"
 elif [ "$start_count" -eq 0 ] && [ "$end_count" -eq 0 ]; then
@@ -251,9 +313,9 @@ if [ "$MODE" = "create" ]; then
     } > "$candidate"
 else
     # 在 END_MARKER 之前插入新行
-    awk -v row="$NEW_ROW" -v end="$END_MARKER" '
+    LHI_RECORD_ROW="$NEW_ROW" awk -v end="$END_MARKER" '
         $0 == end {
-            print row
+            print ENVIRON["LHI_RECORD_ROW"]
             print ""
         }
         { print }
@@ -268,18 +330,7 @@ if [ "$start_count" -ne 1 ] || [ "$end_count" -ne 1 ]; then
     die "candidate 受管 marker 校验失败（start=${start_count} end=${end_count}）"
 fi
 
-if ! awk '
-    /<!--[[:space:]]*legal-harness-init:/ && !/^<!--[[:space:]]legal-harness-init:[a-z0-9-]+:(start|end)[[:space:]]-->$/ { bad=1 }
-    /^<!--[[:space:]]legal-harness-init:[a-z0-9-]+:start[[:space:]]-->$/ {
-        if (open != "" || ++starts[$0] > 1) bad=1
-        open=$0
-    }
-    /^<!--[[:space:]]legal-harness-init:[a-z0-9-]+:end[[:space:]]-->$/ {
-        if (open == "" || ++ends[$0] > 1) bad=1
-        open=""
-    }
-    END { exit (bad || open != "") ? 1 : 0 }
-' "$candidate"; then
+if ! validate_managed_markers "$candidate"; then
     rm -f "$candidate"
     die "candidate 全部受管 marker 结构校验失败"
 fi
@@ -293,7 +344,7 @@ EOF
     exit 0
 fi
 
-# === dry-run ===
+# === dry-run 放在所有候选校验和 unchanged 判断之后；预览不产生副作用 ===
 if [ "$DRY_RUN" = true ]; then
     printf '=== [dry-run] %s init-environment 区块将 %s ===\n' "$TARGET" "$MODE" >&2
     diff -u "$TARGET" "$candidate" >&2 || true
@@ -305,6 +356,36 @@ EOF
 fi
 
 # === 写回（原子 mv）===
+original_backup="${TARGET}.bak.legal-harness-init"
+original_backup_meta="${original_backup}.meta"
+snapshot_backup="${TARGET}.bak.${TIMESTAMP// /-}.record.$$"
+if [ -e "$original_backup" ] || [ -L "$original_backup" ] \
+    || [ -e "$original_backup_meta" ] || [ -L "$original_backup_meta" ]; then
+    saved_mode=$(sed -n 's/.*"mode":"\([0-9][0-9]*\)".*/\1/p' "$original_backup_meta" | head -1)
+    saved_sha=$(sed -n 's/.*"sha256":"\([0-9a-fA-F][0-9a-fA-F]*\)".*/\1/p' "$original_backup_meta" | head -1)
+    actual_sha=$(sha256_file "$original_backup")
+    if [ -L "$original_backup" ] || [ -L "$original_backup_meta" ] \
+        || [ ! -f "$original_backup" ] || [ ! -f "$original_backup_meta" ] \
+        || [ -z "$saved_mode" ] || [ -z "$saved_sha" ] || [ "$actual_sha" != "$saved_sha" ]; then
+        rm -f "$candidate"
+        die "原始备份或元数据缺失、类型异常或完整性校验失败；请人工核对"
+    fi
+else
+    original_mode=$(file_mode "$TARGET")
+    original_sha=$(sha256_file "$TARGET")
+    [ -n "$original_sha" ] || { rm -f "$candidate"; die "缺少 SHA-256 工具，无法建立可验证备份"; }
+    cp -p "$TARGET" "$original_backup" || { rm -f "$candidate"; die "原始备份创建失败"; }
+    json_target=$(json_escape "$TARGET")
+    {
+        cat <<EOF
+{"schema_version":"1","target":"$json_target","mode":"$original_mode","sha256":"$original_sha"}
+EOF
+    } > "$original_backup_meta" || { rm -f "$candidate" "$original_backup" "$original_backup_meta"; die "原始备份元数据创建失败"; }
+    chmod 600 "$original_backup_meta" 2>/dev/null || true
+fi
+cp -p "$TARGET" "$snapshot_backup" || { rm -f "$candidate"; die "本次快照创建失败"; }
+chmod 600 "$original_backup" "$original_backup_meta" "$snapshot_backup" || { rm -f "$candidate"; die "无法收紧备份权限"; }
+chmod "$(file_mode "$TARGET")" "$candidate" || { rm -f "$candidate"; die "无法保留目标权限"; }
 if ! mv "$candidate" "$TARGET"; then
     rm -f "$candidate"
     die "原子替换失败"

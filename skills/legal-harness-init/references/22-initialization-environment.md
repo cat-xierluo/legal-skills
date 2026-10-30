@@ -28,10 +28,17 @@
 | Harness Version | 该 harness 的版本 | 探测失败写 `unknown`；非 claude/codex 写 `n/a` |
 | Model | 当前会话用的 model 名 | env 全空时**强制要求** `--model` 兜底，不臆造 |
 | Init Skill | 固定 `legal-harness-init` | — |
-| Init Skill Version | 本 skill 的 version（来自 SKILL.md frontmatter） | `unknown` |
+| Init Skill Version | 本 skill 的 `metadata.version` | `unknown` |
 | 操作 | `init` / `update` / `append` | 默认 `init` |
 
 可选 `--note "..."` 字段会附在 `操作` 后（用 ` · ` 分隔），例如 `update · M6 项目级`。
+
+## v0.5.3：安全写入与会话归属
+
+- `--note` 必须是单行，并通过与正文候选相同的 `strict` 隐私校验；模型、版本等标识符只允许有限 ASCII 字符，防止第二个写入入口绕过正文保护。
+- 环境记录写入前校验全部受管 marker 的顺序与 ID；真实写入前保留原始备份和本次快照，dry-run 不改内容、权限或备份。
+- `write.sh` 的 `after_sha256` 在环境记录追加完成后计算；记录失败时输出 `*_record_incomplete` + `init_env_status=failed`，并以非零退出提示补记。
+- 会话探测用 Python JSON 解析器读取 `cwd` / session ID / `model` 字段，不读取消息正文；Codex 按 `cwd` 匹配，并发或身份不明时要求 `--session-file` 或 `--model`，更新的跨项目会话不会被当作当前项目。
 
 ## 怎么自动采集
 
@@ -65,21 +72,21 @@ probe-session-model.sh 的探测路径：
 - **claude-code**（v0.5.0）：`~/.claude/projects/<encoded-cwd>/*.jsonl`
 - **qwenwork**（v0.5.2）：`~/.qwenworkcn/projects/<encoded-cwd>/*.jsonl`（model 是平台别名如 `qwork-advanced`）
 - **qoderwork**（v0.5.2）：`~/.qoderworkcn/projects/<encoded-cwd>/*.jsonl`（model 是别名如 `auto`）
-- **myagents**（v0.5.2）：`~/.myagents/sessions/*.jsonl`（flat 不分 cwd，model 较真实如 `glm-5.2[1m]`）
+- **myagents**：`~/.myagents/sessions/*.jsonl`（flat 不分 cwd，须传 `--session-file` 绑定会话）
 
 **其他格式**：
-- **codex**（v0.5.1）：`~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl`，最后一条 `turn_context` 的 `payload.model`
-- **workbuddy**（v0.5.2）：`~/.workbuddy/traces/<pid>/trace_*.json`，遍历 mtime 降序找第一个含 `chat.completion.model` 的 trace（每个操作一个 trace，只有 generation 类含 model）
+- **codex**：`~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl`，筛选 `turn_context.payload.cwd` 等于请求目录后取 `payload.model`；多会话并发时传 `--session-file`
+- **workbuddy**：`~/.workbuddy/traces/<pid>/trace_*.json`，读取 generation span 内 `chat.completion.model`；因 trace 目录不唯一绑定项目，需传 `--session-file`
 
 **暂不支持**：
 - **openclaw**：本机 logs/ 仅补全/审计无会话 jsonl，CC fork 会话路径待研究
 - **orca**：worktree 编排型，session 在各 worktree 的 `.claude/projects`，`~/.orca` 无统一 session，不可自动反查
 
-**为什么默认关闭 `--probe-from-session`**：probe 读 jsonl 是"重"操作（要 find + awk 扫最近 10 分钟 jsonl），不适合每次 init 都跑。只在 env 全空、又不想手填 `--model` 时显式开启。
+**为什么默认关闭 `--probe-from-session`**：probe 读 jsonl 是"重"操作（要枚举并解析最近 10 分钟会话文件），不适合每次 init 都跑。只在 env 全空、又不想手填 `--model` 时显式开启。
 
-**harness=unknown 时的宽容兜底**：当 detect.sh 没识别出当前 harness（如纯净环境 env 全空），probe 脚本会把 `unknown` 当 `claude-code` 试一次——因为 CC 是最常见的默认场景。试不到就 not_found。
+**harness=unknown 不猜测**：detect.sh 没识别出当前 harness 时不把 unknown 冒充 claude-code；返回 not_found，由调用方传 `--harness`、`--session-file` 或 `--model`。
 
-**隐私边界**：probe 只读 jsonl 元数据（mtime + `message.model` 字段），**不**读 `message.content`（thinking / tool_use 正文）。解析只匹配 `"model":"<name>"` 模式，不回显任何对话内容。
+**隐私边界**：probe 会读取候选会话文件的原始 JSON 文本，仅提取和输出 `cwd` / session ID / `model` 与路径元数据；不会输出或另行保存 `message.content`、thinking 或 tool_use 正文。
 
 ## 自助补 model：env 探测失败的两条简单路径
 
@@ -170,10 +177,13 @@ bash scripts/record-init-env.sh --target /path/to/AGENTS.md --action init \
 `record-init-env.sh` 在以下情况拒绝 append：
 
 - 缺 `--target` 或 `--target` 不存在
+- target 是符号链接，或 basename 不是 `AGENTS.md` / `CLAUDE.md`
 - `--action` 不是 `init` / `update` / `append` 之一
-- env 白名单全空且未传 `--model`
+- `--note` 不是单行，或未通过 strict 隐私校验
+- env 白名单全空且未传 `--model`，或会话身份不明且未传 `--session-file`
 - target 文件的 init-environment 区块残缺（只 start 或只 end）
 - candidate marker 校验失败或整体结构异常
+- 原始备份、备份元数据或本次快照创建/校验失败
 - atomic mv 失败
 
 任何失败都退出码 1 + stderr 提示，不留半成品。
@@ -182,5 +192,5 @@ bash scripts/record-init-env.sh --target /path/to/AGENTS.md --action init \
 
 - 受管区块模板 → [templates/modules/init-environment.md](../templates/modules/init-environment.md)
 - 主流程第六步新增"记录初始化环境" → [SKILL.md](../SKILL.md)
-- 决策记录 → [DECISIONS.md §DEC-015](../DECISIONS.md)
+- 历史设计决策保留在本地私有 `DECISIONS.md`；公开包不携带该文件。
 - 与 M5 的关系 → [references/11-module-audit-trail.md](11-module-audit-trail.md)

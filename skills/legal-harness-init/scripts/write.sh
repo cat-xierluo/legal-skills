@@ -25,7 +25,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib_platforms.sh
-. "${SCRIPT_DIR}/lib_platforms.sh"
+. "${SCRIPT_DIR}/lib_platforms.sh" || exit 1
+. "${SCRIPT_DIR}/lib_safety.sh" || exit 1
 
 json_escape() {
     local s="${1-}"
@@ -42,21 +43,7 @@ die() {
     exit 1
 }
 
-sha256_file() {
-    local file="$1"
-    if command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "$file" | awk '{print $1}'
-    elif command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "$file" | awk '{print $1}'
-    else
-        printf ''
-    fi
-}
 
-file_mode() {
-    local file="$1"
-    stat -f '%Lp' "$file" 2>/dev/null || stat -c '%a' "$file" 2>/dev/null || printf '644'
-}
 
 CONTENT_FILE=""
 LEVEL=""
@@ -110,9 +97,9 @@ if grep -Fqx "$START_MARKER" "$CONTENT_FILE" || grep -Fqx "$END_MARKER" "$CONTEN
     die "内容文件不应自带外层受管 marker；write.sh 会自动包裹"
 fi
 
-if [ -x "${SCRIPT_DIR}/validate-content.sh" ]; then
-    validation_output=$(bash "${SCRIPT_DIR}/validate-content.sh" --file "$CONTENT_FILE" --privacy-mode "$PRIVACY_MODE") || die "内容校验未通过"
-fi
+VALIDATOR="${SCRIPT_DIR}/validate-content.sh"
+[ -f "$VALIDATOR" ] && [ -r "$VALIDATOR" ] || die "内容校验器缺失或不可读：$VALIDATOR"
+validation_output=$(bash "$VALIDATOR" --file "$CONTENT_FILE" --privacy-mode "$PRIVACY_MODE") || die "内容校验未通过"
 
 if [ "$LEVEL" = "project" ]; then
     [ -n "$PROJECT_DIR" ] || PROJECT_DIR="$(pwd)"
@@ -136,15 +123,16 @@ target_path_for() {
 
 results_json=""
 emit_result() {
-    # platform path status backup original_backup note before_sha after_sha
+    # platform path status backup original_backup note before_sha after_sha init_env_status
     local platform="$1" path="$2" status="$3" backup="${4:-}" original_backup="${5:-}"
-    local note="${6:-}" before_sha="${7:-}" after_sha="${8:-}" fragment
+    local note="${6:-}" before_sha="${7:-}" after_sha="${8:-}" init_env_status="${9:-}" fragment
     fragment="\"platform\":\"$(json_escape "$platform")\",\"path\":\"$(json_escape "$path")\",\"status\":\"$(json_escape "$status")\""
     [ -n "$backup" ] && fragment="$fragment,\"backup\":\"$(json_escape "$backup")\""
     [ -n "$original_backup" ] && fragment="$fragment,\"original_backup\":\"$(json_escape "$original_backup")\""
     [ -n "$note" ] && fragment="$fragment,\"note\":\"$(json_escape "$note")\""
     [ -n "$before_sha" ] && fragment="$fragment,\"before_sha256\":\"$(json_escape "$before_sha")\""
     [ -n "$after_sha" ] && fragment="$fragment,\"after_sha256\":\"$(json_escape "$after_sha")\""
+    [ -n "$init_env_status" ] && fragment="$fragment,\"init_env_status\":\"$(json_escape "$init_env_status")\""
     if [ -z "$results_json" ]; then results_json="{$fragment}"; else results_json="$results_json,{$fragment}"; fi
 }
 
@@ -202,7 +190,7 @@ for key in "${unique_keys[@]}"; do
 done
 if [ ${#target_paths[@]} -eq 0 ]; then
     cat <<EOF
-{"schema_version":"2","targets":[$results_json]}
+{"schema_version":"3","targets":[$results_json]}
 EOF
     exit 1
 fi
@@ -212,33 +200,6 @@ marker_count() {
     awk -v marker="$marker" '$0 == marker { count++ } END { print count + 0 }' "$file"
 }
 
-validate_managed_markers() {
-    # 所有 legal-harness-init 区块必须顺序成对、同 id 闭合且每个 id 唯一；不允许交叉或嵌套。
-    awk '
-        /<!--[[:space:]]*legal-harness-init:/ && $0 !~ /^<!--[[:space:]]legal-harness-init:[a-z0-9-]+:(start|end)[[:space:]]-->$/ { bad=1 }
-        /^<!--[[:space:]]legal-harness-init:[a-z0-9-]+:(start|end)[[:space:]]-->$/ {
-            marker=$0
-            id=marker
-            sub(/^<!--[[:space:]]legal-harness-init:/, "", id)
-            sub(/:(start|end)[[:space:]]-->$/, "", id)
-            kind=marker
-            sub(/^.*:/, "", kind)
-            sub(/[[:space:]]-->$/, "", kind)
-            if (kind == "start") {
-                if (open != "" || ++starts[id] > 1) bad=1
-                open=id
-            } else {
-                if (open != id || ++ends[id] > 1) bad=1
-                open=""
-            }
-        }
-        END {
-            if (open != "") bad=1
-            for (id in starts) if (starts[id] != ends[id]) bad=1
-            exit bad ? 1 : 0
-        }
-    ' "$1"
-}
 
 build_candidate() {
     local target="$1" output="$2" start_count=0 end_count=0
@@ -294,6 +255,11 @@ for target in "${target_paths[@]}"; do
         had_error=true
         continue
     fi
+    if [ -e "$target" ] && [ ! -f "$target" ]; then
+        emit_result "$labels" "$target" "error" "" "" "目标已存在且不是普通文件，未写入"
+        had_error=true
+        continue
+    fi
 
     candidate=$(mktemp "${parent}/.legal-harness-init.XXXXXX") || { emit_result "$labels" "$target" "error" "" "" "无法创建同目录候选文件"; had_error=true; continue; }
     if ! build_candidate "$target" "$candidate"; then
@@ -311,12 +277,34 @@ for target in "${target_paths[@]}"; do
 
     before_sha=""
     [ -f "$target" ] && before_sha=$(sha256_file "$target")
-    after_sha=$(sha256_file "$candidate")
+    candidate_sha=$(sha256_file "$candidate")
 
     if [ -f "$target" ] && cmp -s "$target" "$candidate"; then
         rm -f "$candidate"
+        if [ "$DRY_RUN" = true ]; then
+            emit_result "$labels" "$target" "dry_run_unchanged" "" "" "候选零 diff，未落盘" "$before_sha" "$candidate_sha"
+            continue
+        fi
         if [ "$LEVEL" = "user" ]; then chmod 600 "$target" 2>/dev/null || true; fi
-        emit_result "$labels" "$target" "unchanged" "" "" "受管区块已是目标内容，零 diff" "$before_sha" "$after_sha"
+        init_env_status="disabled"
+        status="unchanged"
+        if [ "$RECORD_INIT_ENV" = true ]; then
+            init_env_status="present"
+            if ! current_environment_recorded "$target"; then
+                init_args=(--target "$target" --action "$INIT_ACTION")
+                [ -n "$MODEL" ] && init_args+=(--model "$MODEL")
+                if bash "${SCRIPT_DIR}/record-init-env.sh" "${init_args[@]}" >/dev/null; then
+                    init_env_status="recorded"
+                    status="metadata_recorded"
+                else
+                    init_env_status="failed"
+                    status="unchanged_record_incomplete"
+                    had_error=true
+                fi
+            fi
+        fi
+        final_sha=$(sha256_file "$target")
+        emit_result "$labels" "$target" "$status" "" "" "正文区块未变；环境记录状态见 init_env_status" "$before_sha" "$final_sha" "$init_env_status"
         continue
     fi
 
@@ -330,7 +318,7 @@ for target in "${target_paths[@]}"; do
             status="dry_run_create"
         fi
         rm -f "$candidate"
-        emit_result "$labels" "$target" "$status" "" "" "未落盘" "$before_sha" "$after_sha"
+        emit_result "$labels" "$target" "$status" "" "" "未落盘" "$before_sha" "$candidate_sha"
         continue
     fi
 
@@ -338,7 +326,7 @@ for target in "${target_paths[@]}"; do
         printf '=== %s 已存在，需确认后再 upsert 受管区块 ===\n' "$target" >&2
         diff -u "$target" "$candidate" >&2 || true
         rm -f "$candidate"
-        emit_result "$labels" "$target" "needs_confirmation" "" "" "使用 --mode update/append 或 --force 确认落盘" "$before_sha" "$after_sha"
+        emit_result "$labels" "$target" "needs_confirmation" "" "" "使用 --mode update/append 或 --force 确认落盘" "$before_sha" "$candidate_sha"
         continue
     fi
 
@@ -416,15 +404,15 @@ EOF
 
     if ! mv "$candidate" "$target"; then
         rm -f "$candidate"
-        emit_result "$labels" "$target" "error" "$snapshot_backup" "$original_backup" "原子替换失败" "$before_sha" "$after_sha"
+        emit_result "$labels" "$target" "error" "$snapshot_backup" "$original_backup" "原子替换失败" "$before_sha" "$candidate_sha"
         had_error=true
         continue
     fi
     [ "$LEVEL" = "user" ] && chmod 600 "$target" 2>/dev/null || true
     printf '=== %s 已 upsert 受管区块 %s ===\n' "$target" "$BLOCK_ID" >&2
     if [ -n "$snapshot_backup" ]; then status="updated"; else status="written"; fi
-    emit_result "$labels" "$target" "$status" "$snapshot_backup" "$original_backup" "已按实际路径去重并原子写入" "$before_sha" "$after_sha"
-
+    init_env_status=""
+    record_note="已按实际路径去重并原子写入"
     # === 真实落盘后自动调 record-init-env.sh 记录 init-environment ===
     # 默认 RECORD_INIT_ENV=true；--record-init-env=false 显式关闭（如批量脚本场景）。
     # 失败不阻断：AGENTS.md 已落盘,init-environment 是 metadata;模型探测失败时
@@ -435,17 +423,28 @@ EOF
         init_output=$(bash "${SCRIPT_DIR}/record-init-env.sh" "${init_args[@]}" 2>&1) && init_rc=0 || init_rc=$?
         if [ "$init_rc" -eq 0 ]; then
             printf '=== init-environment 已记录到 %s ===\n' "$target" >&2
+            init_env_status="recorded"
+            record_note="已按实际路径去重并原子写入"
         else
             printf '⚠️  init-environment 记录失败（exit %s）；AGENTS.md 已落盘,后续可手动补\n' "$init_rc" >&2
             printf '%s\n' "$init_output" >&2
             printf '   手动命令：bash scripts/record-init-env.sh --target %s --action %s [--model <name>]\n' "$target" "${INIT_ACTION:-init}" >&2
+            init_env_status="failed"
+            status="${status}_record_incomplete"
+            record_note="配置已写入，但 init-environment 记录失败；需手动补记录"
+            had_error=true
         fi
+    else
+        init_env_status="disabled"
+        record_note="已按实际路径去重并原子写入；init-environment 记录显式关闭"
     fi
+    final_sha=$(sha256_file "$target")
+    emit_result "$labels" "$target" "$status" "$snapshot_backup" "$original_backup" "$record_note" "$before_sha" "$final_sha" "$init_env_status"
 done
 
 cat <<EOF
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "level": "$(json_escape "$LEVEL")",
   "mode": "$(json_escape "$MODE")",
   "privacy_mode": "$(json_escape "$PRIVACY_MODE")",
