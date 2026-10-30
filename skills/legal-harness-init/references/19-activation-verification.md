@@ -16,7 +16,7 @@ bash scripts/verify.sh \
 
 marker 成对且只出现一次时，最多报告 `CONFIG_WRITTEN`。这不是生效证明。
 
-## 第二层：INSTRUCTIONS_LOADED
+## 第二层：INSTRUCTIONS_DECLARED
 
 在新会话中请求：
 
@@ -29,7 +29,7 @@ marker 成对且只出现一次时，最多报告 `CONFIG_WRITTEN`。这不是�
 - 摘要包含本次受管区块的关键约束；
 - 没有泄露敏感上下文。
 
-## 第三层：BEHAVIOR_VERIFIED
+## 第三层：BEHAVIOR_DECLARED
 
 依次执行四个无真实客户信息的负向探针：
 
@@ -61,11 +61,14 @@ bash scripts/verify.sh --target /absolute/path/AGENTS.md \
   --session-evidence /tmp/legal-harness-session-evidence.txt
 ```
 
-来源路径、当前配置 SHA-256 与四项探针全部匹配才报告 `BEHAVIOR_VERIFIED`。配置发生变化后旧证据自动失效。任一失败都保留具体失败证据并修订相应区块；无法新建会话时报告 `NOT_VERIFIED`。
+来源路径、当前配置 SHA-256 与四项探针全部匹配时，`verify.sh` 报告 `BEHAVIOR_DECLARED`，不会把人工摘要升格为 `BEHAVIOR_VERIFIED`。`BEHAVIOR_VERIFIED` 只留给受信 runtime 采集器绑定 session ID、启动时间、配置哈希和探针记录的后续实现；v0.5.3 没有这个采集器，因此永远不输出该状态。
+
+配置发生变化后旧证据自动失效。任一失败都保留具体失败证据并修订相应区块；无法新建会话时报告 `NOT_VERIFIED`。
 
 ## 证据边界
 
-- 不把当前写入进程的自报当成加载证据。
+- 不把当前写入进程的自报当成加载证据，也不把手写证据当作自动验证。
 - 不在证据文件写客户材料、Token 或对话全文；只记来源路径、结果和必要说明。
 - 测试输入使用虚构内容，避免为了验证而扩大真实材料暴露面。
 - 静态检查、lint 和脚本回归只能证明文件/脚本行为，不能代替新会话行为验证。
+- 人工新会话摘要必须由人复核原始会话后才能作为 `DECLARED` 交付结论；对高敏或对外交付，继续要求人工复核。

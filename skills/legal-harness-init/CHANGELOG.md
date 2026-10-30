@@ -5,6 +5,53 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.5.3] - 2026-10-30
+
+> 按 2026-10-18 公开升级审计报告推进：先修写入与验证可信度，再谈公开推广。v0.5.2 已经公开（GitHub `v2026.09.30`），本版是公开版本的安全升级，不是首次公开。
+
+### 修复
+
+- **F01 验证可信度**：`verify.sh` 不再把手写 `key=value` 证据升格为 `BEHAVIOR_VERIFIED`，改为 `INSTRUCTIONS_DECLARED` / `BEHAVIOR_DECLARED`，并始终输出 `instructions_loaded=false`、`behavior_verified=false`。`BEHAVIOR_VERIFIED` 保留给未来的受信 runtime 采集器。
+- **F02 校验旁路**：`write.sh` 无条件以 `bash` 调用 `validate-content.sh`；校验器缺失、不可读或执行失败一律失败关闭，不再因权限位缺失而跳过检查。
+- **F03 第二写入通道**：`record-init-env.sh` 复用同一 marker 状态机，拒绝符号链接与非 `AGENTS.md`/`CLAUDE.md` 目标；`--note` 必须单行并通过 strict 隐私校验；model/版本走白名单字符校验；真实写入前建立可校验原始备份与本次快照。
+- **F03 数据保全补强**：`write.sh` 在重建候选前先校验原文件全部受管 marker；原目标区块内嵌其他受管区块、交叉或残缺标记时直接失败并保持原字节不变，不再先删除后校验。
+- **F04 会话归属**：`probe-session-model.sh` 改为 Python JSON 解析器，解析本地会话文件，仅提取 `cwd` / session ID / `model` 字段，不输出或留存消息正文；Codex 按精确项目匹配，并发或身份不明返回 not_found，可显式 `--session-file`；不再把 unknown 冒充 Claude Code。
+- **F05 回执语义**：`write.sh` 的 `after_sha256` 改为环境记录完成后的最终文件哈希；记录失败时输出 `status=*_record_incomplete`、`init_env_status=failed` 并以非零退出提示补记。环境记录的 `操作` 列附带正文配置哈希，重试时只有最后一条记录绑定当前正文才视为已记录，空区块或旧记录都会触发补记。
+- **W02 dry-run 副作用**：同内容 dry-run 不再把用户级配置权限从 0644 改成 0600；dry-run 一律不改内容、权限或备份。
+
+### 改进
+
+- `check-baseline.py` 改为读取候选外的真实产物文件：按顺序状态机检查 marker，交叉/嵌套标记判失败；校验真实文件与报告一致；环境记录证据必须绑定同一配置哈希且表格行真实存在；新增 `INIT-ENVIRONMENT-RECORD-ON-WRITE` 约束。
+- `config/instruction-stability-contract.json` 升到 0.5.3，纳入 record/probe/checker/test 实现路径、新增约束、正反例与历史回归样本。
+- 公开参考文档移除指向本地私有 `DECISIONS.md` 的断链；`scripts/README.md` 纠正“记录脚本不读环境变量值”“probe 不读正文”等不准确描述。
+- 新增支持矩阵与虚构 quick 全流程示例：区分检测 / 写入 / 可选探测，说明 Python 依赖、dry-run 人工核对点、显式 `--session-file` 与平台未实测边界。
+- 权限模板从“逐项确认”改为“具体授权覆盖具体动作，已授权不重复索取，新增范围才确认”，减少已授权工作的反复询问。
+
+### 决策
+
+- 人工新会话摘要只升级为 `DECLARED`；在没有绑定 session ID、启动时间与探针记录的受信采集器前，不保留“自动验证行为”的表述。
+- 环境记录失败不再只是 stderr 警告，而成为回执中的机器可识别部分完成状态。
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：84 项通过、0 失败；其中嵌入 15 项审计反例回归。
+- ✅ `python3 scripts/test-audit.py`：15 项审计反例回归通过，覆盖复查发现的空环境区块、外部证据、重试补记、目录目标、嵌套受管区块、字面反斜杠、异常字段类型和显式会话文件。
+- ✅ 新增回归覆盖：校验器缺失/0644、备注敏感内容、错配 marker、嵌套受管区块、符号链接、权限保持、dry-run 权限、回执最终哈希、部分完成状态、Codex 空白 JSON、跨项目会话顶替、候选绑定 checker 正反例。
+- ✅ `python3 scripts/check-baseline.py --input assets/stability-complete.json` 通过；五个反例均以退出码 3 阻断。
+- ✅ `instruction_stability_gate.py assess` 不再报合同无效/历史回归缺失；剩余 `ISG-006`（缺候选外签名硬约束基线）属正式门禁范围。
+- ✅ 无旧上下文 Agent 演练：虚构项目 8 个模块完成校验、预览、写入与幂等重跑，状态 `CONFIG_WRITTEN`；新会话加载与行为 `NOT_VERIFIED`。首次 detect 曾在错误目录取项目证据、批量驱动在人工核对预览前写入，已把“先进入目标项目”和“dry-run 为人工核对点”写入示例。
+- ✅ 静态安全扫描无 critical/high；1 个 medium 命中为测试文件的 `subprocess.run(shell=False)`，已人工复核为参数数组调用且使用隔离 HOME。
+- ✅ `HARNESS_REVIEW_VERIFIED`：候选绑定门禁亲自重跑 Shell 回归、15 项审计反例、checker 正例和隐私故障反例，共 4 项；证据归档于本地 `skills/skill-lint/archive/20261030_legal-harness-init/`。
+- ✅ Codex 官方 `skill-creator` quick validator 可解析 `metadata.version` 格式（本机 Python 3.14 下 validator 自身 `collections.Hashable` 崩溃，标记 NOT_VERIFIED，改用 YAML 语法/结构检查）。
+- ⚠️ 真实律师新会话前向验证、多轮真实产物稳定性门禁 `NOT_VERIFIED`。
+- ⚠️ 现行八个客户端的安装与加载验收 `NOT_VERIFIED`；本轮只覆盖 Claude Code / Codex 路径的脚本级回归。
+
+### 待办
+
+- 接入受信 runtime 采集器后再开放 `BEHAVIOR_VERIFIED`。
+- 真实律师 quick 引导计时与权限询问负担测试。
+- 按平台现状维护支持矩阵，不把检测表当作适配完成。
+
 ## [0.5.2] - 2026-08-13
 
 > 国产平台 probe 全覆盖：用户指出 WorkBuddy/QwenWork 等国产平台才是主力用户群。本轮扩展 probe 支持 qwenwork/qoderwork/myagents（CC 克隆 jsonl）+ workbuddy（trace json），6 个主流 cli harness 全部能自动反查 model。
@@ -293,7 +340,7 @@
 
 - **修复 detect.sh 空数组崩溃（bash 3.2 + `set -u`）**：无 harness 场景下 `for ... in "${ARR[@]}"` 触发 `unbound variable`、JSON 不输出（目标受众首发场景必崩）。三处 for 循环（HARNESSES / USER_LEVEL / PROJECT_INIT_EVIDENCE）加 `${#ARR[@]} -gt 0` 守卫。详见 DECISIONS §DEC-008
 - **SKILL.md `version` 同步**：`0.1.0` → `0.1.2`（此前滞后于 CHANGELOG）
-- **FAQ 断链修复**：[references/16-faq.md](references/16-faq.md) 末尾 `](templates-modules)` → `](../templates/modules/)`
+- **FAQ 断链修复**：[references/16-faq.md](references/16-faq.md) 末尾 旧目标 `templates-modules` 改为 `templates/modules/` 的相对入口
 - **CHANGELOG 结构整理**：散落在 `[0.1.0]` 段后的顶层 `## 待办` / `## 验证结果（v0.1.0）` 并入本段（信息冗余清理；双场景 detect.sh 验证以本次边界复测为准）
 
 ### 决策
