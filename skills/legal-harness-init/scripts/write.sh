@@ -260,6 +260,11 @@ for target in "${target_paths[@]}"; do
         had_error=true
         continue
     fi
+    if [ -f "$target" ] && ! validate_managed_markers "$target"; then
+        emit_result "$labels" "$target" "error" "" "" "原文件受管 marker 结构校验失败，未写入"
+        had_error=true
+        continue
+    fi
 
     candidate=$(mktemp "${parent}/.legal-harness-init.XXXXXX") || { emit_result "$labels" "$target" "error" "" "" "无法创建同目录候选文件"; had_error=true; continue; }
     if ! build_candidate "$target" "$candidate"; then

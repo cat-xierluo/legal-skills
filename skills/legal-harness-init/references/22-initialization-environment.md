@@ -38,7 +38,7 @@
 - `--note` 必须是单行，并通过与正文候选相同的 `strict` 隐私校验；模型、版本等标识符只允许有限 ASCII 字符，防止第二个写入入口绕过正文保护。
 - 环境记录写入前校验全部受管 marker 的顺序与 ID；真实写入前保留原始备份和本次快照，dry-run 不改内容、权限或备份。
 - `write.sh` 的 `after_sha256` 在环境记录追加完成后计算；记录失败时输出 `*_record_incomplete` + `init_env_status=failed`，并以非零退出提示补记。
-- 会话探测用 Python JSON 解析器读取 `cwd` / session ID / `model` 字段，不读取消息正文；Codex 按 `cwd` 匹配，并发或身份不明时要求 `--session-file` 或 `--model`，更新的跨项目会话不会被当作当前项目。
+- 会话探测用 Python JSON 解析器读取候选会话文件，仅提取和输出 `cwd` / session ID / `model` 等元数据，不输出或留存消息正文；Codex 按 `cwd` 匹配，并发或身份不明时要求 `--session-file` 或 `--model`，更新的跨项目会话不会被当作当前项目。
 
 ## 怎么自动采集
 

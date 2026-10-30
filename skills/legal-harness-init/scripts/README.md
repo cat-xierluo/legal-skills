@@ -12,7 +12,7 @@
 | `restore.sh` | 恢复首次写入前的原文、权限和哈希 | 拒绝符号链接、缺失哈希或损坏备份 |
 | `verify.sh` | 区分写入与人工行为声明 | 人工 key=value 证据最多得到 `DECLARED`，不输出 `BEHAVIOR_VERIFIED` |
 | `record-init-env.sh` | append 一行 harness+model 元数据到 init-environment 受管区块 | 失败关闭；只读白名单 model 环境变量值；整行过 strict 校验；保留备份与目标权限；支持 `--session-file` |
-| `probe-session-model.sh` + `session-model.py` | 从本地会话文件读取 model 元数据（`--probe-from-session` 调用） | Python JSON 解析本地会话文件；只输出 cwd/session ID/model 元数据；并发或身份不明返回 not_found，可显式 `--session-file` |
+| `probe-session-model.sh` + `session-model.py` | 从本地会话文件读取 model 元数据（`--probe-from-session` 调用） | Python JSON 解析本地会话文件原始内容；只输出 cwd/session ID/model 元数据，不输出或留存正文；并发或身份不明返回 not_found，可显式 `--session-file` |
 | `test.sh` | 在 `/tmp/legal-harness-init-test.*` 中执行无网络回归 | 退出时只清理自己创建的测试目录 |
 | `test-audit.py` | 审计反例回归：writer、record、checker、probe | 使用标准库和隔离 HOME，不读取真实用户配置或会话 |
 

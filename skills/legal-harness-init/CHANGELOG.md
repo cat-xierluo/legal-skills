@@ -14,6 +14,7 @@
 - **F01 验证可信度**：`verify.sh` 不再把手写 `key=value` 证据升格为 `BEHAVIOR_VERIFIED`，改为 `INSTRUCTIONS_DECLARED` / `BEHAVIOR_DECLARED`，并始终输出 `instructions_loaded=false`、`behavior_verified=false`。`BEHAVIOR_VERIFIED` 保留给未来的受信 runtime 采集器。
 - **F02 校验旁路**：`write.sh` 无条件以 `bash` 调用 `validate-content.sh`；校验器缺失、不可读或执行失败一律失败关闭，不再因权限位缺失而跳过检查。
 - **F03 第二写入通道**：`record-init-env.sh` 复用同一 marker 状态机，拒绝符号链接与非 `AGENTS.md`/`CLAUDE.md` 目标；`--note` 必须单行并通过 strict 隐私校验；model/版本走白名单字符校验；真实写入前建立可校验原始备份与本次快照。
+- **F03 数据保全补强**：`write.sh` 在重建候选前先校验原文件全部受管 marker；原目标区块内嵌其他受管区块、交叉或残缺标记时直接失败并保持原字节不变，不再先删除后校验。
 - **F04 会话归属**：`probe-session-model.sh` 改为 Python JSON 解析器，解析本地会话文件，仅提取 `cwd` / session ID / `model` 字段，不输出或留存消息正文；Codex 按精确项目匹配，并发或身份不明返回 not_found，可显式 `--session-file`；不再把 unknown 冒充 Claude Code。
 - **F05 回执语义**：`write.sh` 的 `after_sha256` 改为环境记录完成后的最终文件哈希；记录失败时输出 `status=*_record_incomplete`、`init_env_status=failed` 并以非零退出提示补记。环境记录的 `操作` 列附带正文配置哈希，重试时只有最后一条记录绑定当前正文才视为已记录，空区块或旧记录都会触发补记。
 - **W02 dry-run 副作用**：同内容 dry-run 不再把用户级配置权限从 0644 改成 0600；dry-run 一律不改内容、权限或备份。
@@ -33,14 +34,14 @@
 
 ### 验证
 
-- ✅ `bash scripts/test.sh`：84 项通过、0 失败；其中嵌入 14 项审计反例回归（v0.5.2 的 65 项 + 18 项新增检查）。
-- ✅ `python3 scripts/test-audit.py`：14 项审计反例回归通过，覆盖复查发现的空环境区块、外部证据、重试补记、目录目标、字面反斜杠、异常字段类型和显式会话文件。
-- ✅ 新增回归覆盖：校验器缺失/0644、备注敏感内容、错配 marker、符号链接、权限保持、dry-run 权限、回执最终哈希、部分完成状态、Codex 空白 JSON、跨项目会话顶替、候选绑定 checker 正反例。
+- ✅ `bash scripts/test.sh`：84 项通过、0 失败；其中嵌入 15 项审计反例回归。
+- ✅ `python3 scripts/test-audit.py`：15 项审计反例回归通过，覆盖复查发现的空环境区块、外部证据、重试补记、目录目标、嵌套受管区块、字面反斜杠、异常字段类型和显式会话文件。
+- ✅ 新增回归覆盖：校验器缺失/0644、备注敏感内容、错配 marker、嵌套受管区块、符号链接、权限保持、dry-run 权限、回执最终哈希、部分完成状态、Codex 空白 JSON、跨项目会话顶替、候选绑定 checker 正反例。
 - ✅ `python3 scripts/check-baseline.py --input assets/stability-complete.json` 通过；五个反例均以退出码 3 阻断。
 - ✅ `instruction_stability_gate.py assess` 不再报合同无效/历史回归缺失；剩余 `ISG-006`（缺候选外签名硬约束基线）属正式门禁范围。
 - ✅ 无旧上下文 Agent 演练：虚构项目 8 个模块完成校验、预览、写入与幂等重跑，状态 `CONFIG_WRITTEN`；新会话加载与行为 `NOT_VERIFIED`。首次 detect 曾在错误目录取项目证据、批量驱动在人工核对预览前写入，已把“先进入目标项目”和“dry-run 为人工核对点”写入示例。
 - ✅ 静态安全扫描无 critical/high；1 个 medium 命中为测试文件的 `subprocess.run(shell=False)`，已人工复核为参数数组调用且使用隔离 HOME。
-- ✅ `HARNESS_REVIEW_VERIFIED`：候选绑定门禁亲自重跑 Shell 回归、14 项审计反例、checker 正例和隐私故障反例，共 4 项；证据归档于本地 `skills/skill-lint/archive/20261030_legal-harness-init/`。
+- ✅ `HARNESS_REVIEW_VERIFIED`：候选绑定门禁亲自重跑 Shell 回归、15 项审计反例、checker 正例和隐私故障反例，共 4 项；证据归档于本地 `skills/skill-lint/archive/20261030_legal-harness-init/`。
 - ✅ Codex 官方 `skill-creator` quick validator 可解析 `metadata.version` 格式（本机 Python 3.14 下 validator 自身 `collections.Hashable` 崩溃，标记 NOT_VERIFIED，改用 YAML 语法/结构检查）。
 - ⚠️ 真实律师新会话前向验证、多轮真实产物稳定性门禁 `NOT_VERIFIED`。
 - ⚠️ 现行八个客户端的安装与加载验收 `NOT_VERIFIED`；本轮只覆盖 Claude Code / Codex 路径的脚本级回归。

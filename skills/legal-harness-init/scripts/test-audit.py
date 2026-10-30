@@ -62,6 +62,21 @@ class AuditRegression(unittest.TestCase):
         self.assertTrue(target.is_dir())
         self.assertEqual(list(target.iterdir()), [])
 
+    def test_writer_rejects_nested_managed_target_without_changes(self):
+        target = self.project / 'AGENTS.md'
+        original = (
+            '<!-- legal-harness-init:legal-baseline:start -->\n'
+            '# Existing baseline\n'
+            '<!-- legal-harness-init:init-environment:start -->\n'
+            '| valuable managed metadata |\n'
+            '<!-- legal-harness-init:init-environment:end -->\n'
+            '<!-- legal-harness-init:legal-baseline:end -->\n')
+        target.write_text(original)
+        result = self.write('--mode', 'update', '--model', 'safe-model')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(json.loads(result.stdout)['targets'][0]['status'], 'error')
+        self.assertEqual(target.read_text(), original)
+
     def test_retry_incomplete_record_then_idempotent(self):
         result = self.write('--mode', 'update')
         self.assertNotEqual(result.returncode, 0, result.stdout)
