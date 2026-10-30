@@ -31,6 +31,9 @@ from legacy_assets import legacy_asset_ids  # noqa: E402
 ASSET_RE = re.compile(r"^(.+)-(\d+\.\d+\.\d+)\.zip$")
 VERSION_RE = re.compile(r"^## \[?v?(\d+\.\d+\.\d+)\]?", re.MULTILINE)
 PENDING_RE = re.compile(r"源码 v\d+\.\d+\.\d+ 待发布[；;。]?\s*")
+HTML_SUITE_LINK_RE = re.compile(
+    r"\[([^\]]+)\]\((expert-suites/[a-z0-9-]+)/\)"
+)
 
 
 def detect_repo() -> str:
@@ -108,6 +111,13 @@ def source_version(directory: Path | None) -> str | None:
 def asset_version(url: str | None) -> str | None:
     match = ASSET_RE.fullmatch((url or "").rsplit("/", 1)[-1])
     return match.group(2) if match else None
+
+
+def html_suite_link(match: re.Match[str]) -> str:
+    """Render suite references as HTML because GitHub does not parse MD in tables."""
+    label = html.escape(match.group(1))
+    href = html.escape(match.group(2), quote=True)
+    return f'<a href="{href}/">{label}</a>'
 
 
 def discover_readmes(root: Path) -> list[Path]:
@@ -272,6 +282,22 @@ def rewrite_readme(path: Path, repo: str, url_map: dict[str, str]) -> dict[str, 
         return "|".join(cells)
 
     text = re.sub(r"<tr>.*?</tr>", _rewrite_html_row, text, flags=re.DOTALL)
+
+    def _rewrite_html_suite_cell(match: re.Match[str]) -> str:
+        return (
+            match.group(1)
+            + HTML_SUITE_LINK_RE.sub(html_suite_link, match.group(2))
+            + match.group(3)
+        )
+
+    # Apply even to rows whose download link is left untouched; curated notes
+    # still need valid HTML links when they live inside an HTML table.
+    text = re.sub(
+        r"(<td\b[^>]*>)(.*?)(</td>)",
+        _rewrite_html_suite_cell,
+        text,
+        flags=re.DOTALL,
+    )
     text = re.sub(r"^\|.*\|$", _rewrite_md_row, text, flags=re.MULTILINE)
 
     # 表行之外的散链按链接自身 slug 映射。链接文字已明确另一个历史版本时，
