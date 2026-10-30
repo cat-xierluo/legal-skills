@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="seq-title seq-desc">
-  <title id="seq-title">两层错峰：逐批形成短间隔，再切换意见</title>
+  <title id="seq-title">DEC-047 · 两层错峰：逐批形成短间隔，再切换意见</title>
   <desc id="seq-desc">每张小纸片表示一个实际修订或批注写入批次。意见 A 的三批逐个留下，意见内顺延一至二分钟；随后经过五至十分钟的大间隔，再形成意见 B 的三批。距离不是实际耗时比例。周期末仅清除本轮演示并重新播放，不表示删除已写入的批注。</desc>
   <rect x="0" y="0" width="800" height="450" fill="#F6F3EB" rx="12" data-layout-id="canvas" data-layout-role="background" />
-  <text x="44" y="57" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="36" font-weight="600" fill="#183B40" text-anchor="start">两层错峰</text>
-  <text x="44" y="97" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" font-weight="400" fill="#5D6E70" text-anchor="start">按批次写入</text>
+  <text x="44" y="57" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="36" font-weight="600" fill="#183B40" text-anchor="start">DEC-047 · 两层错峰</text>
   <g data-cue="a-label" data-layout-id="a-label">
     <text x="176" y="151" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" font-weight="600" fill="#183B40" text-anchor="middle">意见 A</text>
   </g>
@@ -113,7 +112,6 @@
   </g>
   <g data-cue="short-rule-b" data-layout-id="short-rule-b">
     <path d="M600 305 V315 H676 V305" fill="none" stroke="#176B65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-    <text x="638" y="356" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="600" fill="#176B65" text-anchor="middle">1–2 分钟</text>
   </g>
   <g data-cue="long-rule" data-layout-id="long-rule">
     <path d="M252 305 V315 H524 V305" fill="none" stroke="#A15C22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -122,5 +120,4 @@
   <g data-cue="focus" data-layout-id="focus" transform="translate(100 180)">
     <path d="M-5 -7 H5 L0 0 Z" fill="#A15C22" />
   </g>
-  <text x="44" y="417" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" font-weight="400" fill="#5D6E70" text-anchor="start">间距示意</text>
 </svg>
