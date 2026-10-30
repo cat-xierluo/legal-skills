@@ -21,7 +21,7 @@
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
 | [project-init](../../skills/project-init/) | 初始化项目上下文和最小协作指令 | [已发布 v1.2.6](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/project-init-1.2.6.zip) |
-| [legal-harness-init](../../skills/legal-harness-init/) | 为法律工作区治理 AGENTS.md、CLAUDE.md 等 Harness | [已发布 v0.5.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-harness-init-0.5.2.zip) |
+| [legal-harness-init](../../skills/legal-harness-init/) | 为法律工作区治理 AGENTS.md、CLAUDE.md 等 Harness；源码 v0.5.3 待发布 | [已发布 v0.5.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-harness-init-0.5.2.zip) |
 | [skill-lint](../../skills/skill-lint/) | 审查 Skill 结构、指令稳定性、安全和发布质量 | [已发布 v2.9.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/skill-lint-2.9.3.zip) |
 | [verification-gate](../../skills/verification-gate/) | 运行分层验证并记录可复查证据 | [已发布 v1.3.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/verification-gate-1.3.0.zip) |
 | [git-workflow](../../skills/git-workflow/) | 管理分支、Worktree、PR、合并和安全回退 | [已发布 v1.24.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/git-workflow-1.24.2.zip) |
