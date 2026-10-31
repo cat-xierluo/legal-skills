@@ -71,7 +71,7 @@ DSH_HOME=<隔离home> CONTENT_FACTORY_SCAN_ROOT=<夹具> \
 
 ## 生产数据红线
 
-不读 `~/.dsh/sessions`、`.credentials.yaml`、settings 文档、storages；状态比对只到 ls 级目录名元数据。关停生产实例前后向用户报备（授权流程）。
+默认不读 `~/.dsh/sessions`、`.credentials.yaml`、settings 文档、storages；状态比对只到 ls 级目录名元数据。关停生产实例前后向用户报备（授权流程）。唯一例外是用户明确授权“隔离实例复用现有登录/API 配置”：可一次性解析生产凭据/配置中点名的账号记录、API 引用、provider 模型与所需 env 键，并把等值快照写入隔离 `DSH_HOME`；不做整文件搬运，保留隔离实例自己的 `client-connection/browser-session` 记录，不输出明文、不提交凭据、不复制生产 sessions/storages/profile，不写生产配置。
 
 ## 官方宿主对照（2026-10-19 实测，基准宿主）
 
@@ -114,6 +114,17 @@ DSH_HOME=<隔离目录> ELECTRON_RUN_AS_NODE=1 "$APP" "$BIN" --profile <名> --n
 ```
 
 **官方 GUI 隔离实例**：官方应用无 `profile-selection`，但支持 `--user-data-dir=<隔离目录>` 起并行实例（独立单例锁/独立向导态）；`--profile` 在 GUI 模式被忽略（profile 由 profile 目录本身决定）。官方应用同样支持 `DSH_HOME` 隔离。
+
+### 官方 rc.5 并行实例定位（2026-10-31 实测）
+
+多个插件同时验收时，官方应用可以用两个真 Desktop 进程并行：日常实例继续使用生产 `DSH_HOME` 与生产 userData；测试实例同时提供 `DSH_HOME=<隔离目录>` 和 `--user-data-dir=<隔离目录>`。两者不要互相关闭，测试实例只允许操作本任务启动的 PID。
+
+1. **实例归属**：先只读记录日常实例 PID，再启动测试实例并把 PID 写入仓外实验目录。后续所有关闭动作只匹配该 PID，并用 SIGTERM 分步等待主进程、Host 子进程和监听端口消失。
+2. **避免原生 CUA 抢错实例**：同 bundle 多进程时，原生 CUA 的名称/路径/bundle ID 选择会命中日常实例；不要用它操作测试页面。测试实例启动时加 `--remote-debugging-port=<空闲端口> --remote-debugging-address=127.0.0.1`，通过 `http://127.0.0.1:<端口>/json/list` 精确连接本实例的 `dsh-app://app/` 目标；端口只绑定 loopback，URL/WebSocket 目标不写入公开日志或证据。
+   启动后用 `lsof -nP -iTCP:<端口> -sTCP:LISTEN` 复核监听地址确为 `127.0.0.1`。该端口仍对本机所有进程可达，不当作秘密边界；验收结束立即关闭本实例并确认监听消失。
+3. **授权配置复用**：默认仍不复用生产凭据。用户明确要求免登录时，按上文生产数据红线做最小快照；测试实例可能出现产品内一次性额度/设置提示，这只是 onboarding，可在可见 UI 中跳过，不得伪造完成态或绕过认证。
+4. **rc.5 原生代理停滞判别**：若插件首开 RPC 停在 provisional/pending，而关闭重开插件页或页面内直接 `fetch('/api/<route>')` 能返回，优先怀疑官方 `dsh-app://` shell 转发层而非插件 `connection.fetch.register` 精确路由；插件侧可加有界 RPC transport 超时，不把上游 shell 问题说成已修复。
+5. **证据边界**：整窗截图只截本 PID 拥有的窗口；凭据快照、启动 token、生产会话与真实客户材料不入库。合成材料验收通过不外推生产安装、跨用户/ACL 或 Windows。
 
 **官方 GUI 装插件**：CLI 禁管 desktop profile ⇒ 走 GUI「插件 → + 添加插件」（支持包名 / GitHub 地址 / 本地目录路径），或直接用**官方内嵌 pnpm**（`app/Contents/Resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.cjs`，11.28.5，store v11）——系统 pnpm 10 用 store v10 会报 `ERR_PNPM_UNEXPECTED_STORE`。
 
