@@ -7,6 +7,7 @@
 - [x] 明确生产凭据默认零接触；用户明确授权免登录时才做最小账号/API/provider 快照，保留隔离 browser-session，不输出明文或写生产配置。
 - [x] 登记 rc.5 `dsh-app://` shell 转发停滞的判别边界：先区分官方代理层与插件 fetch route，插件侧只做有界超时，不宣称修复上游。
 - [x] 验证：skill-lint security/harness 静态审查均 PASS，`test-lint.mjs` 47 项自测 PASS；通用 quick_validate 不兼容本仓既有发布 frontmatter（author/homepage/version），该失败与本次候选无关，版本与 CHANGELOG 已人工对齐。
+- [x] 独审返修：授权复用明确为“解析点名记录/引用/env 键后写等值快照，不整文件搬运”；DevTools 端口启动后用 lsof 复核 loopback 监听，并说明本机进程可达、验收后关闭。README 技能表版本按发布流程另行同步，不在本候选强行半更新。
 
 ## 2026-10-16 locale 展开与覆盖审计
 
