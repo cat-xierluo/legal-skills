@@ -1,5 +1,13 @@
 # DSH Plugin Dev 任务
 
+## 2026-10-31 官方 rc.5 并行 Desktop 验收法回写
+
+- [x] 核对既有并行实例配方：`--user-data-dir` 可与生产实例并存，但旧文缺少同 bundle 多进程下的实例定位与授权凭据边界。
+- [x] 回写官方 `0.2.1-rc.5` 实测：独立 `DSH_HOME` + 独立 userData；原生 CUA 不用于同 bundle 多实例选择，改用测试实例独占 loopback DevTools 目标；只关闭本任务 PID 并等待 Host/端口消失。
+- [x] 明确生产凭据默认零接触；用户明确授权免登录时才做最小账号/API/provider 快照，保留隔离 browser-session，不输出明文或写生产配置。
+- [x] 登记 rc.5 `dsh-app://` shell 转发停滞的判别边界：先区分官方代理层与插件 fetch route，插件侧只做有界超时，不宣称修复上游。
+- [x] 验证：skill-lint security/harness 静态审查均 PASS，`test-lint.mjs` 47 项自测 PASS；通用 quick_validate 不兼容本仓既有发布 frontmatter（author/homepage/version），该失败与本次候选无关，版本与 CHANGELOG 已人工对齐。
+
 ## 2026-10-16 locale 展开与覆盖审计
 
 - [x] 固定 main 201e31015d948c288d88a9945581197493bd5d9e 重现嵌套展开假 PASS 和浅覆盖假 FAIL。

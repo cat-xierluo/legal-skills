@@ -2,7 +2,7 @@
 name: dsh-plugin-dev
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.5"
+version: "0.6.6"
 license: MIT
 description: DeepSeek Harness（DSH）插件的设计、开发、装载验证、版本迁移与发布审查指引（版本感知）。在用户要为 DSH Desktop 开发插件、把 Pi/Hermes 插件迁移到 DSH、做隔离装载实验、排查插件在真实宿主的行为、跟进 DSH 版本升级适配，或在发布前做机械审查与验收（dsh.bundle / dsh.client 双面包工件契约、inject/external 对账、主题变量、类型化 locale）时使用。不要用于普通 npm 包审查或与 DSH 无关的 agent 项目。
 ---
@@ -54,7 +54,7 @@ harness 根解析优先级：`--harness-root` 参数 → `DSH_HARNESS_ROOT` 环�
 ## 必须守住的边界
 
 - **版本匹配**：开发依据的源码/文档版本必须与本机 Desktop 内嵌运行时一致——**锚点是安装版实物**（安装包 manifest 直读），不是 npm channel（2026-09-30 实测 npm `latest` 与安装版不同步；「`next` 是预发布线、无桌面内嵌」是历史观察，每次以实物为准）。错位研究必须按实物重核。
-- **生产隔离**：实验只用 `DSH_HOME` 隔离目录 + 合成数据；不读生产 sessions/凭据/settings；动共享 userData 前快照后恢复；关生产实例前后向用户报备。
+- **生产隔离**：实验默认只用 `DSH_HOME` 隔离目录 + 合成数据，不读生产 sessions/凭据/settings；动共享 userData 前快照后恢复；关生产实例前后向用户报备。仅在用户明确授权复用登录/API 配置做并行 Desktop 验收时，才可把最小必要账号记录、API 引用与 provider 配置快照到隔离 `DSH_HOME`；保留隔离实例自己的 browser-session 密钥，不输出明文，不复制生产 sessions/storages/profile，不写生产配置。
 - **退出时序**：SIGTERM 后**分步验证进程真正消失**再执行恢复命令——单例锁会把 premature 的 `open -a` 转发给未死尽的实验实例。
 - **不伪造验证**：mock 冒烟 ≠ 宿主验证 ≠ GUI 验证，三层分开陈述；宿主日志是 Host 半体权威证据；缺失标 NOT_VERIFIED。
 - **组合回归意识**：单分支 diff 看不见共享目录声明的相互作用（如同目录 package.json 的 type 字段）——此类变更合并前后必须全量重跑既有测试。
