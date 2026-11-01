@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from unittest import mock
 
 SCRIPT = Path(__file__).with_name('magpie_resilience.py')
@@ -115,6 +116,51 @@ printf '11 1 100 2.0 Sun Nov  1 09:00:00 2026 /private/magpie-bun\\n'""")
             self.assertEqual(resilience.collect(args, result), 0)
         segments = json.loads(result.getvalue())['host_segments']
         self.assertEqual([s['rss_change_kib'] for s in segments], [30, 0])
+
+    def test_utc_timestamps_and_wall_clock_rollback(self):
+        args = type('Args', (), {'samples': 2, 'interval': 10, 'config_dir': self.config})()
+        instants = ['2026-11-01T12:00:00Z', '2026-11-01T12:00:02Z',
+                    '2026-11-01T11:00:14Z', '2026-11-01T11:00:15Z']
+        clock = [100.0]
+        timeouts = []
+
+        def sample(timeout):
+            timeouts.append(timeout)
+            clock[0] += 2
+            return []
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        with mock.patch.object(resilience.time, 'monotonic', side_effect=lambda: clock[0]), \
+             mock.patch.object(resilience.time, 'sleep', side_effect=sleep), \
+             mock.patch.object(resilience, 'utc_now', side_effect=instants), \
+             mock.patch.object(resilience, 'hosts', side_effect=sample):
+            output = io.StringIO()
+            self.assertEqual(resilience.collect(args, output), 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['requested_interval_seconds'], 10)
+        self.assertEqual(report['coverage_seconds'], 12)
+        self.assertEqual(report['observation_elapsed_seconds'], 14)
+        self.assertEqual([s['elapsed_seconds'] for s in report['samples']], [2, 14])
+        self.assertEqual(timeouts, [300, 288])
+        values = [report['started_at'], *(s['at'] for s in report['samples']), report['finished_at']]
+        self.assertEqual(values, instants)
+        for value in values:
+            self.assertEqual(datetime.fromisoformat(value.replace('Z', '+00:00')).tzinfo, timezone.utc)
+        self.assertLess(values[2], values[1])  # The wall clock actually moved backward.
+
+    def test_utc_timestamps_are_ordered_with_normal_clock(self):
+        with mock.patch.object(resilience, 'hosts', return_value=[]):
+            output = io.StringIO()
+            args = type('Args', (), {'samples': 2, 'interval': 0.1, 'config_dir': self.config})()
+            self.assertEqual(resilience.collect(args, output), 0)
+        report = json.loads(output.getvalue())
+        values = [report['started_at'], *(s['at'] for s in report['samples']), report['finished_at']]
+        parsed = [datetime.fromisoformat(value.replace('Z', '+00:00')) for value in values]
+        self.assertTrue(all(value.endswith('Z') for value in values))
+        self.assertTrue(all(value.tzinfo == timezone.utc for value in parsed))
+        self.assertEqual(parsed, sorted(parsed))
 
     def test_auth_changes_and_no_content_open(self):
         auth = self.config / 'plugin-auth.json'

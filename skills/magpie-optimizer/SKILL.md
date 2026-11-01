@@ -32,6 +32,7 @@ metadata:
 | 派发时指定了子 Agent 模型却没按它跑 | 读取[指名覆盖观测](references/subagent-override.md)，核请求名、统一默认与实际 served 是否一致 |
 | 供应商同时异常、额度停更、模型消失或宿主内存持续增长 | 读取[网关长跑韧性与故障隔离](references/gateway-resilience.md)，分查推理、目录、认证、额度与进程生命周期 |
 | 连续观察宿主内存或认证文件是否反复变化 | 用[有界连续采样](references/gateway-resilience.md#有界连续采样)，只取进程/stat 元数据，保留采样失败与宿主换代边界 |
+| 宿主内存持续增长，要求不中断任务定位插件 | 按[内存增长分层取证](references/memory-growth-triage.md)保留现场、固定身份、对齐事件，再分级归因；共享宿主 RSS 不直接分摊给插件 |
 | MiniMax 登录/额度异常或模型不见 | 读取[网关排障中的 MiniMax 检查](references/gateway-resilience.md#4-minimax-code登录额度与模型消失)，核入口开关、目录、认证和真实回执 |
 | 改完是否有效，是否留下成果 | 关联任务、实际产物与验收；运行效果复核，保留混杂因素和样本边界 |
 

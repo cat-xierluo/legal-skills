@@ -8,6 +8,7 @@ import stat
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -86,8 +87,13 @@ def create_output(path):
     return os.fdopen(fd, 'w', encoding='utf-8')
 
 
+def utc_now():
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
 def collect(args, output):
     start = time.monotonic()
+    started_at = utc_now()
     samples = []
     segments = []
     active = {}
@@ -121,7 +127,8 @@ def collect(args, output):
                 changes += auth['mtime_ns'] != previous_auth['mtime_ns']
             previous_auth = auth
             elapsed = time.monotonic() - start
-            samples.append({'elapsed_seconds': round(elapsed, 3), 'hosts': process, 'auth': auth})
+            samples.append({'at': utc_now(), 'elapsed_seconds': round(elapsed, 3),
+                            'hosts': process, 'auth': auth})
             new_active = {}
             for host in process or []:
                 identity = (host['pid'], host['started'])
@@ -141,7 +148,9 @@ def collect(args, output):
     except KeyboardInterrupt:
         interrupted = True
         failed = True
+    finished_at = utc_now()
     report = {
+        'started_at': started_at, 'finished_at': finished_at,
         'status': 'interrupted' if interrupted else ('incomplete' if failed else 'complete'),
         'requested_samples': args.samples, 'requested_interval_seconds': args.interval,
         'collected_samples': len(samples),
