@@ -58,6 +58,8 @@
 
 补修不能只加 `Promise.race`：还需插件 I/O 接受取消、按账号合并重复目录/额度读取，并限制未完成任务。没有实现与回归证据时不把这些建议记为已修。内存观察同时记录 RSS、物理 footprint 和虚拟预留，不能用大块未分配地址空间判定泄漏。
 
+可复现的宿主任务生命周期缺口已提交 [上游 issue #4678](https://github.com/yetone/magpie/issues/4678)，内含无网络虚拟插件复现。它不是本地配置已修复宿主实现的证明。
+
 ## 4. MiniMax Code：登录、额度与模型消失
 
 内置 API/Coding Plan 与 OAuth 插件入口分别检查；不据 UI 名字认定是同一渠道，也不把两个入口当双份额度。
@@ -97,9 +99,37 @@ bash <skill-dir>/scripts/gateway_guardian.sh all
 
 旧脚本 dry-run 未覆盖缓存删除，guard 也缺少完整归属与托管核验。Skill 更新不会自动替换仓库外运行副本；核 launchd 实际脚本路径和哈希，沿已有授权备份并窄更新后才记为采用。脚本不安装后台任务，不修改 launchd/Magpie 配置。
 
+### 有界连续采样
+
+需要判断趋势时，使用 [`magpie_resilience.py`](../scripts/magpie_resilience.py)，避免重复调用会加载插件或刷新所有供应商的 CLI：
+
+```sh
+python3 <skill-dir>/scripts/magpie_resilience.py collect \
+  --samples 6 --interval 10 \
+  --output <skill-dir>/state/resilience/observation.local.json
+```
+
+结果文件拒绝覆盖、权限 0600，输出目录必须为 0700。默认约五十秒，样本/间隔有限且总观察不超过五分钟；参数和实际覆盖时间均写入回执。脚本只读 `ps` 和认证文件的 stat 元数据，不读取认证内容、不调用 Magpie CLI、不请求网络。配置目录沿 `XDG_CONFIG_HOME`，也可显式指定 `--config-dir`。
+
+按 PID 与启动时间分段，宿主更换不能拼成一条内存曲线。认证 mtime 变化次数是相邻采样的观测下界，无法捕获采样间全部写入；合法 token 刷新也会改变时间戳。采样失败记 unknown/partial 并非零退出，不能当零进程/零增长。RSS 变化和认证写入只提供线索，不输出“已确诊泄漏”或自动触发清理。
+
+## 7. 等待上游期间的本地缓解
+
+按现场需要选择，先保存前态与可读计划，使用已装 CLI 支持的命令；不把以下操作全部设为通用默认。
+
+| 发现 | 最小缓解 | 回读与边界 |
+|---|---|---|
+| 官方包与多个旧 fork 同时加载，共享认证写入者不清楚 | 核功能差异和当前绑定；选择满足当前需求的已安装插件后，`magpie plugin use <spec> <provider>`，再 `plugin off <unused-spec>` | 保留源码、凭据、账号和组成员；核实际 serving spec、模型与账号数量。停用一个插件影响它提供的所有 provider |
+| 不用的副 provider 已 off，其插件却仍运行 hook | 停用对应未使用插件 | 不通过删除账号、清空凭据或重置额度止血 |
+| 运行期频繁换版本，难以绑定故障基线 | 可选择 `magpie update channel stable` 和 `magpie update auto on notify 24h` | 只更改更新偏好，不降级当前版本；notify 不会自动安装修复，看到重要修复后安排验证窗口 |
+| 探测脚本、GUI 或多个 Agent 反复全量读取 | 先复用已有回执和本机文件元数据；手动刷新合并为单次有界操作 | 保留正常自动额度采样和推理，不用高频全量 quota/sync 轮询代替健康检查 |
+| 巡检依赖 RSS 单阈值定时 kill | 使用只读报告；具名复核后才安排有影响的恢复动作 | 不修改系统 swap，不根据 PPID=1/无监听清理，不承诺无中断 |
+
+每次变化后检查配置的目标与无关字段、实际 provider 绑定、正常模型最小请求及其 served；随后连续采样。插件切换可以触发宿主正常换代，不能把新 PID 的低 RSS 作为旧进程回收证明。恢复时只撤销本次仍匹配预期后态的字段，不把旧快照整文件覆盖回去。
+
 完整盘点见[环境体检](preflight.md)和[脱敏盘点](inventory.md)；插件绑定见[插件与客户端接入](plugin-guide.md)。
 
-## 7. 恢复判据
+## 8. 恢复判据
 
 短时复核：认证文件不再持续改写、目录读回、host 资源不再持续失控、网关健康、实际请求成功。记录窗口和同时发生的升级、开关、重启，不把单次通过称为长期稳定。
 

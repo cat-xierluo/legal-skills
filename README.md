@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-01 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.0（源码） | 补网关故障隔离、MiniMax 排障及宿主内存审计边界；只读巡检与有界连续采样，提供本地稳定性缓解与上游复现入口。 |
 | 2026-10-30 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.3（源码） | 加固受管写入与隐私校验，回执绑定最终哈希；会话模型探测改为 JSON 解析并支持显式会话文件；人工新会话结果降为 DECLARED，不再宣称自动行为验证。 |
 | 2026-10-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.8 | 修复根 README HTML 技能表内专家套件备注链接不生效：回写时转换为 HTML 链接，并补幂等回归。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动改为临时目录构建、成功后整批替换，失败不破坏上一批产物；修复资产数输出的变量解析问题，并拒绝符号链接与同名目录目标；补 Bash 实际执行回归。 |
@@ -41,7 +42,6 @@
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
 | 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
 | 2026-10-27 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.4 | README 回写区分源码版本与真实 ZIP 版本，支持部分热补、首次发布与幂等重跑；法律套件在根索引中排前。 |
-| 2026-10-27 | 更新 | [moot-court](skills/moot-court/) | v1.2.11 | 新增固定三角色庭审审计与 WorkBuddy 原生 trace 审计；主控私有词项预检和法官保密复核约束公开概述，交付缺陷按四分类处理。 |
 
 </details>
 
@@ -595,9 +595,9 @@
 <td>工具·AI效能</td>
 <td style="word-break:break-word">基于 Magpie 配置并优化 AI 工作效能：完整命令参考、供应商与订阅接入、额度窗口读数、路由治理、Token 消耗与限流诊断，并关联任务产物和验收比较效果；本机配置与运行证据留在私有层</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.7.0</td>
+<td style="text-align:center">v1.8.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/magpie-optimizer-1.7.0.zip">已发布 v1.7.0</a></td>
-<td>本机配置通过 `config/*.local.*` 与 `state/` 私有层隔离；不改生产配置、不自动消耗额度</td>
+<td>源码 v1.8.0 待发布；配置与证据留私有层，巡检只读，生产变更按授权执行</td>
 </tr>
 <tr>
 <td><a href="skills/lecture-review/"><strong>lecture-review</strong></a></td>
