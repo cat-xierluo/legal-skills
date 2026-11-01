@@ -20,8 +20,12 @@ ROUTING_ENV = {"GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
 SAFE_CONFIG = {"user.name", "user.email", "commit.gpgsign"}
 
 
+class GateRefusal(ValueError):
+    pass
+
+
 def refuse(reason):
-    raise ValueError("main-git-gate 拒绝：" + reason)
+    raise GateRefusal("main-git-gate 拒绝：" + reason)
 
 
 def parse_git(argv):
@@ -130,6 +134,8 @@ def check_snapshot(protected, expected_head, snapshot_dir, ledger):
         if module.collect(protected, module.status_entries(current["status"]),
                           meta["include_ignored"]) != states:
             refuse("快照后工作区内容已变更；重新保全后再采用")
+    except GateRefusal:
+        raise
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         refuse("快照检查失败：" + str(error))
 
