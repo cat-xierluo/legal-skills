@@ -199,6 +199,27 @@ class SnapshotTest(unittest.TestCase):
         report = json.loads(self.verify(out).stdout)
         self.assertIn("does not prove", report["scope"])
 
+    def test_path_through_symlinked_directory_is_captured_with_chain(self):
+        (self.repo / "real").mkdir()
+        (self.repo / "real" / "inner.txt").write_text("behind symlink\n")
+        self.raw("add", "--", "real/inner.txt")
+        self.raw("commit", "-m", "real")
+        # Track a path that resolves through the symlinked directory, the shape the
+        # private-skills repository actually has.
+        blob = subprocess.check_output(["git", "-C", str(self.repo), "hash-object", "-w", "real/inner.txt"], env=ENV, text=True).strip()
+        subprocess.run(["git", "-C", str(self.repo), "update-index", "--add", "--cacheinfo", "100644," + blob + ",alias/inner.txt"], env=ENV, check=True, capture_output=True)
+        os.symlink("real", self.repo / "alias")
+        out = self.create()
+        states = json.loads((out / "states.json").read_bytes())
+        self.assertIn("alias", states)
+        self.assertEqual(states["alias"]["kind"], "symlink")
+        # A tracked path that resolves through the symlinked directory keeps its chain.
+        chain_states = [v for v in states.values() if v.get("via_symlink")]
+        self.assertTrue(chain_states)
+        beyond = out / "working-tree-beyond-symlink"
+        self.assertTrue(beyond.exists())
+        self.assertEqual(self.verify(out).returncode, 0)
+
     def test_empty_state(self):
         out = self.create()
         self.assertEqual(json.loads((out / "snapshot.json").read_bytes())["entries"], 0)

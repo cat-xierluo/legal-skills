@@ -48,16 +48,23 @@ def read_state(path):
     raise ValueError("unsupported special file: " + str(path))
 
 
+def symlink_chain(root, relative):
+    """Return the symlinked parent components of a repository-relative path."""
+    chain = []
+    parts = Path(relative).parts
+    for index in range(1, len(parts)):
+        candidate = root.joinpath(*parts[:index])
+        if candidate.is_symlink():
+            chain.append({"path": candidate.relative_to(root).as_posix(),
+                          "target": os.readlink(candidate)})
+    return chain
+
+
 def safe_path(root, relative):
     p = Path(relative)
     if not relative or p.is_absolute() or any(x in ("..", ".git") for x in p.parts):
         raise ValueError("unsafe relative path: " + repr(relative))
-    full = root / p
-    # A leaf symlink is copied as a link. Parent symlinks are never traversed.
-    for parent in p.parents:
-        if (root / parent).is_symlink():
-            raise ValueError("path crosses symlink: " + repr(relative))
-    return full
+    return root / p
 
 
 def status_entries(raw):
@@ -89,7 +96,13 @@ def collect(repo, entries, include_ignored):
         if name in states:
             return
         path = safe_path(repo, name)
+        chain = symlink_chain(repo, name)
         value = read_state(path)
+        if chain:
+            # The visible path runs through a symlinked directory. Copy the real
+            # content but keep the chain so a restore can rebuild the same shape.
+            value = dict(value)
+            value["via_symlink"] = chain
         states[name] = value
         if value["kind"] == "directory":
             for child in sorted(path.iterdir()):
@@ -177,23 +190,29 @@ def snapshot(repo, safety_root, label, include_ignored=False):
         for name, expected in sorted(states.items()):
             source = safe_path(repo, name)
             destination = safe_path(out / "working-tree", name)
-            if read_state(source) != expected:
+            check = {k: v for k, v in expected.items() if k != "via_symlink"}
+            if read_state(source) != check:
                 raise ValueError("source drift before copying: " + repr(name))
             if expected["kind"] == "file":
+                destination = safe_path(out / ("working-tree-beyond-symlink" if expected.get("via_symlink") else "working-tree"), name)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination, follow_symlinks=False)
             elif expected["kind"] == "symlink":
+                destination = safe_path(out / "working-tree", name)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.symlink_to(expected["target"])
             elif expected["kind"] == "directory":
+                destination = safe_path(out / "working-tree", name)
                 destination.mkdir(parents=True, exist_ok=True)
                 destination.chmod(expected["mode"])
             elif expected["kind"] == "submodule":
                 skipped.append({"path": name, "reason": "submodule working tree; snapshot the submodule repository separately",
                                  "mode": expected["mode"]})
                 continue
-            if expected["kind"] != "submodule" and read_state(destination) != expected:
-                raise ValueError("copy mismatch: " + repr(name))
+            if expected["kind"] != "submodule":
+                check = {k: v for k, v in expected.items() if k != "via_symlink"}
+                if read_state(destination) != check:
+                    raise ValueError("copy mismatch: " + repr(name))
         # Catch changes during copying, including same-status text edits.
         if capture_git(repo) != before or collect(repo, entries, include_ignored) != states:
             raise ValueError("repository drift during snapshot; retry after writers yield")
@@ -238,7 +257,9 @@ def verify(snapshot_dir):
         for name, expected in states.items():
             if expected["kind"] == "submodule":
                 continue
-            if read_state(safe_path(root / "working-tree", name)) != expected:
+            base = "working-tree-beyond-symlink" if expected.get("via_symlink") else "working-tree"
+            check = {k: v for k, v in expected.items() if k != "via_symlink"}
+            if read_state(safe_path(root / base, name)) != check:
                 problems.append("working path mismatch: " + repr(name))
         for entry in json.loads((root / "staged-objects.json").read_bytes()):
             path = safe_path(root, entry["file"])
