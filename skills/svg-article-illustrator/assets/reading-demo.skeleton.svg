@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="seq-title seq-desc">
+  <title id="seq-title">DEC-047 · 两层错峰：逐批形成短间隔，再切换意见</title>
+  <desc id="seq-desc">每张小纸片表示一个实际修订或批注写入批次。意见 A 的三批逐个留下，意见内顺延一至二分钟；随后经过五至十分钟的大间隔，再形成意见 B 的三批。距离不是实际耗时比例。周期末仅清除本轮演示并重新播放，不表示删除已写入的批注。</desc>
+  <rect x="0" y="0" width="800" height="450" fill="#F6F3EB" rx="12" data-layout-id="canvas" data-layout-role="background" />
+  <text x="44" y="57" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="36" font-weight="600" fill="#183B40" text-anchor="start">DEC-047 · 两层错峰</text>
+  <g data-cue="a-label" data-layout-id="a-label">
+    <text x="176" y="151" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" font-weight="600" fill="#183B40" text-anchor="middle">意见 A</text>
+  </g>
+  <g data-cue="b-label" data-layout-id="b-label">
+    <text x="600" y="151" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" font-weight="600" fill="#183B40" text-anchor="middle">意见 B</text>
+  </g>
+  <g data-cue="rail" data-layout-id="rail" data-layout-role="background">
+    <path d="M78 280 H728" fill="none" stroke="#BAC5C3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M78 274 V286 M728 274 V286" fill="none" stroke="#BAC5C3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="position-0" data-layout-id="position-0" data-layout-role="background">
+    <circle cx="100" cy="280" r="7" fill="#F6F3EB" stroke="#C5CECA" stroke-width="2" />
+  </g>
+  <g data-cue="position-1" data-layout-id="position-1" data-layout-role="background">
+    <circle cx="176" cy="280" r="7" fill="#F6F3EB" stroke="#C5CECA" stroke-width="2" />
+  </g>
+  <g data-cue="position-2" data-layout-id="position-2" data-layout-role="background">
+    <circle cx="252" cy="280" r="7" fill="#F6F3EB" stroke="#C5CECA" stroke-width="2" />
+  </g>
+  <g data-cue="position-3" data-layout-id="position-3" data-layout-role="background">
+    <circle cx="524" cy="280" r="7" fill="#F6F3EB" stroke="#C5CECA" stroke-width="2" />
+  </g>
+  <g data-cue="position-4" data-layout-id="position-4" data-layout-role="background">
+    <circle cx="600" cy="280" r="7" fill="#F6F3EB" stroke="#C5CECA" stroke-width="2" />
+  </g>
+  <g data-cue="position-5" data-layout-id="position-5" data-layout-role="background">
+    <circle cx="676" cy="280" r="7" fill="#F6F3EB" stroke="#C5CECA" stroke-width="2" />
+  </g>
+  <g data-cue="batch-0" data-layout-id="batch-0">
+    <rect x="76" y="197" width="51" height="61" fill="#DCE2DD" />
+    <rect x="72" y="191" width="51" height="61" fill="#FFFFFF" stroke="#CCD5CF" stroke-width="1" />
+    <rect x="72" y="191" width="51" height="6" fill="#176B65" />
+    <path d="M83 212 H112 M83 222 H106" fill="none" stroke="#C0CBC5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="83" y="233" width="22" height="5" fill="#176B65" />
+    <path d="M100 256 V270" fill="none" stroke="#176B65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="100" cy="280" r="8" fill="#176B65" />
+    <circle cx="100" cy="280" r="2.6" fill="#fff" />
+  </g>
+  <g data-cue="batch-1" data-layout-id="batch-1">
+    <rect x="152" y="197" width="51" height="61" fill="#DCE2DD" />
+    <rect x="148" y="191" width="51" height="61" fill="#FFFFFF" stroke="#CCD5CF" stroke-width="1" />
+    <rect x="148" y="191" width="51" height="6" fill="#176B65" />
+    <path d="M159 212 H188 M159 222 H182" fill="none" stroke="#C0CBC5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="159" y="233" width="22" height="5" fill="#176B65" />
+    <path d="M176 256 V270" fill="none" stroke="#176B65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="176" cy="280" r="8" fill="#176B65" />
+    <circle cx="176" cy="280" r="2.6" fill="#fff" />
+  </g>
+  <g data-cue="batch-2" data-layout-id="batch-2">
+    <rect x="228" y="197" width="51" height="61" fill="#DCE2DD" />
+    <rect x="224" y="191" width="51" height="61" fill="#FFFFFF" stroke="#CCD5CF" stroke-width="1" />
+    <rect x="224" y="191" width="51" height="6" fill="#176B65" />
+    <path d="M235 212 H264 M235 222 H258" fill="none" stroke="#C0CBC5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="235" y="233" width="22" height="5" fill="#176B65" />
+    <path d="M252 256 V270" fill="none" stroke="#176B65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="252" cy="280" r="8" fill="#176B65" />
+    <circle cx="252" cy="280" r="2.6" fill="#fff" />
+  </g>
+  <g data-cue="batch-3" data-layout-id="batch-3">
+    <rect x="500" y="197" width="51" height="61" fill="#DCE2DD" />
+    <rect x="496" y="191" width="51" height="61" fill="#FFFFFF" stroke="#CCD5CF" stroke-width="1" />
+    <rect x="496" y="191" width="51" height="6" fill="#183B40" />
+    <path d="M507 212 H536 M507 222 H530" fill="none" stroke="#C0CBC5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="507" y="233" width="22" height="5" fill="#183B40" />
+    <path d="M524 256 V270" fill="none" stroke="#183B40" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="524" cy="280" r="8" fill="#183B40" />
+    <circle cx="524" cy="280" r="2.6" fill="#fff" />
+  </g>
+  <g data-cue="batch-4" data-layout-id="batch-4">
+    <rect x="576" y="197" width="51" height="61" fill="#DCE2DD" />
+    <rect x="572" y="191" width="51" height="61" fill="#FFFFFF" stroke="#CCD5CF" stroke-width="1" />
+    <rect x="572" y="191" width="51" height="6" fill="#183B40" />
+    <path d="M583 212 H612 M583 222 H606" fill="none" stroke="#C0CBC5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="583" y="233" width="22" height="5" fill="#183B40" />
+    <path d="M600 256 V270" fill="none" stroke="#183B40" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="600" cy="280" r="8" fill="#183B40" />
+    <circle cx="600" cy="280" r="2.6" fill="#fff" />
+  </g>
+  <g data-cue="batch-5" data-layout-id="batch-5">
+    <rect x="652" y="197" width="51" height="61" fill="#DCE2DD" />
+    <rect x="648" y="191" width="51" height="61" fill="#FFFFFF" stroke="#CCD5CF" stroke-width="1" />
+    <rect x="648" y="191" width="51" height="6" fill="#183B40" />
+    <path d="M659 212 H688 M659 222 H682" fill="none" stroke="#C0CBC5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="659" y="233" width="22" height="5" fill="#183B40" />
+    <path d="M676 256 V270" fill="none" stroke="#183B40" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="676" cy="280" r="8" fill="#183B40" />
+    <circle cx="676" cy="280" r="2.6" fill="#fff" />
+  </g>
+  <g data-cue="short-link-0" data-layout-id="short-link-0" transform="translate(100 280)" data-layout-role="background">
+    <rect x="0" y="-2" width="76" height="4" fill="#176B65" />
+  </g>
+  <g data-cue="short-link-1" data-layout-id="short-link-1" transform="translate(176 280)" data-layout-role="background">
+    <rect x="0" y="-2" width="76" height="4" fill="#176B65" />
+  </g>
+  <g data-cue="short-link-2" data-layout-id="short-link-2" transform="translate(524 280)" data-layout-role="background">
+    <rect x="0" y="-2" width="76" height="4" fill="#176B65" />
+  </g>
+  <g data-cue="short-link-3" data-layout-id="short-link-3" transform="translate(600 280)" data-layout-role="background">
+    <rect x="0" y="-2" width="76" height="4" fill="#176B65" />
+  </g>
+  <g data-cue="long-link" data-layout-id="long-link" transform="translate(252 280)" data-layout-role="background">
+    <path d="M0 0 H272 M0 -2 V2 M272 -2 V2" fill="none" stroke="#A15C22" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 7" />
+  </g>
+  <g data-cue="short-rule" data-layout-id="short-rule">
+    <path d="M100 305 V315 H176 V305" fill="none" stroke="#176B65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="138" y="356" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="600" fill="#176B65" text-anchor="middle">1–2 分钟</text>
+  </g>
+  <g data-cue="short-rule-b" data-layout-id="short-rule-b">
+    <path d="M600 305 V315 H676 V305" fill="none" stroke="#176B65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="long-rule" data-layout-id="long-rule">
+    <path d="M252 305 V315 H524 V305" fill="none" stroke="#A15C22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="388" y="356" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="600" fill="#A15C22" text-anchor="middle">5–10 分钟</text>
+  </g>
+  <g data-cue="focus" data-layout-id="focus" transform="translate(100 180)">
+    <path d="M-5 -7 H5 L0 0 Z" fill="#A15C22" />
+  </g>
+</svg>
