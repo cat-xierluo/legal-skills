@@ -20,6 +20,7 @@ metadata:
 | 扫描本机 Agent 与供应商、账号和额度现状 | 读[环境体检](references/preflight.md)与[脱敏盘点](references/inventory.md) |
 | 接入新账号、导入供应商或安装插件 | 读[供应商与账号接入](references/provider-integration.md)与[插件与客户端接入](references/plugin-guide.md) |
 | 为什么消耗快，哪里值得优化 | 先采集、核覆盖，再诊断；必要时按会话深入 |
+| 检查 Skill、主/子 Agent 的上下文、工具和系统调用开销 | 读[Agent 输入与经济性](references/agent-efficiency.md)，从网关分项反查来源，对新 worker 做保留质量与缓存的同题对照 |
 | 怎样利用套餐和临期积分 | 诊断结合现有任务，读取[资源策略](references/token-strategy.md)，输出当前/稍后/待输入建议 |
 | 新建路由或改已有组 | 先按[智能路由设计](references/adaptive-routing-design.md)生成草案；再读[配置合同](references/cli-contract.md)和[操作入口](references/operations.md)，展示计划，按已有授权执行 |
 | 查某个 magpie 子命令的写法，或接入供应商、订阅、插件 | 读[CLI 命令参考](references/cli-command-reference.md)；涉及写入时按[CLI 与变更边界](references/cli-contract.md)先只读回读并展示计划 |
@@ -91,6 +92,8 @@ python3 scripts/magpie_observe.py diagnose --observation /private/path/observati
 - 重试/排队较多：核共享账号总并发、队列、冷却与回退，不以多建组扩大容量。
 - 复杂度与模型可能不匹配：必须结合任务验收与返工，不能凭短回复、低 Token 或工具次数决定降级。
 - 协作往返多：先核输入、任务边界和交接，不凭消息工具占比否定协作。
+
+细查输入各层、精简新 worker、解释网络阶段与做同题对照时，按[Agent 输入与经济性](references/agent-efficiency.md)执行。总 token 下降不能单独证明省钱或提速；保留必要背景、缓存、实际模型及任务质量的证据。
 
 网关可控制对应路由的请求；原生直连调用另列，不能声称改组就覆盖所有 Agent。已有 Magpie 调优或历史回放只作候选输入；其成本假设不能替代实际任务质量验证。
 
