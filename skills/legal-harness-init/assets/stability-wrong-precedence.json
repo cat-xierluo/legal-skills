@@ -1,9 +1,31 @@
 {
   "privacy_mode": "strict",
   "guide_mode": "team",
-  "config_text": "<!-- legal-harness-init:legal-safety-baseline:start -->\n# 项目：LIT-YYYY-001\n<!-- legal-harness-init:legal-safety-baseline:end -->\n",
-  "target_paths": ["/project/AGENTS.md"],
+  "config_text": "<!-- legal-harness-init:legal-safety-baseline:start -->\n# 项目：LIT-YYYY-001\n<!-- legal-harness-init:legal-safety-baseline:end -->\n<!-- legal-harness-init:init-environment:start -->\n| 时间 | Harness | Harness Version | Model | Init Skill | Init Skill Version | 操作 |\n|---|---|---|---|---|---|---|\n| 2026-10-30 10:00 | codex | test | test-model | legal-harness-init | 0.5.3 | init · config-sha256=fb2c4d8c0c8d793cc6fbf2e14eaabb2cb5925bc16174813f45a32dddacba17fe |\n<!-- legal-harness-init:init-environment:end -->\n",
+  "target_paths": [
+    "AGENTS.md"
+  ],
   "status": "CONFIG_WRITTEN",
-  "session_evidence": {"new_session": false, "loaded": false},
-  "precedence": ["individual", "project", "organization", "legal_safety"]
+  "session_evidence": {
+    "new_session": false,
+    "loaded": false
+  },
+  "precedence": [
+    "individual",
+    "project",
+    "organization",
+    "legal_safety"
+  ],
+  "config_artifacts": [
+    {
+      "target": "AGENTS.md",
+      "path": "stability-wrong-precedence/AGENTS.md"
+    }
+  ],
+  "init_environment": {
+    "recorded": true,
+    "config_sha256": [
+      "b5139508b873ec436cfb064527919a80ab4f47f02cc79fc5aadf817cf25ed30a"
+    ]
+  }
 }

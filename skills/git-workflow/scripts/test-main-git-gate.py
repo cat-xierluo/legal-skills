@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real Git regression for command-entry protection, in disposable fixtures."""
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -44,9 +45,19 @@ class GateTest(unittest.TestCase):
     def run_gate(self, *args, cwd=None, env=None, integration=False, expected=None):
         options = ["--integration-owner", "fixture-owner", "--expected-head",
                    expected or self.raw("rev-parse", "HEAD")] if integration else []
+        if integration and args and args[0] in ("add", "commit", "restore"):
+            options += self.snapshot_options()
         return subprocess.run([sys.executable, str(GATE), "--repo", str(self.root),
                                "--git", GIT, *options, "--", *args], cwd=cwd or self.root,
                               capture_output=True, text=True, env=env)
+
+    def snapshot_options(self):
+        safety = self.base / "safety"
+        output = subprocess.check_output([
+            sys.executable, str(GATE.with_name("main-directory-snapshot.py")),
+            "--repo", str(self.root), "--safety-root", str(safety)], text=True)
+        return ["--snapshot-dir", json.loads(output)["snapshot_dir"],
+                "--snapshot-ledger", str(safety / self.root.name / "MANIFESTS.jsonl")]
 
     def snapshot(self):
         paths = [self.file, self.root / ".git/HEAD", self.root / ".git/index",
@@ -88,7 +99,8 @@ class GateTest(unittest.TestCase):
         before = self.snapshot()
         args = [sys.executable, str(GATE), "--repo", str(self.root), "--git", GIT,
                 "--integration-owner", "fixture-owner", "--expected-head",
-                self.raw("rev-parse", "HEAD"), "--check-only", "--", "add", "skill/a.txt"]
+                self.raw("rev-parse", "HEAD"), *self.snapshot_options(),
+                "--check-only", "--", "add", "skill/a.txt"]
         result = subprocess.run(args, cwd=self.root, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(before, self.snapshot())
@@ -111,6 +123,35 @@ class GateTest(unittest.TestCase):
                      ("branch", "-m", "main", "new")]:
             with self.subTest(args=args):
                 self.deny_unchanged(*args)
+
+    def test_incident_plumbing_sequence_rejected_preserving_dirty_files(self):
+        self.file.write_text("unfinished working file\n")
+        fresh = self.root / "untracked.txt"
+        fresh.write_text("untracked body\n")
+        for args in (("read-tree", "-m", "-u", "HEAD", "other"),
+                     ("read-tree", "HEAD"), ("checkout-index", "-a", "-f")):
+            with self.subTest(args=args):
+                self.deny_unchanged(*args, integration=True)
+                self.assertEqual(fresh.read_text(), "untracked body\n")
+                self.assertEqual(self.file.read_text(), "unfinished working file\n")
+
+    def test_integration_requires_snapshot_and_rejects_later_text_changes(self):
+        self.file.write_text("unfinished\n")
+        base_args = [sys.executable, str(GATE), "--repo", str(self.root), "--git", GIT,
+                     "--integration-owner", "fixture-owner", "--expected-head",
+                     self.raw("rev-parse", "HEAD")]
+        before = self.snapshot()
+        missing = subprocess.run([*base_args, "--", "add", "skill/a.txt"],
+                                 cwd=self.root, capture_output=True, text=True)
+        self.assertEqual(missing.returncode, 73)
+        self.assertEqual(self.snapshot(), before)
+        options = self.snapshot_options()
+        self.file.write_text("different unfinished text, still M\n")
+        before = self.snapshot()
+        stale = subprocess.run([*base_args, *options, "--", "add", "skill/a.txt"],
+                               cwd=self.root, capture_output=True, text=True)
+        self.assertEqual(stale.returncode, 73)
+        self.assertEqual(self.snapshot(), before)
 
     def test_C_routing_repeated_and_config_bypass(self):
         self.deny_unchanged("-C", str(self.root), "switch", "other", cwd=self.base)

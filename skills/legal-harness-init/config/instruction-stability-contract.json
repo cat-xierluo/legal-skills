@@ -2,7 +2,7 @@
   "schema_version": 1,
   "skill": {
     "name": "legal-harness-init",
-    "version": "0.3.0"
+    "version": "0.5.3"
   },
   "producer": {
     "id": "legal-harness-init-workflow",
@@ -11,12 +11,24 @@
       "scripts/detect.sh",
       "scripts/validate-content.sh",
       "scripts/write.sh",
-      "scripts/verify.sh"
+      "scripts/verify.sh",
+      "scripts/record-init-env.sh",
+      "scripts/probe-session-model.sh",
+      "scripts/check-baseline.py",
+      "scripts/test.sh",
+      "scripts/lib_safety.sh",
+      "scripts/lib_platforms.sh",
+      "scripts/session-model.py"
     ]
   },
   "artifacts": [
     {
       "id": "delivery-report",
+      "stage": "final",
+      "required": true
+    },
+    {
+      "id": "configuration",
       "stage": "final",
       "required": true
     }
@@ -34,7 +46,9 @@
       "implementation": "scripts/check-baseline.py",
       "args": [
         "--input",
-        "{artifact:delivery-report}"
+        "{artifact:delivery-report}",
+        "--config",
+        "{artifact:configuration}"
       ],
       "timeout_seconds": 30
     }
@@ -107,6 +121,24 @@
         "team-precedence-reversed"
       ],
       "historical_failure_known": false
+    },
+    {
+      "id": "INIT-ENVIRONMENT-RECORD-ON-WRITE",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#INIT-ENVIRONMENT-RECORD-ON-WRITE"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "case_ids": [
+        "baseline-complete",
+        "missing-init-environment",
+        "historical-missing-init-environment"
+      ],
+      "historical_failure_known": true
     }
   ],
   "cases": [
@@ -117,7 +149,8 @@
         "PRIVACY-MINIMUM-CONTEXT",
         "MANAGED-BLOCK-SAFE-UPSERT",
         "COMPLETION-STATUS-NO-OVERCLAIM",
-        "TEAM-LAYER-PRECEDENCE"
+        "TEAM-LAYER-PRECEDENCE",
+        "INIT-ENVIRONMENT-RECORD-ON-WRITE"
       ],
       "checker_ids": [
         "legal-baseline-checker"
@@ -126,6 +159,10 @@
         {
           "artifact_id": "delivery-report",
           "path": "assets/stability-complete.json"
+        },
+        {
+          "artifact_id": "configuration",
+          "path": "assets/stability-complete/AGENTS.md"
         }
       ],
       "expected": "pass",
@@ -144,6 +181,10 @@
         {
           "artifact_id": "delivery-report",
           "path": "assets/stability-sensitive.json"
+        },
+        {
+          "artifact_id": "configuration",
+          "path": "assets/stability-sensitive/AGENTS.md"
         }
       ],
       "expected": "blocked",
@@ -162,6 +203,10 @@
         {
           "artifact_id": "delivery-report",
           "path": "assets/stability-duplicate-marker.json"
+        },
+        {
+          "artifact_id": "configuration",
+          "path": "assets/stability-duplicate-marker/AGENTS.md"
         }
       ],
       "expected": "blocked",
@@ -180,6 +225,10 @@
         {
           "artifact_id": "delivery-report",
           "path": "assets/stability-overclaim.json"
+        },
+        {
+          "artifact_id": "configuration",
+          "path": "assets/stability-overclaim/AGENTS.md"
         }
       ],
       "expected": "blocked",
@@ -198,6 +247,54 @@
         {
           "artifact_id": "delivery-report",
           "path": "assets/stability-wrong-precedence.json"
+        },
+        {
+          "artifact_id": "configuration",
+          "path": "assets/stability-wrong-precedence/AGENTS.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "missing-init-environment",
+      "kind": "mutation",
+      "constraint_ids": [
+        "INIT-ENVIRONMENT-RECORD-ON-WRITE"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "delivery-report",
+          "path": "assets/stability-missing-init-environment.json"
+        },
+        {
+          "artifact_id": "configuration",
+          "path": "assets/stability-missing-init-environment/AGENTS.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "historical-missing-init-environment",
+      "kind": "historical",
+      "constraint_ids": [
+        "INIT-ENVIRONMENT-RECORD-ON-WRITE"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "delivery-report",
+          "path": "assets/stability-missing-init-environment.json"
+        },
+        {
+          "artifact_id": "configuration",
+          "path": "assets/stability-missing-init-environment/AGENTS.md"
         }
       ],
       "expected": "blocked",
@@ -235,6 +332,14 @@
         "id": "team-layer-precedence-violations",
         "checker_id": "legal-baseline-checker",
         "constraint_id": "TEAM-LAYER-PRECEDENCE",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "init-environment-record-on-write-violations",
+        "checker_id": "legal-baseline-checker",
+        "constraint_id": "INIT-ENVIRONMENT-RECORD-ON-WRITE",
         "value_type": "integer",
         "condition": "equals",
         "expected": 0
@@ -278,6 +383,16 @@
           "TEAM-LAYER-PRECEDENCE"
         ],
         "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "init-environment-recorded",
+        "checker_id": "legal-baseline-checker",
+        "constraint_ids": [
+          "INIT-ENVIRONMENT-RECORD-ON-WRITE"
+        ],
+        "comparison": "exact",
         "required": true,
         "tolerance": null
       }

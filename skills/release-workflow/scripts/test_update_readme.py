@@ -190,6 +190,51 @@ class HtmlRowRewriteTest(unittest.TestCase):
         self.assertIn(">v1.2.3</td>", text)
         self.assertNotIn("→", text)
 
+    def test_html_row_converts_markdown_suite_references(self) -> None:
+        """GitHub HTML tables do not render nested Markdown links."""
+        self._write(
+            '<td><a href="skills/alpha-skill/"><strong>alpha-skill</strong></a></td>\n'
+            '<td>工具</td>\n'
+            '<td style="text-align:center">v1.2.3</td>\n'
+            '<td style="text-align:center"><a href="https://github.com/cat-xierluo/'
+            'legal-skills/releases/download/v2026.09.13/alpha-skill-1.2.3.zip">下载</a></td>\n'
+            '<td>所属套件：[法律套件](expert-suites/legal-suite/)、'
+            '[通用套件](expert-suites/general-suite/)</td>'
+        )
+        MODULE.rewrite_readme(self.readme, self.repo, self.urls)
+        text = self.readme.read_text()
+        self.assertIn(
+            '<a href="expert-suites/legal-suite/">法律套件</a>', text
+        )
+        self.assertIn(
+            '<a href="expert-suites/general-suite/">通用套件</a>', text
+        )
+        self.assertNotIn("](expert-suites/", text)
+        before = self.readme.read_bytes()
+        MODULE.rewrite_readme(self.readme, self.repo, self.urls)
+        self.assertEqual(before, self.readme.read_bytes())
+
+    def test_independent_row_still_converts_suite_reference(self) -> None:
+        """Independent downloads stay untouched, but their HTML notes still link."""
+        self._write(
+            '<td><a href="skills/alpha-skill/"><strong>alpha-skill</strong></a></td>\n'
+            '<td>工具</td>\n'
+            '<td style="text-align:center">v9.9.9</td>\n'
+            '<td style="text-align:center"><a href="https://github.com/'
+            'cat-xierluo/alpha-skill.skill/releases/download/v1.7.0/'
+            'alpha-skill-1.7.0.zip">下载</a></td>\n'
+            '<td>独立仓库；所属套件：[法律套件](expert-suites/legal-suite/)</td>'
+        )
+        stats = MODULE.rewrite_readme(self.readme, self.repo, self.urls)
+        text = self.readme.read_text()
+        self.assertEqual(stats["links"], 0)
+        self.assertEqual(stats["versions"], 0)
+        self.assertIn("alpha-skill.skill/releases", text)
+        self.assertIn(
+            '<a href="expert-suites/legal-suite/">法律套件</a>', text
+        )
+        self.assertNotIn("](expert-suites/", text)
+
 
 class SourceAwareRefreshTest(unittest.TestCase):
     """Exercise source-ahead, first release and partial-release consumers."""

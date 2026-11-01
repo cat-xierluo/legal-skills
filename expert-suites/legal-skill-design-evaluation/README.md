@@ -1,6 +1,6 @@
 # 法律 Skill 对齐与评测专家套件
 
-> [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/suite-legal-skill-design-evaluation-0.1.0.zip)
+> [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/suite-legal-skill-design-evaluation-0.1.0.zip)
 
 面向希望沉淀法律经验、改进已有法律 Skill 的法律专业人员。聚焦“要做什么”和“做出来后是否真正可用”，与通用工程开发及发布套件分工。
 
@@ -22,9 +22,9 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [legal-skill-alignment](../../skills/legal-skill-alignment/) | 把法律经验、文书和 SOP 对齐成 Legal Skill Brief，明确输入输出与交接阻断项 | [已发布 v1.0.7](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-skill-alignment-1.0.7.zip) |
-| [skill-lint](../../skills/skill-lint/) | 审查通用结构、设计、Harness 与候选绑定质量证据 | [已发布 v2.9.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/skill-lint-2.9.3.zip) |
-| [legal-skill-evaluation](../../skills/legal-skill-evaluation/) | 消费通用质量结论，评测指定法律场景产出并定位最小修复单元 | [已发布 v0.8.14](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-skill-evaluation-0.8.14.zip) |
+| [legal-skill-alignment](../../skills/legal-skill-alignment/) | 把法律经验、文书和 SOP 对齐成 Legal Skill Brief，明确输入输出与交接阻断项 | [已发布 v1.0.7](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-skill-alignment-1.0.7.zip) |
+| [skill-lint](../../skills/skill-lint/) | 审查通用结构、设计、Harness 与候选绑定质量证据 | [已发布 v2.9.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/skill-lint-2.9.3.zip) |
+| [legal-skill-evaluation](../../skills/legal-skill-evaluation/) | 消费通用质量结论，评测指定法律场景产出并定位最小修复单元 | [已发布 v0.8.14](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-skill-evaluation-0.8.14.zip) |
 
 ## 建议使用方式
 

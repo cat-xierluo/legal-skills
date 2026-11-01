@@ -1,6 +1,6 @@
 # 合同审查与小微企业顾问专家套件
 
-> [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/suite-contract-business-counsel-0.1.0.zip)
+> [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/suite-contract-business-counsel-0.1.0.zip)
 
 面向合同起草、审查及 OPC / 小微企业日常经营分诊。按任务选择合同入口或经营入口，不要求每次调用全部成员。
 
@@ -22,12 +22,12 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [contract-copilot](../../skills/contract-copilot/) | 合同起草、风险审查、DOCX 批注修订与审查意见书 | [已发布 v1.6.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/contract-copilot-1.6.3.zip) |
-| [opc-legal-counsel](../../skills/opc-legal-counsel/) | OPC 与小微企业经营问题分诊、联动风险和行动优先级 | [已发布 v1.0.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/opc-legal-counsel-1.0.2.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 对已出现的履约争议梳理事实、证据与争点 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-case-analysis-1.1.2.zip) |
-| [yuandian-law-search](../../skills/yuandian-law-search/) | 核验现行法、监管规则与正反类案，回填检索依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/yuandian-law-search-1.10.1.zip) |
-| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 将已核验的分析整理为咨询、沟通或服务方案 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-proposal-generator-0.4.1.zip) |
-| [legal-ocr](../../skills/legal-ocr/) | 把扫描合同及附件转成可读文本，保留原件供核对 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/legal-ocr-1.6.0.zip) |
+| [contract-copilot](../../skills/contract-copilot/) | 合同起草、风险审查、DOCX 批注修订与审查意见书 | [已发布 v1.6.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/contract-copilot-1.6.3.zip) |
+| [opc-legal-counsel](../../skills/opc-legal-counsel/) | OPC 与小微企业经营问题分诊、联动风险和行动优先级 | [已发布 v1.0.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/opc-legal-counsel-1.0.2.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 对已出现的履约争议梳理事实、证据与争点 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-case-analysis-1.1.2.zip) |
+| [yuandian-law-search](../../skills/yuandian-law-search/) | 核验现行法、监管规则与正反类案，回填检索依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/yuandian-law-search-1.10.1.zip) |
+| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 将已核验的分析整理为咨询、沟通或服务方案 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-proposal-generator-0.4.1.zip) |
+| [legal-ocr](../../skills/legal-ocr/) | 把扫描合同及附件转成可读文本，保留原件供核对 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-ocr-1.6.0.zip) |
 
 ## 建议使用方式
 

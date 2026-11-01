@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.6] - 2026-10-31
+
+### 新增
+
+- 官方 `0.2.1-rc.5` 并行 Desktop 验收法：独立 `DSH_HOME` 与 `--user-data-dir` 并存；同 bundle 多进程下不用原生 CUA 猜实例，改用测试实例独占 loopback DevTools 目标与 PID 归属核验；SIGTERM 后等待 Host 子进程和端口消失。
+- 生产凭据默认零接触；仅用户明确授权免登录复用时，向隔离 home 快照最小账号/API/provider 配置，保留隔离 browser-session，不输出明文、不复制生产 sessions/storages/profile、不写生产配置。
+- 登记 rc.5 原生 `dsh-app://` shell 转发停滞的判别边界：先区分官方代理层与插件 `connection.fetch.register` 精确路由；插件侧可加有界 transport 超时，不宣称修复上游 shell。
+
 ## [0.6.5] - 2026-10-21
 
 ### 修复

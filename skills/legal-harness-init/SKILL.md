@@ -1,10 +1,11 @@
 ---
 name: legal-harness-init
-description: 面向法律工作者初始化或增量治理 AGENTS.md/CLAUDE.md：识别当前 AI harness，区分用户级、项目级和团队级指令，生成最小法律安全基线，安全合并受管区块，并在新会话中验证权限、保密、信息缺口和回溯行为。用户明确提到法律工作且要配置 harness、AGENTS.md、CLAUDE.md、agent 协作规则或 AI 使用基线时使用。不要用于合同审查、案件分析、文书起草、项目脚手架或 Skill 开发。
-version: "0.5.2"
+description: 面向法律工作者初始化或增量治理 AGENTS.md/CLAUDE.md：识别当前 AI harness，区分用户级、项目级和团队级指令，生成最小法律安全基线，安全合并受管区块，并区分真实写入与人工新会话行为声明。用户明确提到法律工作且要配置 harness、AGENTS.md、CLAUDE.md、agent 协作规则或 AI 使用基线时使用。不要用于合同审查、案件分析、文书起草、项目脚手架或 Skill 开发。
 license: MIT
-author: 杨卫薪律师（微信ywxlaw）
-homepage: https://github.com/cat-xierluo/legal-skills
+metadata:
+  version: "0.5.3"
+  author: 杨卫薪律师（微信ywxlaw）
+  homepage: https://github.com/cat-xierluo/legal-skills
 ---
 
 # Legal Harness Init
@@ -12,11 +13,14 @@ homepage: https://github.com/cat-xierluo/legal-skills
 把法律人的稳定协作要求写成可加载、可增量更新、可验证的 harness 指令。完成不等于“文件已写入”；必须区分：
 
 1. `CONFIG_WRITTEN`：文件与受管区块存在。
-2. `INSTRUCTIONS_LOADED`：新会话报告了精确加载来源。
-3. `BEHAVIOR_VERIFIED`：新会话通过四类行为探针。
+2. `INSTRUCTIONS_DECLARED`：人工证据声明新会话加载了精确来源。
+3. `BEHAVIOR_DECLARED`：人工证据声明四类行为探针通过。
+4. `BEHAVIOR_VERIFIED`：由受信 runtime 采集器绑定的会话证据自动确认；本版本尚未提供该采集器，不得宣称此状态。
 
 <!-- skill-lint:constraint COMPLETION-STATUS-NO-OVERCLAIM -->
-如果无法启动新会话，必须报告 `CONFIG_WRITTEN` + `NOT_VERIFIED`，不得声称配置已经生效。
+如果无法启动新会话，必须报告 `CONFIG_WRITTEN` + `NOT_VERIFIED`。人工会话摘要最多升级为 `DECLARED`，不得扩大成已加载或行为已验证。
+
+首次使用或判断平台是否支持时，读 [支持矩阵与完整示例](references/23-support-and-walkthrough.md)。检测到平台不等于客户端已实际加载；本 Skill 写入的是协作约定，不是 runtime 权限拦截器。
 
 ## 适用边界
 
@@ -112,7 +116,7 @@ bash scripts/detect.sh --runtime codex
 <!-- skill-lint:constraint PRIVACY-MINIMUM-CONTEXT -->
 M4/M5 必须覆盖四项契约，且项目配置不得直接包含凭证、高敏身份号或与协作无关的可识别案件信息：
 
-- 权限契约：读、写、外发、提交、删除、支付分别需要什么授权；外部或不可逆动作必须逐项确认。
+- 权限契约：读、写、外发、提交、删除、支付分别需要什么授权；外部或不可逆动作必须有覆盖具体动作的授权，已有明确授权不重复询问，超出范围才补确认。
 - 保密契约：默认最小必要上下文；禁止把客户材料、身份号码、凭证或未脱敏事实写入公开配置、日志、提交或外部服务。
 - 溯源契约：区分材料事实、推断与建议；法律结论保留来源、时间和适用范围；信息不足时明确缺口。
 - 人工裁决契约：AI 不作最终法律判断；期限、金额、主体、法条引用和对外交付必须由指定人员复核。
@@ -213,6 +217,7 @@ bash scripts/record-init-env.sh \
   [--skill-version <v>] \
   [--note "<额外说明>"] \
   [--probe-from-session] \
+  [--session-file <已确认的会话文件>] \
   [--dry-run]
 ```
 
@@ -220,18 +225,19 @@ bash scripts/record-init-env.sh \
 
 - harness(name)：默认 source `detect.sh` 取 `current_runtime`（schema v3）；可用 `--harness` 显式覆盖
 - harness version：探测 `claude --version` / `codex --version`（2s 超时，失败 `unknown`）；非 claude/codex 写 `n/a`
-- model：env 白名单 `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL` / `GLM_MODEL` / `MY_MODEL` 探测，**全部未命中时**：v0.5.2+ 若传 `--probe-from-session` 则从当前 harness session 反查 model——claude-code/qwenwork/qoderwork/myagents（CC 克隆 jsonl，`role=assistant.message.model`）、codex（`turn_context.payload.model`）、workbuddy（trace spans toolOutput chat.completion.model）；openclaw/orca 暂 not_found；仍未命中时拒绝 append 并要求 `--model` 兜底（不臆造）
-- init skill version：从本 skill 根 `SKILL.md` frontmatter `version` 字段读
+- model：env 白名单 `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL` / `GLM_MODEL` / `CODEX_MODEL` / `OPENAI_MODEL_GLM` / `MYAGENTS_MODEL` / `QWEN_MODEL` / `MY_MODEL` 探测，**全部未命中时**：若传 `--probe-from-session` 则从当前 harness session 反查 model——claude-code/qwenwork/qoderwork/myagents（CC 克隆 jsonl，`role=assistant.message.model`）、codex（按精确 `cwd` 匹配 `turn_context.payload.model`，并发时须传 `--session-file`）、workbuddy（trace spans toolOutput chat.completion.model）；openclaw/orca 暂 not_found；仍未命中时拒绝 append 并要求 `--model` 兜底（不臆造）
+- init skill version：从本 skill 根 `SKILL.md` frontmatter `metadata.version` 字段读
 
 脚本必须：
 
 - 用受管 marker 包裹，append-only 表格行（不覆盖历史）
 - 区块残缺（只 start 或只 end）拒绝 append，提示人工修复
-- 失败关闭：参数非法、target 不存在、candidate marker 不完整或整体结构异常均拒绝
+- 失败关闭：参数非法、符号链接 target、target 不存在、备注未过 strict 校验、candidate marker 不完整或整体结构异常均拒绝
+- 真实写入前建立可校验原始备份和本次快照；dry-run 不改变内容、权限或备份
 - 表格行数 >50 时 stderr 软提示归档（不阻断）
 
 <!-- skill-lint:constraint INIT-ENVIRONMENT-RECORD-ON-WRITE -->
-每次 `write.sh` 真实落盘（不是 dry-run、不是 needs_confirmation）后都已由 `write.sh` 自动调一次 `record-init-env.sh`（v0.4.2+，受 `--record-init-env` 开关控制）。缺这条记录等同于"配置改了但没记工具环境"。无法获得 model 时不臆造，必须显式传 `--model` 或回退到 NOT_VERIFIED。
+每次 `write.sh` 真实落盘（不是 dry-run、不是 needs_confirmation）后都已由 `write.sh` 自动调一次 `record-init-env.sh`（v0.4.2+，受 `--record-init-env` 开关控制）。缺这条记录等同于"配置改了但没记工具环境"；输出 `init_env_status=failed` 且 `status=*_record_incomplete`，整体退出非零。无法获得 model 时不臆造，必须显式传 `--model` 或回退到 NOT_VERIFIED。
 
 ## 第七步：在新会话验证生效
 
@@ -246,7 +252,7 @@ bash scripts/verify.sh \
   --session-evidence <证据文件>
 ```
 
-证据必须包含 `new_session=true`、`loaded=true`、精确 `source_path`、与当前配置一致的 `config_sha256`，以及四项 `probe_*=pass` 才可报告 `BEHAVIOR_VERIFIED`。配置变化后旧证据失效；当前写入会话的自报不算加载证据。
+证据必须包含 `new_session=true`、`loaded=true`、精确 `source_path`、与当前配置一致的 `config_sha256`；四项 `probe_*=pass` 时最多报告 `BEHAVIOR_DECLARED`。`verify.sh` 只在接入受信 runtime 采集器后才允许输出 `BEHAVIOR_VERIFIED`；v0.5.3 永远不输出该状态。配置变化后旧证据失效；当前写入会话的自报不算加载证据。
 
 ## 验收
 
@@ -262,13 +268,13 @@ bash scripts/test.sh
 - 已有文件的非受管内容完整保留；
 - 多平台同路径只写一次，重复执行零 diff；
 - 原始内容、权限和哈希可恢复；
-- 最终状态没有把 `CONFIG_WRITTEN` 扩大成已加载或行为已验证；
+- 最终状态没有把 `CONFIG_WRITTEN` 或人工声明扩大成已加载或行为已验证；
 - 无法新启会话时明确报告 `NOT_VERIFIED`；
-- 每次 `write.sh` 真实落盘后都已 `record-init-env.sh` 追加一条 init-environment 行；缺记录时报告 `INIT_ENV_NOT_RECORDED` 而非宣称完成。
+- 每次 `write.sh` 真实落盘后都已 `record-init-env.sh` 追加一条 init-environment 行；缺记录时回执包含 `*_record_incomplete` / `init_env_status=failed` 而非宣称完整完成。
 
 ## 依赖
 
-日常初始化开箱即用，无第三方包。需要 Bash 3.2+ 及常见系统工具：`awk`、`grep`、`sed`、`stat`、`diff`、`mktemp`、`shasum` 或 `sha256sum`。正式指令稳定性 checker 另需系统自带或已安装的 Python 3，不需要额外 Python 包。
+日常初始化开箱即用，无第三方包。需要 Bash 3.2+ 及常见系统工具：`awk`、`grep`、`sed`、`stat`、`diff`、`mktemp`、`shasum` 或 `sha256sum`。可选的会话模型探测和可选会话探测、审计回归和正式指令稳定性 checker 另需已安装的 Python 3.9+，不需要额外 Python 包。
 
 ## 禁止事项
 
@@ -277,6 +283,7 @@ bash scripts/test.sh
 - 禁止覆盖、删除或重排受管 marker 之外的用户内容。
 - 禁止在 marker 残缺、内容校验失败或目标不明确时写入。
 - 禁止将旧会话、当前写入进程或静态检查当作新会话加载证据。
+- 禁止把手写 `key=value` 行为证据升格为 `BEHAVIOR_VERIFIED`。
 - 禁止为了“留痕完整”擅自创建不适用的 DECISIONS、TASKS 或 CHANGELOG。
 - 禁止在 `record-init-env.sh` 探测不到 model 时臆造 model 名；必须 `--model` 兜底或留 `unknown` 并标 `INIT_ENV_NOT_VERIFIED`。
 - 禁止手改 `init-environment` 受管区块里的表格行；append-only 由脚本负责。
