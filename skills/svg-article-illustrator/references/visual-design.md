@@ -26,9 +26,4 @@
 
 关键停留帧同时审内容准确、构图、对象关系和视觉完成度，不能只看文字没有相交。动态再检查中段、触发前后、复位与连续循环；测量和未验边界沿 [布局验收](layout-verification.md)。
 
-下面的素材用于练习编译和变换，可按实际需要查阅：
-
-- [材料骨架](../assets/materials-demo.skeleton.svg) + [秒数时间轴](../assets/materials-demo.timeline.json)：归拢、层叠与翻页变换。
-- [界面骨架](../assets/ui-demo.skeleton.svg) + [秒数时间轴](../assets/ui-demo.timeline.json)：控件联动，细节见 [条件参考](ui-interaction.md)。
-
-素材覆盖有限，不能代表全部画面形态，也不是创意候选清单。使用同一个编译器可以实现其他内容与造型；配图数量、时长、配色和对象个数继续从当前任务推导。主对象与表达路线先确定，再查需要的技术用法。
+确定本图构图后，再按需要读取[时间轴工具](timeline-tools.md)或[UI条件参考](ui-interaction.md)。技术示例和验证夹具不参与默认画风选择；已有作品中适合本次阅读任务的版式可以继续使用。

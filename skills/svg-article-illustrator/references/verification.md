@@ -33,12 +33,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_svg_motion.py --browser-fixture /
 
 正式 Skill-lint 的候选绑定签名与三轮前向评估未由这些命令执行，不应声称 `HARNESS_REVIEW_VERIFIED` 或 `INSTRUCTION_STABILITY_VERIFIED`。无旧上下文的创作前向测试、目标项目采用与真机证据由相应审阅者补充。
 
-## 三种内容的可重建样例
+## 多内容验证夹具
 
-以下是具体内容的实现，可用于复查方法迁移，不作为固定版式。每组骨架与时间轴同名，按时间轴工具编译并在实际阅读宽度审阅。
+以下文件位于scripts/fixtures，只用于检查数量守恒、对象连续性和时序，不提供默认画风或布局。创作先依据正文决定表达，再按需要使用工具。每组骨架与时间轴同名，可按时间轴工具编译复验。
 
 | 示例 | 内容与需核的关系 |
 |---|---|
-| [水流暂存](../assets/water-flow-demo.skeleton.svg) / [时轴](../assets/water-flow-demo.timeline.json) | 同量输入，经孔隙后延迟释放；水量保留，时间刻痕与空间位置区分。 |
-| [判断修订](../assets/evidence-revision-demo.skeleton.svg) / [时轴](../assets/evidence-revision-demo.timeline.json) | 原记录留存，证据副本进入判断，旧判断归档，新判断仍暂定。 |
-| [组件重组](../assets/component-regroup-demo.skeleton.svg) / [时轴](../assets/component-regroup-demo.timeline.json) | 九个组件连续移动，类型不变，三组任务各含三类组件各一件。 |
+| [水流暂存](../scripts/fixtures/visual-cases/water-flow-demo.skeleton.svg) / [时轴](../scripts/fixtures/visual-cases/water-flow-demo.timeline.json) | 同量输入，经孔隙后延迟释放；水量保留，时间刻痕与空间位置区分。 |
+| [判断修订](../scripts/fixtures/visual-cases/evidence-revision-demo.skeleton.svg) / [时轴](../scripts/fixtures/visual-cases/evidence-revision-demo.timeline.json) | 原记录留存，证据副本进入判断，旧判断归档，新判断仍暂定。 |
+| [组件重组](../scripts/fixtures/visual-cases/component-regroup-demo.skeleton.svg) / [时轴](../scripts/fixtures/visual-cases/component-regroup-demo.timeline.json) | 九个组件连续移动，类型不变，三组任务各含三类组件各一件。 |
