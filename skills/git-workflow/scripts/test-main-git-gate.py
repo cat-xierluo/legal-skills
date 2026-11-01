@@ -112,6 +112,17 @@ class GateTest(unittest.TestCase):
             with self.subTest(args=args):
                 self.deny_unchanged(*args)
 
+    def test_incident_plumbing_sequence_rejected_preserving_dirty_files(self):
+        self.file.write_text("unfinished working file\n")
+        fresh = self.root / "untracked.txt"
+        fresh.write_text("untracked body\n")
+        for args in (("read-tree", "-m", "-u", "HEAD", "other"),
+                     ("read-tree", "HEAD"), ("checkout-index", "-a", "-f")):
+            with self.subTest(args=args):
+                self.deny_unchanged(*args, integration=True)
+                self.assertEqual(fresh.read_text(), "untracked body\n")
+                self.assertEqual(self.file.read_text(), "unfinished working file\n")
+
     def test_C_routing_repeated_and_config_bypass(self):
         self.deny_unchanged("-C", str(self.root), "switch", "other", cwd=self.base)
         self.deny_unchanged("-C", str(self.root / "skill"), "-C", "..", "switch", "other")

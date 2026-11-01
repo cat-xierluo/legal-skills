@@ -82,9 +82,12 @@ HEAD reflog 中没有候选时（例如分支从未检出），先核备份、�
 
 ## 5. 误 reset --hard / checkout . / clean -f（丢弃工作区未提交内容）
 
+- `checkout-index -a -f`、`read-tree -u` 或直接文件覆盖也按本节处理。先保全事故命令、原 HEAD/index、已知事故前状态和仍存在的正文，证据从临时目录复制到仓外持久位置。不要把“恢复索引”顺手扩成重写整个工作区。
 - **已提交**的内容：按 §0 reflog 找回 tip，`git branch backup/<desc> <tip>` 新建引用恢复。
 - **曾暂存但未提交**的内容：`git add` 已把当时内容写入 blob，对象尚未被回收时可尝试 `git fsck --no-reflogs --unreachable` 找候选 blob，先用 `git cat-file -p <blob-oid>` 只读核内容，确认后导出到独立恢复目录。blob 本身不保存文件名/目录；只能找回曾写入对象库的字节，暂存后继续编辑的部分未必可恢复。
 - **从未被 Git 收录**的工作区内容或 untracked 文件：不能指望 Git 对象库恢复。可尝试 IDE 本地历史（JetBrains Local History / VS Code Timeline）、Time Machine、整目录 rsync 备份（见 [history-rewrite-and-removal.md](history-rewrite-and-removal.md) 的三层备份）。不因 fsck 找到某个 blob 就承诺全部内容已找回，也不因“未提交”就跳过对象库检查。
+
+没有系统备份时继续查既有 worktree、固定发布载荷、采用前 `original-files`、逐文件哈希清单及会话产物。先把候选复制到仓外救援区，再区分“事故前哈希精确一致”“仅历史候选”“尚无依据”；不按最多副本或最新 mtime 直接覆盖。事故前的 D 代表原本删除，不是丢了该文件正文；类型变更要恢复实际目录/链接关系。恢复后 `status` 相同只证明路径状态，须另外逐文件校验实际内容，并核事故后新增仍完整。无法证实的最新字节仍报未确认。风险操作前的快照入口见[主目录保护](main-directory-protection.md#具名采用前的可恢复快照)。
 
 ## 6. 误 commit 到错分支（落到并行会话的分支上）
 

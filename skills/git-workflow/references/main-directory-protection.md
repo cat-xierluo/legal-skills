@@ -16,6 +16,30 @@
 
 在 worktree 提交只是候选完成，不等于共享 Skill 已更新。还要核实际安装链接、加载版本与候选哈希。共享入口指向经过采用的 main 或有来源记录的固定快照，不指向临时开发树。云端发表另按已有授权；不由本合同自动推送。
 
+### 审查与试验隔离
+
+审查任务交付完整候选 OID、允许范围、diff 和隔离 worktree，或交付能覆盖审查问题的只读副本。不要把共享主目录作为 reviewer 的执行目录。需要核对实际安装时由具名集成者只读导出版本/哈希，交回 reviewer；不让 reviewer 在主目录验证“某写命令会不会失败”。
+
+`read-tree`、`checkout-index`、直接写 index/ref 和文件 API 与 `reset/checkout` 同样可能覆盖现场；不能因为它们是底层命令、带 dry-run 字样、上一步失败或只想“恢复索引”就执行。Git 命令失败不证明文件未变；管道末端成功也不代表前端 Git 成功。实验只用一次性的隔离仓库。
+
+### 具名采用前的可恢复快照
+
+主目录只读 `status/diff/show` 不必每次复制仓库。具名采用或其他已授权的工作区/index 风险操作之前，先在仓库外保存**实际内容**并验证；只保存路径、状态行、index 或 commit 不足以恢复未暂存正文。
+
+```bash
+python3 "$git_workflow_dir/scripts/main-directory-snapshot.py" \
+  --repo "$main_repo" --safety-root "$external_safety_root" \
+  --label pre-main-adoption
+python3 "$git_workflow_dir/scripts/main-directory-snapshot.py" \
+  --verify "$actual_snapshot_dir"
+```
+
+保存已修改/新增/重命名/冲突路径的工作区版本、符号链接目标、删除状态、原 index bytes 与变化路径的 staged blobs，使用 NUL 分隔状态避免空格/中文/换行文件名被误读。文件改为目录时递归保存其内容；链接只保存目标字符串，不跟随到外部。ignored 默认不复制，先核其用途、大小和隐私；风险操作可能影响它们时加 `--include-ignored`，或按 owner 的独立备份清单保全，不能把排除项称为全量备份。
+
+创建与复验都须退出 0 且结果为 PASS；失败、源漂移或 `INCOMPLETE.json` 均阻断后续采用。快照身份、逐文件哈希与原现场绑定；快照后有写入须重新核对并重新保全变化。它不冻结并发 writer，也不自动调用门禁或恢复文件。脏 submodule 的内部状态另作子仓快照。
+
+恢复时先导出到仓外候选并逐文件核来源、字节/模式/链接与置信度，保留事故后有效新增；需要恢复同一文件的前后两版时合并并核实，不能仅因 status 行数相同宣称全文恢复。恢复执行遵循[事故恢复](accident-recovery.md)，不整体覆盖主目录。本机快照防覆盖误操作，不是异机备份；二进制和私有快照留在仓外，不自动入 Git 或上传。
+
 ## 命令入口门禁
 
 `scripts/main-git-gate.py` 在 Git 执行前判断真实目录，默认只允许受管主目录的读取命令。具名采用必须显式给出 owner 和核验过的完整主目录 HEAD：
@@ -47,6 +71,8 @@ python3 "$git_workflow_dir/scripts/main-git-gate.py" \
 ## 验收与未覆盖边界
 
 运行 `python3 scripts/test-main-git-gate.py`，使用临时真实 Git 仓库核：主目录开发命令拒绝后文件/HEAD/index 不变、具名采用、HEAD 漂移拒绝、check-only 不暂存、不同分支切换提前拒绝、独立稀疏 worktree 实际提交。
+
+运行 `python3 scripts/test-main-directory-snapshot.py` 验证工作区与暂存双版本、冲突 stages、删除/目录/链接、特殊文件名、快照损坏、源漂移和复制失败；全部用隔离真实仓库，不拿主目录试恢复。脚本可用、规则已写、实际入口已加载、runtime 已接入、OS 权限隔离分别核验；缺哪一层就写 NOT_VERIFIED，不增加未执行的保护承诺。
 
 这是命令入口护栏，不是文件系统安全边界。绝对路径 Git、未接入的 Agent、GUI 内置 Git/libgit2、直接文件 API 写入都可绕过；客户端未逐项实测为 `NOT_VERIFIED`。需要所有程序都不能切换时，必须另行做 runtime 强制策略或账号/沙箱隔离，不能由本脚本宣称达到。
 
