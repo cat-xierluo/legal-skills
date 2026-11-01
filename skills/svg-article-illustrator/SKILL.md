@@ -2,7 +2,7 @@
 name: svg-article-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.8"
+version: "1.1.9"
 license: MIT
 description: 根据文章内容创作动态 SVG 文章配图，以构图、图形关系和状态变化解释内容；默认输出3–5秒原生SMIL动画，静态图仅作为明确例外。支持时间轴编译、布局检查与PNG导出；不用于完整视频制作或自动发布。
 ---
