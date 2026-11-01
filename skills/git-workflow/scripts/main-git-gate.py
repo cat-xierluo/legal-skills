@@ -5,6 +5,8 @@ Only commands routed through this entry are guarded. Not a security boundary,
 Git hook, global executable replacement, or protection for native GUI clients.
 """
 import argparse
+import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -18,8 +20,12 @@ ROUTING_ENV = {"GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
 SAFE_CONFIG = {"user.name", "user.email", "commit.gpgsign"}
 
 
+class GateRefusal(ValueError):
+    pass
+
+
 def refuse(reason):
-    raise ValueError("main-git-gate 拒绝：" + reason)
+    raise GateRefusal("main-git-gate 拒绝：" + reason)
 
 
 def parse_git(argv):
@@ -103,7 +109,39 @@ def check_unstage_options(args):
             refuse("restore 未知或可能覆盖文件/来源的选项：" + arg)
 
 
-def check(git, protected, argv, integration_owner=None, expected_head=None):
+def check_snapshot(protected, expected_head, snapshot_dir, ledger):
+    if not snapshot_dir or not ledger:
+        refuse("具名采用须提供 --snapshot-dir 和 --snapshot-ledger")
+    script = Path(__file__).with_name("main-directory-snapshot.py")
+    spec = importlib.util.spec_from_file_location("main_snapshot", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        report = module.verify(snapshot_dir, ledger)
+        if report["status"] != "PASS" or report.get("skipped"):
+            refuse("快照未验证或存在未保全部分")
+        root = Path(snapshot_dir).resolve()
+        meta = json.loads((root / "snapshot.json").read_bytes())
+        if Path(meta["repo"]).resolve() != protected or meta["head"] != expected_head:
+            refuse("快照不属于本次仓库/HEAD")
+        # Require a fresh snapshot for each index write, including the add->commit transition.
+        current = module.capture_git(protected)
+        if current["index"] != (root / "index.bin").read_bytes():
+            refuse("快照后 index 已变更；重新保全后再采用")
+        if current["status"] != (root / "status.z").read_bytes():
+            refuse("快照后工作区状态已变更；重新保全后再采用")
+        states = json.loads((root / "states.json").read_bytes())
+        if module.collect(protected, module.status_entries(current["status"]),
+                          meta["include_ignored"]) != states:
+            refuse("快照后工作区内容已变更；重新保全后再采用")
+    except GateRefusal:
+        raise
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        refuse("快照检查失败：" + str(error))
+
+
+def check(git, protected, argv, integration_owner=None, expected_head=None,
+          snapshot_dir=None, snapshot_ledger=None):
     for key in ROUTING_ENV:
         if os.environ.get(key):
             refuse("存在环境路由覆写 " + key)
@@ -127,6 +165,7 @@ def check(git, protected, argv, integration_owner=None, expected_head=None):
         code, actual = query(git, cwd, "rev-parse", "HEAD")
         if code or len(expected_head) != 40 or actual != expected_head:
             refuse("集成基准已漂移；重新核验 owner、HEAD、索引及逐文件清单")
+        check_snapshot(protected, expected_head, snapshot_dir, snapshot_ledger)
     if command == "add":
         return
     if command == "commit":
@@ -155,6 +194,8 @@ def main():
     p.add_argument("--git", required=True, help="已核真实 Git 二进制绝对路径，不能指回本门禁")
     p.add_argument("--integration-owner", help="已获授权的具名集成者；不是普通开发开关")
     p.add_argument("--expected-head", help="该次集成核验的完整主目录 HEAD；每次提交后重新核验")
+    p.add_argument("--snapshot-dir", help="本次采用前新建并复验的仓外快照")
+    p.add_argument("--snapshot-ledger", help="快照目录外的 MANIFESTS.jsonl")
     p.add_argument("--check-only", action="store_true", help="只核准命令，不执行 Git")
     p.add_argument("args", nargs=argparse.REMAINDER)
     ns = p.parse_args()
@@ -169,7 +210,8 @@ def main():
     argv = ns.args[1:] if ns.args[:1] == ["--"] else ns.args
     if bool(ns.integration_owner) != bool(ns.expected_head):
         refuse("integration-owner 与 expected-head 必须同时提供")
-    check(str(git), protected, argv, ns.integration_owner, ns.expected_head)
+    check(str(git), protected, argv, ns.integration_owner, ns.expected_head,
+          ns.snapshot_dir, ns.snapshot_ledger)
     if ns.check_only:
         return
     os.execv(str(git), [str(git), *argv])

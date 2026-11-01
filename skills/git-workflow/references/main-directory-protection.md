@@ -16,6 +16,38 @@
 
 在 worktree 提交只是候选完成，不等于共享 Skill 已更新。还要核实际安装链接、加载版本与候选哈希。共享入口指向经过采用的 main 或有来源记录的固定快照，不指向临时开发树。云端发表另按已有授权；不由本合同自动推送。
 
+### 审查与试验隔离
+
+审查任务交付完整候选 OID、允许范围、diff 和隔离 worktree，或交付能覆盖审查问题的只读副本。不要把共享主目录作为 reviewer 的执行目录。需要核对实际安装时由具名集成者只读导出版本/哈希，交回 reviewer；不让 reviewer 在主目录验证“某写命令会不会失败”。
+
+不给 reviewer 主目录路径只是降低误触发面，不是强制隔离。Full Access reviewer 仍可能通过共享 workspace 的符号链接、`git worktree list`、`.git` 常见目录名或进程环境自行发现主目录。要强制阻止该类访问，必须另行接入 runtime 命令拦截或 OS/账号隔离，并实测拒绝前现场不变；未接入时按 NOT_VERIFIED 处理。
+
+`read-tree`、`checkout-index`、直接写 index/ref 和文件 API 与 `reset/checkout` 同样可能覆盖现场；不能因为它们是底层命令、带 dry-run 字样、上一步失败或只想“恢复索引”就执行。Git 命令失败不证明文件未变；管道末端成功也不代表前端 Git 成功。实验只用一次性的隔离仓库。
+
+### 具名采用前的可恢复快照
+
+主目录只读 `status/diff/show` 不必每次复制仓库。具名采用或其他已授权的工作区/index 风险操作之前，先在仓库外保存**实际内容**并验证；只保存路径、状态行、index 或 commit 不足以恢复未暂存正文。
+
+```bash
+python3 "$git_workflow_dir/scripts/main-directory-snapshot.py" \
+  --repo "$main_repo" --safety-root "$external_safety_root" \
+  --label pre-main-adoption
+python3 "$git_workflow_dir/scripts/main-directory-snapshot.py" \
+  --verify "$actual_snapshot_dir" --ledger "$external_manifest_ledger"
+```
+
+保存已修改/新增/重命名/冲突路径的工作区版本、符号链接目标、删除状态、原 index bytes 与变化路径的 staged blobs，使用 NUL 分隔状态避免空格/中文/换行文件名被误读。文件改为目录时递归保存其内容；链接只保存目标字符串，不跟随到外部。经由符号链接目录的路径按真实内容保存，并在 `via_symlink` 记录链接链，恢复时才能还原同样的目录形状。ignored 默认不复制，先核其用途、大小和隐私；风险操作可能影响它们时加 `--include-ignored`，或按 owner 的独立备份清单保全，不能把排除项称为全量备份。
+
+创建与复验都须退出 0 且结果为 PASS；失败、源漂移或 `INCOMPLETE.json` 均阻断后续采用。脚本另在快照目录外的 `MANIFESTS.jsonl` 登记摘要；复验缺少该账本时返回 NOT_VERIFIED、退出非零。采用记录保留账本及快照摘要；同权限程序仍可修改两者，这不是签名或 OS 安全边界。
+
+快照身份、逐文件哈希与原现场绑定；快照后有写入须重新核对并重新保全变化。它不冻结并发 writer，也不自动恢复文件。`--max-bytes` 默认 2 GiB，超额失败并保留 INCOMPLETE，不把部分副本当完整快照。硬链接关系、稀疏文件布局不保留，按独立文件字节备份。
+
+`--verify` 核快照相对于仓外摘要的一致性，不证明快照内容等于事故前的仓库状态；后者需要与事故前清单或采用记录逐项比对。submodule/嵌套仓库不复制内部状态，另作子仓快照；`skipped.json` 明确列出未覆盖范围。`skipped` 非空时不能称全量保全，主目录采用门禁拒绝继续。
+
+大规模 dirty 主目录的快照有时间和磁盘成本；`add→commit` 两次 index 写入之间会要求新快照。若该成本开始诱使操作者绕开门禁，停止本次主目录采用，改为完整 PR/固定版本安装路径，或先收敛/迁移未提交现场。不用“成本高”作为跳过保全的理由。
+
+恢复时先导出到仓外候选并逐文件核来源、字节/模式/链接与置信度，保留事故后有效新增；需要恢复同一文件的前后两版时合并并核实，不能仅因 status 行数相同宣称全文恢复。恢复执行遵循[事故恢复](accident-recovery.md)，不整体覆盖主目录。本机快照防覆盖误操作，不是异机备份；二进制和私有快照留在仓外，不自动入 Git 或上传。
+
 ## 命令入口门禁
 
 `scripts/main-git-gate.py` 在 Git 执行前判断真实目录，默认只允许受管主目录的读取命令。具名采用必须显式给出 owner 和核验过的完整主目录 HEAD：
@@ -26,10 +58,11 @@ python3 "$git_workflow_dir/scripts/main-git-gate.py" \
 python3 "$git_workflow_dir/scripts/main-git-gate.py" \
   --repo "$main_repo" --git "$real_git_binary" \
   --integration-owner "$verified_owner" --expected-head "$verified_main_sha" \
+  --snapshot-dir "$actual_snapshot_dir" --snapshot-ledger "$external_manifest_ledger" \
   -- add -- "$reviewed_path"
 ```
 
-`--check-only` 只检查、不执行 Git。每次提交改变 HEAD 后重新核验并记录，不复用旧 expected HEAD。owner/HEAD 参数是调用者的具名意图与漂移检查，不证明用户授权、目标内容正确或独占锁已建立；调用方仍须完成上面的采用合同，不把这些参数当作普通开发开关。只检查模式与真实执行之间仍可能发生竞态，不能代替集成串行化。
+`--check-only` 只检查、不执行 Git。具名 add/commit/取消暂存必须同时提供快照与账本；门禁复算快照，并核同仓库/HEAD、原 index、当前状态和实际文件内容。缺失、损坏、未保全部分或内容漂移均拒绝。每次 index 写入后（例如 add→commit）重新保全；每次提交改变 HEAD 后也重新核验并记录，不复用旧 expected HEAD。owner/HEAD 参数不证明用户授权、目标内容正确或独占锁已建立；检查与真实执行之间仍可能竞态，不能代替集成串行化。
 
 | 经过入口的操作 | 行为 |
 |---|---|
@@ -47,6 +80,8 @@ python3 "$git_workflow_dir/scripts/main-git-gate.py" \
 ## 验收与未覆盖边界
 
 运行 `python3 scripts/test-main-git-gate.py`，使用临时真实 Git 仓库核：主目录开发命令拒绝后文件/HEAD/index 不变、具名采用、HEAD 漂移拒绝、check-only 不暂存、不同分支切换提前拒绝、独立稀疏 worktree 实际提交。
+
+运行 `python3 scripts/test-main-directory-snapshot.py` 验证工作区与暂存双版本、冲突 stages、删除/目录/链接、特殊文件名、快照损坏、源漂移和复制失败；全部用隔离真实仓库，不拿主目录试恢复。脚本可用、规则已写、实际入口已加载、runtime 已接入、OS 权限隔离分别核验；缺哪一层就写 NOT_VERIFIED，不增加未执行的保护承诺。
 
 这是命令入口护栏，不是文件系统安全边界。绝对路径 Git、未接入的 Agent、GUI 内置 Git/libgit2、直接文件 API 写入都可绕过；客户端未逐项实测为 `NOT_VERIFIED`。需要所有程序都不能切换时，必须另行做 runtime 强制策略或账号/沙箱隔离，不能由本脚本宣称达到。
 

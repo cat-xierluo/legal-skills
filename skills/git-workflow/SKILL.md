@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。用于分支与 worktree 管理、主目录 main 防切换保护、Skill 稀疏检出、PR 创建/审查/合并，以及提交身份和隐私检查；也支持 CI 额度治理、敏感文件历史撤回与仓库瘦身。不要用于批量生成提交信息、项目任务分配或本地 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.24.2"
+  version: "1.25.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -22,7 +22,7 @@ metadata:
 | 新建或限缩 Skill/套件工作树、跨目录占用审计 | [稀疏工作树](references/sparse-worktree.md)；创建用 `scoped-worktree.py`，完整登记只读审计用 `sparse-worktree-audit.py` |
 | 提交身份、Co-authored-by 污染、已合历史回执、完整 PR 范围推送 | [身份与推送](references/identity-and-push.md)，再按内容读取[隐私预检](references/privacy-preflight.md) |
 | PR 创建/审查/合并、CI 未知、冲突或更新 base | [PR 流程](references/pr-workflow.md)；文本与完整历史核验读取[隐私预检](references/privacy-preflight.md) |
-| 主目录固定 main、所有 Agent 独立 worktree 开发、具名集成 | [主目录分支保护](references/main-directory-protection.md)；主目录默认只读、具名采用的命令前门禁用 `main-git-gate.py` / `test-main-git-gate.py`；历史索引锁只核验/解除 |
+| 主目录固定 main、具名集成前保全工作区、审查隔离 | [主目录分支保护](references/main-directory-protection.md)；先用 `main-directory-snapshot.py` 保存并复验恢复点，再用 `main-git-gate.py` 执行已核采用；快照与门禁均不代表运行时已强制接入 |
 | Monorepo 窄采用、cherry-pick 与冲突 | [改动集成](references/change-integration.md) |
 | 误 amend / stash / 删分支 / reset 的事故恢复 | [事故恢复](references/accident-recovery.md)；先定位证据，再按授权恢复 |
 | Skill 连续迭代、候选观察、长期功能线或里程碑 | [长期集成分支](references/long-lived-integration-branch.md) |
@@ -41,7 +41,7 @@ metadata:
 - 单 Skill/具名套件默认**创建时稀疏检出**。副作用前固定目标、真实依赖、基准与磁盘预算，入口不支持目录范围时停在创建前，不把缺少参数当作全量许可。已有树限缩先保护 dirty/index、ignored/untracked 和 Session；详细方法只在稀疏合同维护。
 - `force push`、`reset --hard`、丢弃修改、`clean -f`、强删分支、跳过 hooks/签名及改写历史须有具体明确授权。锁先查持有者，不直接删；hook 失败修复后新建提交，不绕过。默认新建 commit，amend 须用户要求；精确暂存文件。
 - 普通提交发表走 `safe-push.sh`，身份和隐私核验**完整 PR range**并绑定不可变 OID；不得只查 HEAD、用 `HEAD~1` 缩窄范围或裸 push 绕门。创建/合并 PR 用 `safe-pr.py` 核最终完整文本与精确 head，不使用未经检查的自动说明。已明确授权的历史重写与精确 ref 删除按对应专页执行，不能借该例外绕过普通发表门禁。
-- 合并须绑定授权、可读 diff、允许范围、独立 review 和最终 checks。未知、失败、缺失或候选漂移时停止；helper 不代替这些门禁。不绕仓库保护、自 approve 限制或用 admin override。
+- 合并须绑定授权、可读 diff、允许范围、独立 review 和最终 checks。审查者使用隔离候选或只读材料，不在共享主目录试合并、修复索引或执行恢复实验。未知、失败、缺失或候选漂移时停止；helper 不代替这些门禁。不绕仓库保护、自 approve 限制或用 admin override。
 - Monorepo 不在本地直接 feature→main merge。按实际允许范围窄采用或正式 PR 保留目标侧其他模块；主干→长期功能线同步属于另一个方向，遵循功能线合同。
 - 单任务清理绑定生命周期及精确 tip；长期分支与固定树不随子 PR 删除。已合并后的清理失败记录 `CLEANUP_PENDING`，不重放 push/merge；批量候选不等于删除授权。
 - 依赖缺失、验证失败或网络结果不明时保留首失败及现场；先核真实结果再重试。缺工具不自动安装、不降级绕过门禁，环境安装沿用户及项目已有授权。
