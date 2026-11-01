@@ -3,7 +3,7 @@ name: magpie-optimizer
 description: 用 Magpie 配置并优化 AI 工作效能：接入供应商、订阅与插件，配置模型路由组与意图规则，管理网关、可见性、共享 MCP 与搜索；盘点额度与套餐，诊断 Token 消耗与限流，把每次调整关联真实任务验收效果。
 license: MIT
 metadata:
-  version: "1.7.0"
+  version: "1.8.0"
   author: 杨卫薪律师（微信ywxlaw）
   homepage: https://github.com/cat-xierluo/legal-skills
 ---
@@ -30,6 +30,8 @@ metadata:
 | 只用一个组当统一入口、建组/拆组、组内分层与回退治理 | 读取[路由治理](references/routing-governance.md)，按坑位排障、成员分层、计点溢出、规则顺序、出口代理分层与可配置项落地 |
 | 给某 harness 的子 Agent 单独配模型、核优先级与坑 | 读取[子Agent模型指定](references/subagent-models.md)，先核安装版与该客户端可见模型列表 |
 | 派发时指定了子 Agent 模型却没按它跑 | 读取[指名覆盖观测](references/subagent-override.md)，核请求名、统一默认与实际 served 是否一致 |
+| 供应商同时异常、额度停更、模型消失或宿主内存持续增长 | 读取[网关长跑韧性与故障隔离](references/gateway-resilience.md)，分查推理、目录、认证、额度与进程生命周期 |
+| MiniMax 登录/额度异常或模型不见 | 读取[网关排障中的 MiniMax 检查](references/gateway-resilience.md#4-minimax-code登录额度与模型消失)，核入口开关、目录、认证和真实回执 |
 | 改完是否有效，是否留下成果 | 关联任务、实际产物与验收；运行效果复核，保留混杂因素和样本边界 |
 
 先运行 `magpie --version`，以安装版 CLI 帮助及实际接口为准。Magpie 可有耗时的会话索引；超时是读取尚未完成，先保留部分状态，不判断能力不存在。使用本机已有网关，端口从实际界面/配置核实；不为诊断启动公开服务或升级软件。
@@ -132,5 +134,8 @@ python3 <skill-dir>/scripts/public_release_check.py check --root <skill-dir>/..
 |---|---|
 | Python 3.10+ | 全部脚本只用标准库，无需 pip；使用本机已有Python，缺失时提示安装 |
 | 已安装 Magpie CLI 与本机网关 | 采集/配置；沿用官方应用已有安装和登录，不自动下载或升级 |
+| bash 3.2+ 与 macOS 自带 ps/sysctl/find | 仅[网关长跑韧性](references/gateway-resilience.md)的只读巡检脚本需要；脚本不安装后台任务 |
 
 采集只请求本机只读接口；CLI可能初始化已安装插件运行时。配置apply会写网关设置并可能同步客户端模型目录；效果复核只读用户具名产物和验收文件。运行时不自动执行模型任务、付费请求、账号切换、耗卡或后台任务。
+
+[网关长跑韧性](references/gateway-resilience.md)的巡检脚本仅报告进程、内存和缓存数量；保留旧子命令名，但不发送信号、不重启、不删除文件。仓库外旧副本须核实际路径及哈希后单独采用，更新 Skill 不证明运行副本已更新。
