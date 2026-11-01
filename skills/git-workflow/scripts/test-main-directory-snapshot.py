@@ -55,7 +55,9 @@ class SnapshotTest(unittest.TestCase):
         return Path(data["snapshot_dir"])
 
     def verify(self, out):
-        return subprocess.run([sys.executable, str(SCRIPT), "--verify", str(out)],
+        ledger = self.safety / self.repo.name / "MANIFESTS.jsonl"
+        return subprocess.run([sys.executable, str(SCRIPT), "--verify", str(out),
+                               "--ledger", str(ledger)],
                               capture_output=True, text=True, env=ENV)
 
     def test_working_text_links_deleted_and_nonascii_odd_paths(self):
@@ -190,7 +192,7 @@ class SnapshotTest(unittest.TestCase):
         (sub / "f.txt").write_text("sub local edit\n")
         out = self.create()
         skipped = json.loads((out / "skipped.json").read_bytes())
-        self.assertEqual([e["path"] for e in skipped], ["sub"])
+        self.assertEqual({e["path"] for e in skipped}, {"sub"})
         self.assertIn("submodule", skipped[0]["reason"])
         self.assertEqual(self.verify(out).returncode, 0)
 
@@ -223,6 +225,54 @@ class SnapshotTest(unittest.TestCase):
     def test_empty_state(self):
         out = self.create()
         self.assertEqual(json.loads((out / "snapshot.json").read_bytes())["entries"], 0)
+        self.assertEqual(self.verify(out).returncode, 0)
+
+    def test_parent_or_symlinked_output_cannot_resolve_into_repository(self):
+        r = self.run_snapshot("--safety-root", str(self.repo.parent))
+        self.assertNotEqual(r.returncode, 0)
+        self.safety.mkdir()
+        (self.safety / self.repo.name).symlink_to(self.repo, target_is_directory=True)
+        r = self.run_snapshot()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(list(self.repo.glob("*pre-main-adoption*")))
+
+    def test_coordinated_manifest_change_and_dropped_entries_fail_external_anchor(self):
+        (self.repo / "tracked.txt").write_text("unique unfinished\n")
+        for drop in (False, True):
+            out = self.create()
+            states = json.loads((out / "states.json").read_bytes())
+            if drop:
+                del states["tracked.txt"]
+            else:
+                (out / "working-tree/tracked.txt").write_text("substituted\n")
+                states["tracked.txt"] = MODULE.read_state(out / "working-tree/tracked.txt")
+            (out / "states.json").write_bytes(MODULE.encode(states))
+            meta = json.loads((out / "snapshot.json").read_bytes())
+            meta["files"]["states.json"] = MODULE.sha((out / "states.json").read_bytes())
+            meta["manifest_digest"] = MODULE.manifest_digest(meta)
+            (out / "snapshot.json").write_bytes(MODULE.encode(meta))
+            self.assertNotEqual(self.verify(out).returncode, 0)
+
+    def test_missing_ledger_never_verifies_and_size_budget_fails(self):
+        out = self.create()
+        r = subprocess.run([sys.executable, str(SCRIPT), "--verify", str(out)],
+                           capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(json.loads(r.stdout)["status"], "NOT_VERIFIED")
+        (self.repo / "large.txt").write_bytes(b"x" * 4096)
+        r = self.run_snapshot("--max-bytes", "100")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertTrue(list(self.safety.rglob("INCOMPLETE.json")))
+
+    def test_untracked_nested_repository_is_explicitly_skipped(self):
+        nested = self.repo / "nested"
+        nested.mkdir()
+        subprocess.check_call(["git", "-C", str(nested), "init", "-q", "-b", "main"], env=ENV)
+        (nested / "unfinished.txt").write_text("other repository\n")
+        out = self.create()
+        meta = json.loads((out / "snapshot.json").read_bytes())
+        self.assertTrue(meta["skipped"])
+        self.assertIn("nested", {e["path"] for e in meta["skipped"]})
         self.assertEqual(self.verify(out).returncode, 0)
 
 

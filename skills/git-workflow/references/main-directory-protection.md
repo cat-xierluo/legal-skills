@@ -31,14 +31,16 @@ python3 "$git_workflow_dir/scripts/main-directory-snapshot.py" \
   --repo "$main_repo" --safety-root "$external_safety_root" \
   --label pre-main-adoption
 python3 "$git_workflow_dir/scripts/main-directory-snapshot.py" \
-  --verify "$actual_snapshot_dir"
+  --verify "$actual_snapshot_dir" --ledger "$external_manifest_ledger"
 ```
 
 保存已修改/新增/重命名/冲突路径的工作区版本、符号链接目标、删除状态、原 index bytes 与变化路径的 staged blobs，使用 NUL 分隔状态避免空格/中文/换行文件名被误读。文件改为目录时递归保存其内容；链接只保存目标字符串，不跟随到外部。经由符号链接目录的路径按真实内容保存，并在 `via_symlink` 记录链接链，恢复时才能还原同样的目录形状。ignored 默认不复制，先核其用途、大小和隐私；风险操作可能影响它们时加 `--include-ignored`，或按 owner 的独立备份清单保全，不能把排除项称为全量备份。
 
-创建与复验都须退出 0 且结果为 PASS；失败、源漂移或 `INCOMPLETE.json` 均阻断后续采用。快照身份、逐文件哈希与原现场绑定；快照后有写入须重新核对并重新保全变化。它不冻结并发 writer，也不自动调用门禁或恢复文件。
+创建与复验都须退出 0 且结果为 PASS；失败、源漂移或 `INCOMPLETE.json` 均阻断后续采用。脚本另在快照目录外的 `MANIFESTS.jsonl` 登记摘要；复验缺少该账本时返回 NOT_VERIFIED、退出非零。采用记录保留账本及快照摘要；同权限程序仍可修改两者，这不是签名或 OS 安全边界。
 
-`--verify` 只证明快照自身完整、未被篡改，不证明快照内容等于事故前的仓库状态；那需要与事故前清单或采用记录逐项比对。dirty submodule 不会被复制，其内部状态另作子仓快照，`skipped.json` 明确列出未覆盖范围；`skipped` 非空时不能称全量保全。
+快照身份、逐文件哈希与原现场绑定；快照后有写入须重新核对并重新保全变化。它不冻结并发 writer，也不自动恢复文件。`--max-bytes` 默认 2 GiB，超额失败并保留 INCOMPLETE，不把部分副本当完整快照。硬链接关系、稀疏文件布局不保留，按独立文件字节备份。
+
+`--verify` 核快照相对于仓外摘要的一致性，不证明快照内容等于事故前的仓库状态；后者需要与事故前清单或采用记录逐项比对。submodule/嵌套仓库不复制内部状态，另作子仓快照；`skipped.json` 明确列出未覆盖范围。`skipped` 非空时不能称全量保全，主目录采用门禁拒绝继续。
 
 恢复时先导出到仓外候选并逐文件核来源、字节/模式/链接与置信度，保留事故后有效新增；需要恢复同一文件的前后两版时合并并核实，不能仅因 status 行数相同宣称全文恢复。恢复执行遵循[事故恢复](accident-recovery.md)，不整体覆盖主目录。本机快照防覆盖误操作，不是异机备份；二进制和私有快照留在仓外，不自动入 Git 或上传。
 
@@ -52,10 +54,11 @@ python3 "$git_workflow_dir/scripts/main-git-gate.py" \
 python3 "$git_workflow_dir/scripts/main-git-gate.py" \
   --repo "$main_repo" --git "$real_git_binary" \
   --integration-owner "$verified_owner" --expected-head "$verified_main_sha" \
+  --snapshot-dir "$actual_snapshot_dir" --snapshot-ledger "$external_manifest_ledger" \
   -- add -- "$reviewed_path"
 ```
 
-`--check-only` 只检查、不执行 Git。每次提交改变 HEAD 后重新核验并记录，不复用旧 expected HEAD。owner/HEAD 参数是调用者的具名意图与漂移检查，不证明用户授权、目标内容正确或独占锁已建立；调用方仍须完成上面的采用合同，不把这些参数当作普通开发开关。只检查模式与真实执行之间仍可能发生竞态，不能代替集成串行化。
+`--check-only` 只检查、不执行 Git。具名 add/commit/取消暂存必须同时提供快照与账本；门禁复算快照，并核同仓库/HEAD、原 index、当前状态和实际文件内容。缺失、损坏、未保全部分或内容漂移均拒绝。每次 index 写入后（例如 add→commit）重新保全；每次提交改变 HEAD 后也重新核验并记录，不复用旧 expected HEAD。owner/HEAD 参数不证明用户授权、目标内容正确或独占锁已建立；检查与真实执行之间仍可能竞态，不能代替集成串行化。
 
 | 经过入口的操作 | 行为 |
 |---|---|
