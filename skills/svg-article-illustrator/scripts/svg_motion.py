@@ -176,7 +176,47 @@ def validate(source, *, allow_static=False):
         errors.append(str(e))
     if not animations and not allow_static:
         errors.append('Article SVG delivery requires at least one native SMIL animate/animateTransform track; use --allow-static only for a documented static exception')
-    durations = sorted({e.get('dur') for e in animations})
+    # Only classify cases that are provably ineffective in this supported profile.
+    # Unknown CSS/layout, clipping and platform behavior remain outside this check.
+    if animations and not errors:
+        effective = 0
+        for animation in animations:
+            parent = parents[animation]
+            values = animation.get('values').split(';')
+            parsed = [tuple(nums(v)) for v in values]
+            constant = len(set(parsed)) == 1
+            hidden = False
+            for node in ancestors(parent, parents):
+                declarations = {}
+                for part in node.get('style', '').split(';'):
+                    key, sep, value = part.partition(':')
+                    if sep:
+                        declarations[key.strip().lower()] = value.strip().lower()
+                display = declarations.get('display', node.get('display', '').strip().lower())
+                if display == 'none':
+                    hidden = True
+                    break
+                opacity = declarations.get('opacity', node.get('opacity', '').strip())
+                opacity_tracks = [c for c in node if tag(c) == 'animate' and c.get('attributeName') == 'opacity']
+                if opacity_tracks and 'opacity' not in declarations and all(
+                        all(number_text(v) == 0 for v in c.get('values').split(';')) for c in opacity_tracks):
+                    hidden = True
+                    break
+                if opacity and not opacity_tracks:
+                    try:
+                        if number_text(opacity) == 0:
+                            hidden = True
+                            break
+                    except Invalid:
+                        pass  # Unrecognized CSS value: do not infer visibility.
+            reasons = (['constant values'] if constant else []) + (['permanently hidden by display/opacity'] if hidden else [])
+            if reasons:
+                warnings.append(f"{tag(animation)}: ineffective track ({', '.join(reasons)})")
+            else:
+                effective += 1
+        if not effective:
+            errors.append('Article SVG requires at least one potentially visible changing animation track')
+    durations = sorted({e.get('dur') for e in animations if e.get('dur') is not None})
     return {'ok': not errors, 'errors': errors, 'warnings': warnings, 'bytes': len(source.encode()), 'sha256': hashlib.sha256(source.encode()).hexdigest(), 'animations': len(animations), 'duration': durations[0] if len(durations) == 1 else durations, 'delivery_mode': 'static_exception' if allow_static and not animations else 'dynamic', 'scope': 'conservative SVG/SMIL profile; layout, fonts, clipping and WeChat NOT_VERIFIED'}
 
 def ancestors(e, parents):

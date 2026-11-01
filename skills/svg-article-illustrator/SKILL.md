@@ -2,7 +2,7 @@
 name: svg-article-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.7"
+version: "1.1.8"
 license: MIT
 description: 根据文章内容创作动态 SVG 文章配图，以构图、图形关系和状态变化解释内容；默认输出3–5秒原生SMIL动画，静态图仅作为明确例外。支持时间轴编译、布局检查与PNG导出；不用于完整视频制作或自动发布。
 ---
@@ -14,7 +14,7 @@ description: 根据文章内容创作动态 SVG 文章配图，以构图、图�
 
 静态只用于调用方明确要求静态、目标平台拒绝动画，或动画确实无解释增益的总结图。选择静态必须在配图计划和交付说明中逐图写明理由；不得因为关系图、分类图或制作方便而静默降级为静态。
 
-最终交付前用 `validate` 或 `publish` 验收，命令默认拒绝没有任何原生 SMIL 的 SVG。只有已记录逐图理由的静态例外才可显式加 `--allow-static`；不得为通过门禁改写例外理由。Markdown 内联交付也要先把每段 SVG 单独通过该门禁。
+最终交付前用 `validate` 或 `publish` 验收，命令默认拒绝没有原生 SMIL、全部轨道恒定或所有变化轨道均可确定永久隐藏的 SVG。只有已记录逐图理由的静态例外才可显式加 `--allow-static`；不得为通过门禁改写例外理由。Markdown 内联交付也要先把每段 SVG 单独通过该门禁。
 
 ## 工作方法
 

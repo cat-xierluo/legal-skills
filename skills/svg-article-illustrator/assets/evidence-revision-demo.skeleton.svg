@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="revision-title revision-desc">
+  <title id="revision-title">新证据来了，判断可以更新</title>
+  <desc id="revision-desc">原始记录E1、E2保留；新增E3进入推理，判断J1移入历史，J2仍为暂定。抽象教学示意，非真实软件界面；重演不表示撤销档案。</desc>
+  <g data-cue="canvas" data-layout-id="canvas" data-layout-role="background">
+    <rect x="0" y="0" width="800" height="450" fill="#F7F3EB" rx="12" />
+  </g>
+  <text x="44" y="53" font-size="34" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#203B42" text-anchor="start" font-weight="600">新证据来了，判断可以更新</text>
+  <text x="65" y="104" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#203B42" text-anchor="start">原记录</text>
+  <text x="610" y="104" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#203B42" text-anchor="middle">暂定判断</text>
+  <g data-cue="links" data-layout-id="links" data-layout-role="background">
+    <path d="M187 184 C285 184 306 216 407 216 M187 280 C282 280 304 246 407 246 M318 336 Q367 336 407 276" stroke="#CFD2C5" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M450 246 H540" stroke="#C0C8BB" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="E1" data-layout-id="E1" transform="translate(135 181)">
+    <path d="M-35 -43 H22 L35 -30 V43 H-35 Z" stroke="#CDD2C8" stroke-width="1.5" fill="#FFFDF8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M22 -43 V-30 H35" stroke="#CDD2C8" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="-23" y="-25" width="29" height="5" fill="#167C80" />
+    <path d="M-23 -9 H17 M-23 1 H22" stroke="#D2D8CB" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="0" y="29" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#167C80" text-anchor="middle" font-weight="600">E1</text>
+  </g>
+  <g data-cue="E2" data-layout-id="E2" transform="translate(135 285)">
+    <path d="M-35 -43 H22 L35 -30 V43 H-35 Z" stroke="#CDD2C8" stroke-width="1.5" fill="#FFFDF8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M22 -43 V-30 H35" stroke="#CDD2C8" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="-23" y="-25" width="29" height="5" fill="#B46F35" />
+    <path d="M-23 -9 H17 M-23 1 H22" stroke="#D2D8CB" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="0" y="29" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#B46F35" text-anchor="middle" font-weight="600">E2</text>
+  </g>
+  <g data-cue="E3" data-layout-id="E3" transform="translate(280 336)">
+    <path d="M-35 -43 H22 L35 -30 V43 H-35 Z" stroke="#CDD2C8" stroke-width="1.5" fill="#FFFDF8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M22 -43 V-30 H35" stroke="#CDD2C8" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="-23" y="-25" width="29" height="5" fill="#74628E" />
+    <path d="M-23 -9 H17 M-23 1 H22" stroke="#D2D8CB" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="0" y="29" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#74628E" text-anchor="middle" font-weight="600">E3</text>
+  </g>
+  <g data-cue="copy1" data-layout-id="copy1" transform="translate(187 184)">
+    <circle cx="0" cy="0" r="10" fill="#167C80" />
+    <circle cx="0" cy="0" r="3" fill="#FFFDF8" />
+  </g>
+  <g data-cue="copy2" data-layout-id="copy2" transform="translate(187 280)">
+    <circle cx="0" cy="0" r="10" fill="#B46F35" />
+    <circle cx="0" cy="0" r="3" fill="#FFFDF8" />
+  </g>
+  <g data-cue="copy3" data-layout-id="copy3" transform="translate(318 336)">
+    <circle cx="0" cy="0" r="10" fill="#74628E" />
+    <circle cx="0" cy="0" r="3" fill="#FFFDF8" />
+  </g>
+  <g data-cue="old" data-layout-id="old" transform="translate(610 224)">
+    <circle cx="0" cy="0" r="53" fill="#FFFDF8" stroke="#B46F35" stroke-width="2" />
+    <circle cx="0" cy="0" r="46" fill="none" stroke="#B46F35" stroke-width="0.7" />
+    <text x="0" y="8" font-size="34" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#B46F35" text-anchor="middle" font-weight="600">J1</text>
+  </g>
+  <g data-cue="new" data-layout-id="new" transform="translate(610 224)">
+    <circle cx="0" cy="0" r="53" fill="#FFFDF8" stroke="#167C80" stroke-width="2" />
+    <circle cx="0" cy="0" r="46" fill="none" stroke="#167C80" stroke-width="0.7" />
+    <text x="0" y="8" font-size="34" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#167C80" text-anchor="middle" font-weight="600">J2</text>
+  </g>
+  <text x="508" y="350" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#716E5C" text-anchor="end">历史</text>
+</svg>

@@ -148,6 +148,50 @@ class MotionTests(unittest.TestCase):
             manual=f'<svg xmlns="{SVG}" viewBox="0 0 100 100"><g><rect width="20" height="20"/><animate attributeName="opacity" values="0;1;0" keyTimes="0;.5;1" begin="0s" dur="{duration}s" repeatCount="indefinite"/></g></svg>'
             self.assertFalse(validate(manual)['ok'])
 
+    def test_missing_duration_has_structured_validate_report(self):
+        good = compile_svg(SKELETON, PLAN)
+        root = ET.fromstring(good)
+        animations = [e for e in root.iter() if e.tag in {f'{{{SVG}}}animate', f'{{{SVG}}}animateTransform'}]
+        del animations[0].attrib['dur']
+        broken = ET.tostring(root, encoding='unicode')
+        report = validate(broken)
+        self.assertFalse(report['ok'])
+        self.assertTrue(any('dur must use seconds' in e for e in report['errors']))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'missing.svg'; path.write_text(broken)
+            result = subprocess.run([sys.executable, str(HERE/'svg_motion.py'), 'validate', str(path)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertFalse(json.loads(result.stdout)['ok'])
+            self.assertEqual(result.stderr, '')
+
+    def test_effective_animation_requires_possible_visibility_and_change(self):
+        def svg(body): return f'<svg xmlns="{SVG}" viewBox="0 0 100 100">{body}</svg>'
+        def anim(values='0;1;0', kind='animate', extra='attributeName="opacity"'):
+            return f'<{kind} {extra} values="{values}" keyTimes="0;.5;1" begin="0s" dur="4s" repeatCount="indefinite"/>'
+        def rect(animation, attrs=''):
+            return f'<rect width="10" height="10" {attrs}>{animation}</rect>'
+        scale = anim("1 1;1.0 1e0;1 1", "animateTransform", 'attributeName="transform" type="scale"')
+        translation = anim("0 0;10 0;0 0", "animateTransform", 'attributeName="transform" type="translate"')
+        for body in [rect(anim('1;1.0;1e0')), rect(anim(), 'display="none"'),
+                     f'<g opacity="0">{rect(anim())}</g>', f'<g style="display:none">{rect(anim())}</g>',
+                     f'<g><rect width="10" height="10"/>{scale}</g>']:
+            with self.subTest(body=body):
+                report = validate(svg(body))
+                self.assertFalse(report['ok'], report)
+                self.assertTrue(any('ineffective track' in w for w in report['warnings']))
+        # A zero initial opacity animated later is not permanently hidden.
+        visible = rect(anim(), 'opacity="0"')
+        self.assertTrue(validate(svg(visible))['ok'])
+        parent = f'<g opacity="0">{anim()}<g><rect width="10" height="10"/>{translation}</g></g>'
+        self.assertTrue(validate(svg(parent))['ok'])
+        hidden_parent = f'<g opacity="0">{anim("0;0.0;0e0")}<g><rect width="10" height="10"/>{translation}</g></g>'
+        self.assertFalse(validate(svg(hidden_parent))['ok'])
+        mixed = validate(svg(visible + rect(anim('1;1.0;1e0'), 'x="20"')))
+        self.assertTrue(mixed['ok'], mixed)
+        self.assertTrue(any('constant values' in w for w in mixed['warnings']))
+        # A value we cannot establish as zero must not be called hidden.
+        self.assertTrue(validate(svg(rect(anim(), 'style="opacity:var(--unknown)"')))['ok'])
+
     def test_dynamic_is_the_default_and_static_requires_explicit_exception(self):
         static=ROOT.joinpath('assets/layouts.svg').read_text()
         rejected=validate(static)

@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-30 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.1.7 | 分支候选：补充阅读编排与返修回查，联合审阅内容、布局和文字疏密；延续3–5秒原生SMIL默认，尚未打包新ZIP。 |
+| 2026-11-01 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.1.8 | 修复动态例外、小字测量与无效动画检查，新增三题材可重建案例；尚未打包新ZIP。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动改为临时目录构建、成功后整批替换，失败不破坏上一批产物；修复资产数输出的变量解析问题，并拒绝符号链接与同名目录目标；补 Bash 实际执行回归。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.6 | 专家套件发布 staging 兼容 macOS Info-ZIP 未标记 UTF-8 的中文文件名，避免成员清单误报不匹配。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
@@ -505,9 +505,9 @@
 <td>工具·配图</td>
 <td style="word-break:break-word">默认输出3–5秒的解释性SMIL动态文章配图，校验与发布默认拒绝静态；静态仅作逐图说明并可显式放行的例外。提供时间轴编译、布局预览与保留原生SMIL的本地交接导出，保留PNG路径</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.7</td>
+<td style="text-align:center">v1.1.8</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.29/svg-article-illustrator-1.0.5.zip">已发布 v1.0.5</a></td>
-<td>源码 v1.1.7 分支候选：补充阅读编排与返修回查，联合审阅内容、布局和文字疏密；延续3–5秒原生SMIL默认与显式静态例外。尚未打包，下载仍为 v1.0.5。</td>
+<td>源码 v1.1.8：修复动态例外、小字测量与无效动画检查，新增三题材可重建案例；保持3–5秒原生SMIL默认。尚未打包，下载仍为 v1.0.5。</td>
 </tr>
 <tr>
 <td><a href="skills/handdrawn-article-illustrator/"><strong>handdrawn-article-illustrator</strong></a></td>

@@ -32,3 +32,13 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_svg_motion.py --browser-fixture /
 此外仍需通过预览 UI 实际执行播放、暂停、逐秒与宽度切换，播放两个周期并检查关键截图。浏览器回归函数覆盖的是固定场景，不能代替真实文章逐图验收。
 
 正式 Skill-lint 的候选绑定签名与三轮前向评估未由这些命令执行，不应声称 `HARNESS_REVIEW_VERIFIED` 或 `INSTRUCTION_STABILITY_VERIFIED`。无旧上下文的创作前向测试、目标项目采用与真机证据由相应审阅者补充。
+
+## 三种内容的可重建样例
+
+以下是具体内容的实现，可用于复查方法迁移，不作为固定版式。每组骨架与时间轴同名，按时间轴工具编译并在实际阅读宽度审阅。
+
+| 示例 | 内容与需核的关系 |
+|---|---|
+| [水流暂存](../assets/water-flow-demo.skeleton.svg) / [时轴](../assets/water-flow-demo.timeline.json) | 同量输入，经孔隙后延迟释放；水量保留，时间刻痕与空间位置区分。 |
+| [判断修订](../assets/evidence-revision-demo.skeleton.svg) / [时轴](../assets/evidence-revision-demo.timeline.json) | 原记录留存，证据副本进入判断，旧判断归档，新判断仍暂定。 |
+| [组件重组](../assets/component-regroup-demo.skeleton.svg) / [时轴](../assets/component-regroup-demo.timeline.json) | 九个组件连续移动，类型不变，三组任务各含三类组件各一件。 |

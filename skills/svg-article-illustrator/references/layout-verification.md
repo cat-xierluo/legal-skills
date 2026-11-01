@@ -6,7 +6,7 @@
 
 `scripts/measure_layout.js` 的 `measureSvgLayout(svg, options)` 已嵌入 preview。函数先核 document.hidden；后台时立即抛出 NOT_VERIFIED。fonts.ready 和双 rAF 共用最多 2 秒等待，等待中切后台或超时即拒绝，不产出测量结果；把页面带到前台后重测。options.waitTimeoutMs 可缩短至 (0,2000] 毫秒。预览按钮会显示失败原因，不保留旧报告冒充新结果。等待成功后读取 BCR、实际透明度、屏幕矩阵、文字长度及字号。可从浏览器自动化 `evaluate()` 调用，不需重写测量逻辑。
 
-- 全部 `<text>` 自动纳入；对象或组合加唯一 `data-layout-id`。未标注且不属于已标注组合的图形会计入 `unannotated-graphics` 警告，不因此宣称全图已检。
+- 全部 `<text>` 自动纳入；含 `tspan` / `textPath` 时按实际文字节点测Range边界及继承字号，父文字总框仍核越界但不与文字片段重复计碰撞，`title` / `desc` 不作为可见文字。对象或组合加唯一 `data-layout-id`。未标注且不属于已标注组合的图形会计入 `unannotated-graphics` 警告，不因此宣称全图已检。
 - 容器形状标 `data-layout-id="panel" data-layout-role="container"`；文字或文字祖先标 `data-layout-within="panel"`。只有目标存在、可见且实际全包含才豁免容器碰撞；文字越出容器仍报错。嵌套容器可逐层声明归属，只有每一层均可见且实测包含时才传递豁免；排除记录包含完整 containment 路径，缺边、循环或任意一层越界均不作为传递包含。
 - 背景可标 `data-layout-role="background"`，报告明确记录被排除的相交对；不能把有内容的对象批量标成背景来消警告。
 - 互斥状态祖先标 `data-state-group="result" data-state="old"` 或 `new`。透明度由当前帧计算，隐藏项单列。两个不同状态同时可见且相交会报 `exclusive-states-both-visible`，标注本身不能豁免。

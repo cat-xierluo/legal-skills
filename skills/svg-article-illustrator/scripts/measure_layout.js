@@ -51,6 +51,30 @@ async function measureSvgLayout(svg, options = {}) {
     const stateHost=e.closest('[data-state-group]');
     return {e,id,rect:box(e),role:e.getAttribute('data-layout-role') || 'object',within:e.closest('[data-layout-within]')?.getAttribute('data-layout-within'),stateGroup:stateHost?.getAttribute('data-state-group'),state:stateHost?.getAttribute('data-state'),...visibility(e)};
   });
+  // Text with nested spans needs one geometric record per actual text node.
+  // Keep aggregate text records for IDs/containment, but do not compare their
+  // union boxes as collision candidates alongside their own runs.
+  for(const text of svg.querySelectorAll('text')){
+    if(!text.querySelector('tspan,textPath')) continue;
+    const owner=records.find(r=>r.e===text);
+    if(owner) owner.textAggregate=true;
+    for(const record of records){
+      if(record.e!==text && text.contains(record.e) && ['tspan','textpath'].includes(record.e.tagName.toLowerCase())) record.textAggregate=true;
+    }
+    const walker=document.createTreeWalker(text,NodeFilter.SHOW_TEXT);
+    let node,index=0;
+    while((node=walker.nextNode())){
+      if(!node.data.trim())continue;
+      const element=node.parentElement;
+      if(!['text','tspan','textpath'].includes(element.tagName.toLowerCase()))continue;
+      if(element.closest('title,desc,defs'))continue;
+      const range=document.createRange();range.selectNodeContents(node);
+      const rect=box(range);range.detach();
+      const id=`${owner.id}::run-${index++}`;
+      const stateHost=element.closest('[data-state-group]');
+      records.push({e:element,id,rect,role:'text-run',textRun:true,within:element.closest('[data-layout-within]')?.getAttribute('data-layout-within'),stateGroup:stateHost?.getAttribute('data-state-group'),state:stateHost?.getAttribute('data-state'),...visibility(element)});
+    }
+  }
   const viewport=box(svg);
   const active=records.filter(r=>{
     if(!r.visible){hidden.push({id:r.id,opacity:r.opacity,reason:r.reason});return false;}
@@ -64,11 +88,12 @@ async function measureSvgLayout(svg, options = {}) {
       if(!container || !container.visible || container.role!=='container') errors.push({kind:'invalid-container',id:r.id,within:r.within});
       else if(!contains(container.rect,r.rect)) errors.push({kind:'outside-container',id:r.id,within:r.within});
     }
-    if(r.e.tagName.toLowerCase()==='text'){
+    if((r.e.tagName.toLowerCase()==='text' && !r.textAggregate) || r.textRun){
       const matrix=r.e.getScreenCTM();
       const px=parseFloat(getComputedStyle(r.e).fontSize)*Math.hypot(matrix.a,matrix.b);
       r.fontPx=px;
-      r.textLength=r.e.getComputedTextLength();
+      if(r.textRun) r.textBoundsWidthPx=r.rect.width;
+      else r.textLength=r.e.getComputedTextLength();
       r.fontFamily=getComputedStyle(r.e).fontFamily;
       if(px<minTextPx) errors.push({kind:'small-text',id:r.id,fontPx:px,minimum:minTextPx});
     }
@@ -87,14 +112,14 @@ async function measureSvgLayout(svg, options = {}) {
   };
   for(let i=0;i<active.length;i++) for(let j=i+1;j<active.length;j++){
     const a=active[i],b=active[j];
-    if(!overlap(a.rect,b.rect))continue;
+    if(a.textAggregate || b.textAggregate || !overlap(a.rect,b.rect))continue;
     if(a.stateGroup && a.stateGroup===b.stateGroup && a.state && b.state && a.state!==b.state){
       errors.push({kind:'exclusive-states-both-visible',a:a.id,b:b.id,opacity:[a.opacity,b.opacity]});continue;
     }
     let reason=null,containment=null;
     if(a.role==='background'||b.role==='background') reason='explicit background';
     else if((a.role==='container' && (containment=containmentPath(b,a.id))) || (b.role==='container' && (containment=containmentPath(a,b.id)))) reason='declared and measured containment';
-    else if((a.e.contains(b.e)&&contains(a.rect,b.rect)) || (b.e.contains(a.e)&&contains(b.rect,a.rect))) reason='measured composite and its descendant';
+    else if((!a.textRun && a.e.contains(b.e)&&contains(a.rect,b.rect)) || (!b.textRun && b.e.contains(a.e)&&contains(b.rect,a.rect))) reason='measured composite and its descendant';
     if(reason)exclusions.push({a:a.id,b:b.id,reason,...(containment?{containment}: {})});
     else errors.push({kind:'overlap-candidate',a:a.id,b:b.id});
   }

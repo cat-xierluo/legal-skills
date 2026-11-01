@@ -63,6 +63,23 @@ async function runSvgMotionBrowserChecks(options={}){
   fixture.querySelector('[data-layout-id="outer"]').removeAttribute('data-layout-within');
   fixture.querySelector('[data-layout-id="inner"]').setAttribute('width','40');nested=await measureSvgLayout(fixture);
   assert(nested.errors.some(e=>e.kind==='outside-container'&&e.id==='nested-label'),'broken containment cannot be excluded',{errors:nested.errors});
+  // Measure actual text runs, including inherited styles and nested tspans.
+  fixture.style.width='600px';
+  fixture.innerHTML='<text x="20" y="50" font-size="24" data-layout-id="mixed">Big <tspan x="150" font-size="8">tiny <tspan x="220">nested</tspan></tspan><tspan x="320">inherited</tspan></text>';
+  let runs=await measureSvgLayout(fixture);
+  const small=runs.errors.filter(e=>e.kind==='small-text');
+  assert(small.length===2 && small.every(e=>e.id.startsWith('mixed::run-')),'nested inherited small text runs detected',{errors:runs.errors,items:runs.items});
+  assert(runs.items.some(e=>e.id==='mixed::run-3' && Math.abs(e.fontPx-24)<.1),'span inherits parent font size',{items:runs.items});
+  assert(!runs.errors.some(e=>e.kind==='overlap-candidate'),'parent text aggregate is not counted against its runs',{errors:runs.errors});
+  fixture.innerHTML='<text font-size="24" data-layout-id="runs"><tspan x="30" y="100">overlap</tspan><tspan x="30" y="100">overlap</tspan></text>';
+  runs=await measureSvgLayout(fixture);
+  assert(runs.errors.some(e=>e.kind==='overlap-candidate' && e.a.startsWith('runs::run-') && e.b.startsWith('runs::run-')),'overlapping sibling runs detected',{errors:runs.errors});
+  fixture.querySelectorAll('tspan')[1].setAttribute('x','250');
+  runs=await measureSvgLayout(fixture);
+  assert(!runs.errors.some(e=>e.kind==='overlap-candidate'),'separated sibling runs do not collide',{errors:runs.errors});
+  fixture.innerHTML='<text x="30" y="100" font-size="24" data-layout-id="accessible"><title>Nonvisual title</title><desc>Nonvisual description</desc><tspan>visible</tspan></text>';
+  runs=await measureSvgLayout(fixture);
+  assert(runs.errors.length===0 && runs.items.filter(e=>e.textRun).length===1,'accessible metadata is not measured as visible text',{errors:runs.errors,items:runs.items});
   host.remove();await frame(0);
   return {ok:true,checks:results.length,results};
 }
