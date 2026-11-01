@@ -179,6 +179,26 @@ class SnapshotTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertFalse(self.safety.exists())
 
+    def test_dirty_submodule_is_recorded_not_silently_dropped(self):
+        sub = self.base / "sub"
+        sub.mkdir()
+        subprocess.run(["git", "-C", str(sub), "init", "-q", "-b", "main"], env=ENV, check=True)
+        (sub / "f.txt").write_text("sub base\n")
+        subprocess.run(["git", "-C", str(sub), "add", "-A"], env=ENV, check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(sub), "commit", "-qm", "sub"], env=ENV, check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.repo), "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(sub), "sub"], env=ENV, check=True, capture_output=True)
+        (sub / "f.txt").write_text("sub local edit\n")
+        out = self.create()
+        skipped = json.loads((out / "skipped.json").read_bytes())
+        self.assertEqual([e["path"] for e in skipped], ["sub"])
+        self.assertIn("submodule", skipped[0]["reason"])
+        self.assertEqual(self.verify(out).returncode, 0)
+
+    def test_verify_scope_states_it_does_not_prove_preincident_equality(self):
+        out = self.create()
+        report = json.loads(self.verify(out).stdout)
+        self.assertIn("does not prove", report["scope"])
+
     def test_empty_state(self):
         out = self.create()
         self.assertEqual(json.loads((out / "snapshot.json").read_bytes())["entries"], 0)

@@ -41,6 +41,9 @@ def read_state(path):
         data = path.read_bytes()
         return {"kind": "file", "sha256": sha(data), "size": len(data), "mode": mode}
     if stat.S_ISDIR(info.st_mode):
+        if (path / ".git").exists():
+            # A submodule keeps its own repository; never copy or follow it here.
+            return {"kind": "submodule", "mode": mode}
         return {"kind": "directory", "mode": mode}
     raise ValueError("unsupported special file: " + str(path))
 
@@ -91,6 +94,8 @@ def collect(repo, entries, include_ignored):
         if value["kind"] == "directory":
             for child in sorted(path.iterdir()):
                 visit(child.relative_to(repo).as_posix())
+        elif value["kind"] == "submodule":
+            states[name] = {"kind": "submodule", "mode": value["mode"]}
 
     for name in sorted(names):
         visit(name)
@@ -130,6 +135,7 @@ def snapshot(repo, safety_root, label, include_ignored=False):
     out.mkdir(parents=True, mode=0o700)
     out.chmod(0o700)
     inventory = {}
+    skipped = []
 
     def save(relative, data):
         target = safe_path(out, relative)
@@ -155,7 +161,11 @@ def snapshot(repo, safety_root, label, include_ignored=False):
             if name not in changed_index:
                 continue
             if mode == "160000":
-                raise ValueError("dirty submodule needs its own snapshot: " + name)
+                # A submodule's inner state lives in another repository; only the
+                # gitlink is recorded here. Snapshot it separately, never fail silently.
+                skipped.append({"path": name, "reason": "dirty submodule; snapshot the submodule repository separately",
+                                 "oid": oid, "stage": stage})
+                continue
             data = git(repo, "cat-file", "blob", oid)
             blob_path = "index-blobs/" + oid
             if blob_path not in inventory:
@@ -163,6 +173,7 @@ def snapshot(repo, safety_root, label, include_ignored=False):
             staged_objects.append({"path": name, "mode": mode, "stage": stage,
                                    "oid": oid, "file": blob_path})
         save("staged-objects.json", encode(staged_objects))
+        save("skipped.json", encode(skipped))
         for name, expected in sorted(states.items()):
             source = safe_path(repo, name)
             destination = safe_path(out / "working-tree", name)
@@ -177,13 +188,18 @@ def snapshot(repo, safety_root, label, include_ignored=False):
             elif expected["kind"] == "directory":
                 destination.mkdir(parents=True, exist_ok=True)
                 destination.chmod(expected["mode"])
-            if read_state(destination) != expected:
+            elif expected["kind"] == "submodule":
+                skipped.append({"path": name, "reason": "submodule working tree; snapshot the submodule repository separately",
+                                 "mode": expected["mode"]})
+                continue
+            if expected["kind"] != "submodule" and read_state(destination) != expected:
                 raise ValueError("copy mismatch: " + repr(name))
         # Catch changes during copying, including same-status text edits.
         if capture_git(repo) != before or collect(repo, entries, include_ignored) != states:
             raise ValueError("repository drift during snapshot; retry after writers yield")
         save("states.json", encode(states))
         meta = {"schema": "git-workflow/main-snapshot/v1", "complete": True,
+                "skipped": skipped,
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "repo": str(repo), "head": before["head"], "branch": before["branch"],
                 "label": label, "include_ignored": include_ignored,
@@ -194,7 +210,8 @@ def snapshot(repo, safety_root, label, include_ignored=False):
         if checked["status"] != "PASS":
             raise ValueError("new snapshot failed self-verification: " + repr(checked))
         return {**checked, "head": meta["head"], "entries": len(entries),
-                "working_paths": len(states), "staged_blobs": len(staged_objects)}
+                "working_paths": len(states), "staged_blobs": len(staged_objects),
+                "skipped": skipped}
     except Exception as error:
         (out / "INCOMPLETE.json").write_bytes(encode({"complete": False, "error": str(error)}))
         raise
@@ -208,7 +225,8 @@ def verify(snapshot_dir):
         problems.append("invalid or incomplete snapshot")
     if (root / "INCOMPLETE.json").exists():
         problems.append("incomplete marker present")
-    required = {"index.bin", "index-entries.z", "status.z", "status.json", "states.json", "staged-objects.json"}
+    required = {"index.bin", "index-entries.z", "status.z", "status.json", "states.json",
+                "staged-objects.json", "skipped.json"}
     if not required <= set(meta.get("files", {})):
         problems.append("missing required metadata files")
     for name, expected in meta.get("files", {}).items():
@@ -218,6 +236,8 @@ def verify(snapshot_dir):
     if not problems:
         states = json.loads((root / "states.json").read_bytes())
         for name, expected in states.items():
+            if expected["kind"] == "submodule":
+                continue
             if read_state(safe_path(root / "working-tree", name)) != expected:
                 problems.append("working path mismatch: " + repr(name))
         for entry in json.loads((root / "staged-objects.json").read_bytes()):
@@ -225,7 +245,10 @@ def verify(snapshot_dir):
             if entry["file"] not in meta["files"] or sha(path.read_bytes()) != meta["files"][entry["file"]]:
                 problems.append("missing staged object: " + repr(entry["path"]))
     return {"status": "FAIL" if problems else "PASS", "snapshot_dir": str(root),
-            "problems": problems}
+            "problems": problems,
+            "skipped": meta.get("skipped", []),
+            "scope": "verifies snapshot internal consistency and byte integrity only; "
+                     "it does not prove the snapshot equals the pre-incident repository state"}
 
 
 def main():
