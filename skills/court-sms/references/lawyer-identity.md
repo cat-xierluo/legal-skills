@@ -113,7 +113,8 @@ python3 scripts/lawyer_config.py set-tail \
 
 | 结果 | 接续动作 |
 |---|---|
-| `identity.status=not_requested` | 匿名API可读，未提交任何后四位，继续已授权范围内下载 |\n| `identity.status=not_required` | 仅只核验模式中开关关闭，不索取手机号 |
+| `identity.status=not_requested` | 匿名API可读，未提交任何后四位，继续已授权范围内下载 |
+| `identity.status=not_required` | 仅只核验模式中开关关闭，不索取手机号 |
 | `status=needs_config` | 缺本人配置时询问并保存；客户短信改用单次后四位入口；非法或冲突配置先修正，不请求法院 |
 | `next_action=ask_recipient_mobile_last4` | 执行上述问答，收到答案后携带失败清单续跑 |
 | `next_action=check_delivery_registration` | 本次预算耗尽，停止并提示核对登记 |
