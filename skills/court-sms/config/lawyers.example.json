@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "lawyers": {
+    "lawyer-example": {
+      "name": "示例律师",
+      "mobile": null,
+      "mobile_last4": null,
+      "id_last4": null,
+      "delivery_recipient": false,
+      "note": null
+    }
+  }
+}

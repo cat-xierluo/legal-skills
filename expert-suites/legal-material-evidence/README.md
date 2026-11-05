@@ -27,7 +27,7 @@
 | [local-asr](../../skills/local-asr/) | 本地语音识别转写音视频，保留时间戳与说话人 | [已发布 v2.3.5](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/local-asr-2.3.5.zip) |
 | [transcription-corrector](../../skills/transcription-corrector/) | 纠正同音字、专有名词和 ASR 漂移 | [已发布 v1.0.9](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/transcription-corrector-1.0.9.zip) |
 | [tingwu-asr](../../skills/tingwu-asr/) | 使用通义听悟完成云端长音视频转录 | [已发布 v0.4.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/tingwu-asr-0.4.8.zip) |
-| [court-sms](../../skills/court-sms/) | 解析法院短信、下载文书并归档到案件目录 | [已发布 v1.5.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/court-sms-1.5.4.zip) |
+| [court-sms](../../skills/court-sms/) | 解析法院短信、下载文书并归档到案件目录；源码 v1.6.2 待发布 | [已发布 v1.5.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/court-sms-1.5.4.zip) |
 | [dingtalk-minutes](../../skills/dingtalk-minutes/) | 读取钉钉 AI 听记摘要、逐字稿和待办 | [已发布 v1.1.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/dingtalk-minutes-1.1.1.zip) |
 
 ## 建议使用方式

@@ -22,7 +22,7 @@
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
 | [new-case](../../skills/new-case/) | 建立标准案件目录、信息底板和期限结构 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/new-case-1.5.0.zip) |
-| [court-sms](../../skills/court-sms/) | 解析法院短信、获取法院文书并回填案件材料 | [已发布 v1.5.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/court-sms-1.5.4.zip) |
+| [court-sms](../../skills/court-sms/) | 解析法院短信、获取法院文书并回填案件材料；源码 v1.6.2 待发布 | [已发布 v1.5.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/court-sms-1.5.4.zip) |
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-ocr-1.6.0.zip) |
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页码和证据索引，拆分、合并并规范材料 | [已发布 v0.6.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/pdf-organizer-0.6.1.zip) |
 | [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、起诉状证据初评、庭审复盘和上诉再审判断，形成风险与诉讼策略 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.10.30/legal-case-analysis-1.1.2.zip) |
