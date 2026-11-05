@@ -2,18 +2,22 @@
 name: court-sms
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.5.4"
+version: "1.6.2"
 license: MIT
-description: 本技能应在用户收到法院短信（文书送达、立案通知、开庭提醒等）时使用，自动提取案号、当事人、下载链接，下载文书并归档到对应案件目录。会落盘敏感诉讼数据到本地，请确认目标位置私密。
+description: 本技能应在用户收到法院短信（文书送达、立案通知、开庭提醒等）时使用，解析链接、处理手机号或证件后四位核验、下载文书并归档。先尝试API直连，成功不读取或询问手机号；确需核验才使用本机私有配置，核验拒绝后询问实际接收手机号后四位并接续。会落盘敏感诉讼数据，请使用私密位置。
 ---
 
 # 法院短信识别与文书下载
 
-## 隐私与合规说明（透明告知，不阻挡执行）
+## 隐私、所需权限与安全说明（透明告知，不阻挡执行）
 
 本技能处理的是**法院诉讼文书与送达短信**，内容含案号、当事人、法院信息、送达时间等敏感诉讼数据，部分还可能涉及客户机密与个人隐私。使用即表示你授权本技能按以下方式处理：
 
 - 下载的文书与归档记录会**落到本地文件系统**（案件目录 + skill 内部 `archive/`）。案件目录位置由 `config/workspace.json` 的 `case_root` 决定（未配置时用当前工作目录），请把它指向仅你本人可访问的私密路径，且勿提交到公开仓库或同步到第三方服务。
+- 处理 zxfw 链接会向短信中对应的法院送达平台发起 HTTPS 请求，并把返回文书下载到本机暂存目录；本 Skill 不向其他第三方发送案件数据。
+- zxfw 的签收确认会向法院写入查收记录。仅在用户已明确授权签收时使用 `--confirm-receipt`；一般下载请求先取列表，若页面要求签收再针对该操作取得授权。已有授权直接复用。
+- 默认先进行只读API探测，成功时不读取或询问手机号。确需核验才读取本机律师配置 `config/lawyers.json`（0600，已被 `.gitignore` 排除）；缺资料时询问保存，以后复用。客户短信所需后四位默认只用于本次核验，不覆盖律师配置；用户明确要求才长期保存。发往法院的仅是后四位，不收集完整身份证号。
+- 核验凭据应匹配该条链接在法院的登记，短信称呼不能单独证明绑定的是客户还是律师号码。API明确要求核验后，客户短信缺凭据或本机号码被拒绝时，按 [身份核验与失败问答](references/lawyer-identity.md) 询问实际接收手机号后四位。
 - 涉及登录凭证（账号、密码、验证码）的步骤，在你粘贴含相关信息的短信后默认自动代入，以实现无感下载。
 - 新建案件目录、写入内部归档记录均按流程自动执行，无需逐步确认。
 
@@ -83,7 +87,7 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 
 | 平台 | 域名 | 下载方式 | 提取参数 |
 |------|------|----------|----------|
-| 全国法院统一送达平台 | `zxfw.court.gov.cn` | curl API 直连 | qdbh, sdbh, sdsin |
+| 全国法院统一送达平台 | `zxfw.court.gov.cn` | API匿名探测优先；确需核验才读配置/问答，已授权才签收并正式取列表下载 | qdbh, sdbh, sdsin；可选 mm |
 | 广东法院电子送达 | `sd.gdems.com` | 浏览器自动化 | 路径中的送达标识码 |
 | 集约送达平台 | `jysd.10102368.com` | 浏览器自动化 | key |
 | 湖北电子送达 | `dzsd.hbfy.gov.cn` | HTTP API（免账号）/ 浏览器自动化（账号模式） | 免账号：msg；账号模式：账号+密码从正文提取 |
@@ -137,12 +141,20 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 
 ### 第三步：文书下载
 
+zxfw 先按 [API优先与按需核验](references/lawyer-identity.md) 执行：
+
+1. **先直接运行下载器**：只提供原始链接和暂存目录；不要先读手机号配置、运行配置列表、询问手机号或用 `--identity-only` 探路。上下文已匹配的 `--lawyer-id` 可沿用，但配置只在确需核验时读取。
+2. **API可读就下载**：匿名列表成功时不查询网页核验开关、不提交后四位。默认不签收；已有签收授权时，匿名探测后发送一次签收，再正式取列表下载。
+3. **确需核验才补资料**：只有下载API明确要求身份核验，才查询核验开关并读取匹配的本机配置。配置已有就复用；缺失时才问询保存。已知登记客户手机号且无凭据时，只询问实际接收手机号后四位。网页开关为true本身不代表API不可读；网络、空列表或普通业务错误不触发收集手机号。
+4. **拒绝后必须问答**：`identity.next_action=ask_recipient_mobile_last4` 时停止后续请求，询问「请提供该短信实际接收手机号的后四位（4位数字）」并等待真实回答。使用可用的自由文本问答工具；工具不适用时普通提问并等待。
+5. **回答后接续**：核验拒绝后用 `--identity-stdin` 传入答案，带 `--retry-identity-from "{该清单路径}"` 先核验再接续；仅缺配置且尚未提交凭据时可改带已匹配的 `--lawyer-id`。均不重新匿名试探，沿用原签收授权和清单状态；此前已发签收（包括未知回执）不重发。客户输入不覆盖本机手机号，两次核验用尽后停止。
+
 > **平台判断**：根据第一步识别的链接域名，选择下载策略。
 > - `zxfw.court.gov.cn` → 方案一（API 直连）→ 方案二 → 方案三
 > - `sd.gdems.com` 或 `jysd.10102368.com` → 跳过方案一，直接方案二 → 方案三
 > - `dzsd.hbfy.gov.cn` → 湖北专属流程（见下方）
 > - `sfpt.cdfy12368.gov.cn`（含广西实例 `171.106.48.55:28083`）→ SFDW 专属流程（见下方）
-> - 未知域名但 URL 路径匹配已知平台特征 → 按路径识别平台（同构异域名支持）
+> - 未知域名但 URL 路径匹配已知平台特征 → 按路径识别平台类别；zxfw 下载器调用固定官方后端，不能仅凭路径认定任意别名实例与其数据互通
 > - 完全无法识别 → 提示用户提供链接信息
 >
 > **⛔ 降级铁律**：严格串行，禁止并行。当前方案成功即停止，绝不降级。禁止"双保险"并行尝试多个方案。
@@ -151,79 +163,57 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 
 | 依赖 | 用途 | 适用方案 | 安装方式 |
 |------|------|----------|----------|
-| Python 3.8+ | 送达证据检查（标准库，无需 pip） | 期限核对前 | macOS/Linux 使用已有 `python3`；缺少时提示安装后重试期限核对 |
-| `curl` | API 下载 | 方案一 | macOS/Linux 预装 |
-| `jq` | JSON 解析（可选） | 方案一 | `brew install jq` |
-| Playwright | 浏览器自动化 | 方案二/三 | 见下方 |
+| Python 3.8+ | zxfw 下载与送达证据检查（标准库，无需 pip） | 方案一及期限核对前 | 使用已有 `python3` |
+| `curl` | 其他平台 API 与诊断 | 多平台 | macOS/Linux 预装 |
+| `jq` | JSON 解析（可选） | 其他平台手工诊断 | `brew install jq` |
+| Playwright 或宿主已有浏览器工具 | 页面、网络监听和下载 | 方案二/三 | 优先复用当前环境已配置的能力 |
 
-**Playwright 安装指引**（仅方案二/三需要）：
+**浏览器依赖**：API 失败后先发现宿主实际提供的浏览器/MCP/CLI 能力；缺少时说明具体缺口，按用户环境已有授权处理安装，不假定某个固定 MCP 名称或全局安装已存在。
 
-```bash
-# 方案二: Playwright CLI
-npm install -g playwright
-npx playwright install chromium
-
-# 方案三: Playwright MCP（需在 Claude Code 设置中配置）
-# 在 settings.json 的 mcpServers 中添加：
-# "playwright": { "command": "npx", "args": ["@anthropic-ai/mcp-playwright"] }
-```
-
-> **⛔ 大多数情况下不需要 Playwright**：zxfw 平台方案一直接 curl 调用 API，无需浏览器。仅 gdems/jysd 平台或**方案一失败后**才需要方案二/三。禁止在方案一执行期间同时打开浏览器。
+> **zxfw 先走 API**：瞬态失败按下述策略重试；非 JSON、参数/业务错误、空列表等按实际原因处理，必要时再串行进入浏览器。不要在 API 下载尚未结束时同时打开同一送达页面。
 
 #### 方案一 — API 直连（优先）
 
-完全无头，无需浏览器。直接调用 zxfw 后端 API 获取文书下载链接，再用 curl 下载 PDF。
+使用 [标准库下载器](scripts/download_zxfw.py)，从 SPA fragment query 中提取参数，先只读探测列表；可读时直接进入下载，确需核验时才在同一HTTP会话中读取配置并提交后四位，再处理已授权签收与下载。每次在 `--output` 下创建独立私密目录，结果的 `manifest_path` 指向本次清单。
 
-**API 信息**：
+**当前上游流程**（2026-11-04 核对，固定来源见 [归属声明](references/ATTRIBUTION.md)）：
 
-- 端点：`POST https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/getWsListBySdbhNew`
-- Content-Type：`application/json`
-- 请求体：`{ "qdbh": "xxx", "sdbh": "xxx", "sdsin": "xxx" }`（从短信 URL 提取）
-- 响应字段：`data[].c_wsmc`（文书名称）、`data[].wjlj`（OSS 签名下载链接）、`data[].c_fymc`（法院名称）
-- 无需认证、无需浏览器
-
-```bash
-# 1. 从短信 URL 提取参数（示例）
-qdbh="DEMO_qdbh_value"
-sdbh="DEMO_sdbh_value"
-sdsin="DEMO_sdsin_value"
-
-# 2. 调用 API 获取文书列表
-mkdir -p /tmp/court-sms-staging/
-resp=$(curl -s -X POST "https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/getWsListBySdbhNew" \
-  -H "Content-Type: application/json" \
-  -d "{\"qdbh\":\"$qdbh\",\"sdbh\":\"$sdbh\",\"sdsin\":\"$sdsin\"}")
-
-# 3. 解析文书列表，逐个下载 PDF
-echo "$resp" | jq -r '.data[] | "\(.c_wsmc)\t\(.wjlj)"' | while IFS=$'\t' read -r name url; do
-  curl -sL -o "/tmp/court-sms-staging/${name}.pdf" "$url"
-done
-
-# 4. 验证下载结果
-ls -lh /tmp/court-sms-staging/*.pdf
-```
-
-#### 方案二 — 无头浏览器（Playwright CLI）
-
-当方案一 API 不可用或链接过期时，用 Playwright CLI 无头模式打开页面，拦截网络请求获取下载链接。
+- 同一基址 `https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/` 下，上游先调用 `updateSdxxBySdzt` 签收，再调用 `getWsListBySdbhNew` 取列表；两个接口仍用 `POST application/json` 及 `{qdbh,sdbh,sdsin}`。这不是列表接口改名。
+- 官网已新增 `getSfhyKg` 开关与 `checkSdryxx` 后四位核验，法穿当前下载器尚未包含这段。核验请求保留链接可选 `mm`，加 `jylx=sjhm/zjhm`、`jyz=后四位`；**本下载器先尝试匿名列表，只有API明确要求身份核验才进入核验流程**。进入核验后，开关未知、资料缺失或核验拒绝时停止后续请求，不再匿名试探。完整字段、配置录入与浏览器操作见上述参考。
+- API先进行无签收副作用的匿名列表探测。已有签收授权时，仍在正式列表/下载前发送一次签收；需要核验则先核验。未授权默认省略签收；官网页面在核验并取得列表后自动签收，未授权时不能用网页兜底。接口回执不自动确定法律送达日。
+- 每次运行只提交一个凭据；号码明确被拒绝即交回用户问答，不自动换人或换证件方式。失败清单续跑累计最多2次核验，同一失败记录及其副本只能接续一次；网络或未知响应不当作号码错误。
+- API确需核验后，用户指定或当前业务已确认由本机律师接收时可复用其号码；短信称呼为客户也可能登记代理律师手机号，不能仅凭称呼排除。已知登记客户号码时才询问客户后四位。
+- 本下载器只在显式 `--confirm-receipt` 时写入签收；匿名探测本身不签收。签收只发送一次，响应丢失或无法解析记 `receipt.status=unknown`，明确非200业务码记 `unconfirmed`，均不自动重发，继续尝试取列表。业务成功记 `receipt.status=confirmed`，也不能直接填入法律送达日期或起算期限。
+- 列表仍返回 `c_wsmc`（名称）、`wjlj`（签名下载地址）、`c_fymc`（法院名称）等；不要求 `dt_cjsj`。上游报告新生成送达首次列表请求可能超过30秒：默认网络超时30秒，最多尝试3次，间隔3秒/8秒。超时是网络操作的超时设置，不是整次任务的硬性时限。
+- 网络/超时、HTTP 408/425/429/5xx 可重试；JSON 中 `code != 200` 或非 JSON 响应不机械重试。不据业务错误单独认定链接永久失效。
+- 获取 `wjlj` 后立即下载，不假定固定有效期。签名地址403等失败时保留成功文件，先刷新列表获取该文书的新地址，仍失败再进入浏览器，避免整批重复下载。
+- 下载器拒绝空文件、HTML错误页、已支持格式头不符及已知长度不符的响应，中断片段会清理。支持PDF、ZIP/OOXML/OFD、旧Office与常见图片的基础格式检查；JSON文书无法与通用错误响应可靠区分，记 `unverified_json_document`，未知格式记 `unsupported_file_format`，均交浏览器或人工核验。基础检查不替代后续打开文书、页数及完整性核验。
 
 ```bash
-# 需要先安装 playwright
-npx playwright install chromium 2>/dev/null
+# 默认只取列表并下载，不写签收记录
+python3 scripts/download_zxfw.py \
+  --url "{短信中的 zxfw 链接}" \
+  --output /tmp/court-sms-staging/
 
-# 无头模式运行（脚本需自行编写，拦截 getWsListBySdbhNew API 响应）
-node scripts/download_court_docs.mjs --url "{短信链接}" --output /tmp/court-sms-staging/
+# 用户已经明确授权签收时，在同一命令中加 --confirm-receipt
 ```
+
+读取输出：`identity.status=not_requested` 且 `direct_api.status=accessible` 表示API可读、未使用手机号；`needs_config` 时先匹配已有本机资料，缺失才按本人/客户场景补资料；`identity.next_action=ask_recipient_mobile_last4` 时必须问答并等待；`check_delivery_registration` 时停止重试，其他 `unknown` 检查服务状态；`downloaded` 才表示全部文件通过基础检查，`partial` 仅补失败项，`empty/error` 不算成功。`identity`、`receipt` 与下载状态分别处理；`manifest_path` 不固定在暂存根目录。身份核验、签收响应或下载成功均不自动确定法律送达日期。
+
+#### 方案二 — 浏览器网络监听
+
+列表瞬态失败耗尽（`reason=list_attempts_exhausted`）、非JSON或空列表时，先确认浏览器页面/会话实际可用，再**在导航前**注册 `getWsListBySdbhNew` 响应监听，打开原始链接并读取当前页面。只有 JSON `code=200` 且列表非空才提取文书。本 Skill 未附带通用浏览器下载脚本；使用已发现的实际工具，缺少时记录具体缺口。
+
+浏览器打开送达页可能触发同一签收写入；进入会自动签收的页面或操作前沿用签收授权边界。遇到新路由、身份验证或验证码时按真实页面处理，保留经脱敏的端点/错误信息；不要猜测新的参数，也不要只因一次慢响应判断“法院改版后不可下载”。
 
 #### 方案三 — 交互式浏览器（Playwright MCP）
 
 当方案二不可用时（需要已配置 Playwright MCP）：
 
 ```text
-1. browser_navigate → 打开短信中的 zxfw URL
-2. 等待页面加载
-3. browser_evaluate → 直接调用 fetch API 获取文书列表
-4. browser_run_code → 下载 PDF 文件到 /tmp/court-sms-staging/
+1. 查看真实页面和文书列表，必要时进入 iframe
+2. 逐份触发下载，等待实际下载事件完成并保存文件
+3. 核对文件数、非空及格式；只补 API 阶段失败的文书
 ```
 
 如 API 调用未成功，改用页面交互：
@@ -308,6 +298,8 @@ done
 
 当三级均失败时：
 
+仅在手动访问符合用户当前授权时给出下面的兜底；若已知打开链接会自动签收，而用户要求暂不签收，不打开、不引导其打开，保留待处理状态，等待已下载文件或不触发签收的合法获取方式。
+
 ```text
 ⚠️ 自动下载失败，请手动访问以下链接下载：
 {原始链接}
@@ -324,6 +316,7 @@ done
    - 如找到匹配案件目录，优先查找法院文书子目录（如 `08*`、`法院送达`、`court` 等）；如无子目录则直接归档到案件根目录
    - **如未找到匹配案件，自动在基准目录下新建**：`{案号} {当事人与案由}/`
    - 如目标目录不存在，自动创建
+   - **纯链接输入时案号未知**：先只落暂存目录并完成文书解析，从文书或短信中取得案号与当事人后再建案件目录；不要用「未知案号」建目录，也不要先把文书丢进当前工作区
 2. **获取当前日期**：`date "+%Y%m%d"`
 3. **确定文书标题**：
    - 优先使用 API 返回的标题
@@ -336,7 +329,9 @@ done
    - **跨法院/多程序场景**：短信案号与项目目录短码不一致时，文书名以短信案号为准（`{短信案号} {title}-{接收人}_{YYYYMMDD}收.pdf`），不使用项目旧案号，避免后续翻案底时找不到对应文书。
 5. **移入目标目录**
    - **不要顺手改 `案件信息.md`、`case.yaml`、时间线等叙事/任务文件**——遇到跨法院、案号冲突、管辖异常等需要人工判断的事项，归档仅落 PDF，叙事更新由用户确认后再单独处理。
-6. **写入内部记录**：保存本次处理的完整信息到 **skill 内部的 `archive/` 目录**（即 `.claude/skills/court-sms/archive/`），不是案件文件夹。格式详见 [`references/archive-format.md`](references/archive-format.md)
+6. **写入内部记录**：保存本次处理的完整信息到 **本 Skill 目录下的 `archive/`**，不是案件文件夹。路径按实际安装位置解析（Codex 为 `~/.codex/skills/court-sms/archive/` 或插件缓存目录，Claude Code 为 `~/.claude/skills/court-sms/archive/`），以当前 Skill 目录为准，不要写死某一家客户端的路径。格式详见 [`references/archive-format.md`](references/archive-format.md)
+
+   > 目录不可写时（如只读安装或权限受限），先向用户说明该缺口并给出可写的替代位置征得同意，不要静默跳过归档记录，也不要退回到把记录写进案件文件夹。
 
    > **透明告知**：`archive/` 会留存短信原文（`sms_raw`）、案号、当事人、法院编号、下载参数与 API 响应等敏感诉讼信息。该目录默认不纳入版本库（已加入 `.gitignore`），请勿将其同步到公开仓库、第三方网盘或共享目录。
 7. **基础文书解析**：法院 PDF 通常带文字层，提取首页文本，快速识别文书类型和关键信息
@@ -580,13 +575,14 @@ http://dzsd.hbfy.gov.cn/hb/msg=XXXXXXX
 
 ## 配置
 
-三个配置文件，均改完即生效，不需要动脚本：
+配置改完即在下次执行生效：
 
 首次使用可把 `config/workspace.example.json` 复制为 `config/workspace.json`；不创建该文件时按当前工作目录回退。
 
 | 文件 | 管什么 | 关键字段 |
 | --- | --- | --- |
 | `config/workspace.json` | **文书归档到哪里** | `case_root`（归档根目录，`null`=用当前工作目录）、`search_depth`（递归匹配层数，默认 3）、`new_case_dir_template`（新案件目录命名） |
+| `config/lawyers.json` | **本机律师的私有手机号配置** | `lawyers.{lawyer_id}.name/mobile`；按需 `id_last4`，明确要求长期保存的后四位用 `mobile_last4`。仅API确需核验才读取，首次缺资料时询问保存、以后复用；真实配置/锁/临时文件被 `.gitignore` 排除，详见 [身份核验](references/lawyer-identity.md) |
 | `config/user-preferences.json` | PDF 后处理的合并与重命名 | `merge_strategy`、`rename` |
 | `references/sms-patterns.json` | 短信解析规则 | 平台域名、案号正则、文书标题映射 |
 

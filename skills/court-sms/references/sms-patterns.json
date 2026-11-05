@@ -6,13 +6,44 @@
       "description": "全国法院统一送达平台（最常见）",
       "pattern": "https?://[^\\s/]+/zxfw/#/pagesAjkj/app/wssd/index\\?[^\\s]*",
       "required_params": ["qdbh", "sdbh", "sdsin"],
-      "param_extract": "从 URL query string 中提取 qdbh、sdbh、sdsin 三个参数值",
+      "optional_params": ["mm"],
+      "param_extract": "从 URL query/fragment query 提取 qdbh、sdbh、sdsin；存在 mm 时原样保留",
       "download_strategy": "api_first",
       "api": {
         "endpoint": "https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/getWsListBySdbhNew",
         "method": "POST",
         "content_type": "application/json",
         "request_body": { "qdbh": "{全局编号}", "sdbh": "{送达编号}", "sdsin": "{送达签名}" },
+        "helper_script": "scripts/download_zxfw.py",
+        "identity_verification": {
+          "gate_endpoint": "https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/getSfhyKg",
+          "check_endpoint": "https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/checkSdryxx",
+          "method": "POST",
+          "required_when": "列表API明确要求身份核验；getSfhyKg=true仅表示网页要求，不能单独强制收集手机号",
+          "request_body": "原 qdbh/sdbh/sdsin 和可选 mm；核验另加 jylx=sjhm(手机号)/zjhm(证件) 与 jyz=对应后四位",
+          "profiles_file": "config/lawyers.json",
+          "setup_script": "scripts/lawyer_config.py",
+          "on_missing": "先尝试API，确需核验才读取已有本机配置；缺本机资料才询问保存，客户仅问当次实际接收手机号后四位",
+          "recipient_scope": "凭据匹配法院对该链接的登记；不能仅凭短信称呼排除律师手机号，delivery_recipient标记须结合本次事实",
+          "retry_budget": "每次运行只提交一个凭据；失败清单续跑累计最多2次，同一记录的副本共享一次性标记",
+          "on_rejected_or_unknown": "明确不匹配时返回ask_recipient_mobile_last4并等待答案；未知/服务异常停止，不当作号码错误",
+          "on_rejected": {
+            "status": "identity_blocked",
+            "next_action": "ask_recipient_mobile_last4"
+          },
+          "reference": "references/lawyer-identity.md",
+          "one_time_input": "--identity-stdin 通过stdin接收mobile_last4，不覆盖律师配置",
+          "resume": "--retry-identity-from 使用失败或缺配置manifest_path，先核验而不重做匿名探测，继承原签收状态与授权"
+        },
+        "receipt_confirmation": {
+          "endpoint": "https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/updateSdxxBySdzt",
+          "method": "POST",
+          "request_body": "与列表接口相同的 qdbh/sdbh/sdsin",
+          "authorization": "仅明确授权签收时加 --confirm-receipt；默认不调用",
+          "order": "先只读匿名探测；已授权才签收一次，再正式取列表下载。续跑不重复已发签收",
+          "attempts": 1,
+          "ambiguous_response": "status=unknown，不自动重发；不能推断未签收或确定法律送达日期"
+        },
         "response_fields": {
           "court_name": "data[].c_fymc",
           "court_id": "data[].c_fybh",
@@ -21,8 +52,16 @@
           "download_url": "data[].wjlj",
           "file_format": "data[].c_wjgs"
         },
-        "download_method": "curl -sL -o \"{filename}\" \"{wjlj}\"",
-        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。实测该响应不含任何送达时间字段（曾记录的 dt_cjsj 并不存在），须核对与目标文书及受送达人绑定的送达凭证，不能用文书生成时间替代，见 sent_time_extraction。"
+        "download_method": "python3 scripts/download_zxfw.py --url \"{短信中的 zxfw 链接}\" --output \"{私密暂存目录}\"",
+        "retry_policy": {
+          "list_api_timeout_seconds": 30,
+          "attempts": 3,
+          "retry_delays_seconds": [3, 8],
+          "retry_only": ["network_failure", "timeout", "http_408", "http_425", "http_429", "http_5xx"],
+          "business_code_error": "code != 200 或非 JSON 不机械重试；不能单据此判定链接永久失效"
+        },
+        "fallback_after_retries": "瞬态失败三次耗尽后先确保浏览器可用，在导航前监听列表响应，再按实际页面逐份点击；打开会自动签收的页面同样需要签收授权",
+        "notes": "优先运行 helper_script。首次列表请求可能超过30秒；成功取列表后立即下载，不假定签名链接固定有效期。每次在暂存根目录下建立独立私密子目录，结果由 manifest_path 定位；status=downloaded 表示基础下载检查通过，与 receipt.status 分开。manifest 不保存签名 URL。列表不要求 dt_cjsj，也不能用生成/下载时间替代送达证据，见 sent_time_extraction。"
       }
     },
     {
@@ -122,9 +161,9 @@
   ],
   "case_number_pattern": "[（(〔\\[]\\d{4}[）)\\]〕]\\s*[\\u4e00-\\u9fa5]{1,10}\\d+[\\u4e00-\\u9fa5]{1,5}\\d+号?",
   "case_number_examples": [
-    "（2025）苏0981民初1234号",
-    "(2024)粤0604执保5678号",
-    "〔2025〕京0105民初901号"
+    "（YYYY）苏XXXX民初XXXX号",
+    "(YYYY)粤XXXX执保XXXX号",
+    "〔YYYY〕京XXXX民初XXXX号"
   ],
   "sms_type_keywords": {
     "document_delivery": ["文书送达", "请查收", "查收文书", "下载文书", "送达文书", "案件文书", "受理通知书", "缴费通知书", "告知书", "廉政监督卡"],
