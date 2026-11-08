@@ -507,7 +507,7 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/svg-article-illustrator-1.2.0.zip">已发布 v1.2.0</a></td>
-<td>源码 v1.2.0：先审计旧图基线，区分运动存在与理解增益，并逐图取舍；保持3–5秒原生SMIL默认与多样版式。尚未打包，下载仍为 v1.0.5。</td>
+<td>源码 v1.2.0：先审计旧图基线，区分运动存在与理解增益，并逐图取舍；保持3–5秒原生SMIL默认与多样版式。下载版本见本行已发布 ZIP 链接。</td>
 </tr>
 <tr>
 <td><a href="skills/handdrawn-article-illustrator/"><strong>handdrawn-article-illustrator</strong></a></td>
