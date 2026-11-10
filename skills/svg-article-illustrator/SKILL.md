@@ -2,7 +2,7 @@
 name: svg-article-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.0"
+version: "1.2.2"
 license: MIT
 description: 根据文章内容创作动态 SVG 文章配图，以构图、图形关系和状态变化解释内容；默认输出3–5秒原生SMIL动画，静态图仅作为明确例外。支持时间轴编译、布局检查与PNG导出；不用于完整视频制作或自动发布。
 ---
@@ -18,11 +18,11 @@ description: 根据文章内容创作动态 SVG 文章配图，以构图、图�
 
 ## 工作方法
 
-1. **内容 → 配图计划**：为每张图记录对应段落、读者需要理解的关系/变化、图的作用、插入点、输出模式。按信息增益决定数量，不按标题数或固定张数配图。
-2. **计划 → 视觉表达**：用一句话说清读者将看到哪些对象、它们有什么关系或变化，再选择画面形态。在计划中说明哪些关系需要突出、比较或同时保留，以及图形与变化怎样帮助理解；同时记录必须保留的事实与对象辨识细节，见[阅读编排](references/reading-sequence.md)和[视觉设计](references/visual-design.md)。创意从本次内容出发，不按示例外观或固定类型映射套版。已有插图先按上述方法审旧基线：旧图已讲清内容时沿用，不用“换成动画”或“重新设计”替代比较。沿用表示不重画，不绕过交付门禁；动态旧图按原样验证，静态旧图仍按逐图静态例外记录并显式放行。
+1. **内容 → 配图计划**：为每张图记录对应段落、读者需要理解的关系/变化、图的作用、插入点、输出模式，以及按[画幅档位](references/core-principles.md#画幅档位与选择)选定的尺寸与理由。根据同屏关系、文字和运动空间选画幅，按信息增益决定数量，不按标题数或固定张数配图。
+2. **计划 → 视觉表达**：用一句话说清读者将看到哪些对象、它们有什么关系或变化，再选择画面形态。在计划中说明关键关系由什么形状、位置或动作呈现，再决定标题、容器和连线；同时记录必须保留的事实与对象辨识细节，见[阅读编排](references/reading-sequence.md)和[视觉设计](references/visual-design.md)。创意从本次内容出发，不按示例外观或固定类型映射套版。已有插图先按上述方法审旧基线：旧图已讲清内容时沿用，不用“换成动画”或“重新设计”替代比较。沿用表示不重画，不绕过交付门禁；动态旧图按原样验证，静态旧图仍按逐图静态例外记录并显式放行。
 3. **对象/状态 → 时间轴**：列出对象、标签、容器、坐标系、初末状态和互斥关系。让运动说明对象如何变化、为何变化；在 3–5 秒内组织需要的变化与可读停留，结合关键状态和过渡共同安排空间与节奏。过程复杂就拆图或压缩无关动作。确认为静态例外时，仍记录该图缺少动效的解释理由。
 4. **骨架 + 时间轴 → SVG**：使用唯一 `data-cue` 定位实际图形；通过 [时间轴工具](references/timeline-tools.md) 编译，不手算大量 keyTimes。静态例外直接输出可读 SVG。变换坐标合同和修正示例见 [动态规范](references/dynamic-svg.md)。
-5. **SVG → 实测与整图审阅**：运行结构校验；打开自包含 HTML，在桌面与 375 CSS px 宽度测量真实文字与对象，检查截图。覆盖初态、停留、运动中段、循环末与下一轮；实际播放两个完整周期。按[阅读编排](references/reading-sequence.md)审内容理解、观看顺序、最终布局和文字疏密；返修后回查此前反馈是否仍落实，记录具体画面与所见。动画存在、字数减少或无碰撞均不能单独代替这一层；还要说明运动是否让对象关系、结构、数量或因果比基线更容易理解，不能只比较质感或节奏。多图先审有代表性的一张，再扩展。测量方法及边界见 [布局验收](references/layout-verification.md)。
+5. **SVG → 实测与整图审阅**：运行结构校验；打开自包含 HTML，在桌面与 375 CSS px 宽度测量真实文字与对象，检查截图。覆盖初态、停留、运动中段、循环末与下一轮；实际播放两个完整周期。按[阅读编排](references/reading-sequence.md)审内容理解、观看顺序、最终布局和文字疏密；返修后回查此前反馈是否仍落实，记录具体画面与所见。动画存在、字数减少或无碰撞均不能单独代替这一层；还要说明运动是否让对象关系、结构、数量或因果比基线更容易理解，不能只比较质感或节奏。多图先做一张代表图，比较关键状态能否读清；有旧图时以相同阅读宽度对照。确认表达成立后再扩展，旧图没有改进收益就保留。测量方法及边界见 [布局验收](references/layout-verification.md)。
 6. **实测 → 交付**：按调用项目要求内联 SVG、保存文件或插入 PNG；回读实际交付内容，确认动画、ID 引用和文本仍完整。通过 publish 剥离制作标记，保留原生 SMIL；预览 HTML 的 JS 不进入发布 SVG。本地 HTML 片段交接见工具参考。提供源骨架、时间轴和验证记录以便修改。
 
 ## 按需加载
@@ -44,18 +44,7 @@ description: 根据文章内容创作动态 SVG 文章配图，以构图、图�
 
 ## 工具入口
 
-以下以材料归拢样例演示命令，在 Skill 目录运行，输出路径可指定；已有文件默认拒绝覆盖，确认替换时加 `--force`。Python 工具仅使用标准库，不安装第三方套件。
-
-```bash
-python3 scripts/svg_motion.py compile assets/materials-demo.skeleton.svg assets/materials-demo.timeline.json -o /tmp/materials-demo.svg
-python3 scripts/svg_motion.py validate /tmp/materials-demo.svg
-python3 scripts/svg_motion.py preview /tmp/materials-demo.svg -o /tmp/materials-demo.html
-python3 scripts/svg_motion.py publish /tmp/materials-demo.svg -o /tmp/materials-demo.publish.svg
-# 仅用于已在计划和交付说明中写明理由的静态例外：
-python3 scripts/svg_motion.py validate /tmp/static-exception.svg --allow-static
-```
-
-在浏览器打开生成的 HTML；播放、暂停、重置、逐秒步进与时间滑杆只服务于制作预览。其测量函数 `window.measureSvgLayout(svg)` 也可由浏览器自动化调用。此处只演示工具的输入输出，实际创作自行选择画面形态、风格、尺寸与节奏。
+构图确定后，再按[时间轴工具](references/timeline-tools.md)选用编译、校验、预览和导出命令。工具示例供查询用法；预览可在浏览器播放、定位时点和运行 `window.measureSvgLayout(svg)`。
 
 PNG 路径保留 `node scripts/svg2png.js input.svg [output.png] [dpi]`，需要既有 Node.js、Puppeteer和浏览器；缺少时按环境约定准备项目本地依赖，不自动做全局安装。
 
