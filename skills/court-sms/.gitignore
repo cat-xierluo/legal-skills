@@ -1,0 +1,4 @@
+# Private phone profiles; distribute examples only.
+/config/lawyers.json
+/config/lawyers.json.lock
+/config/.lawyers-*.json

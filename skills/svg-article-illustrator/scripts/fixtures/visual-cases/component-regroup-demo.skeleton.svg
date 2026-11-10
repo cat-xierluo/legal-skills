@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="regroup-title regroup-desc">
+  <title id="regroup-title">组件不变，按任务重新组合</title>
+  <desc id="regroup-desc">九个组件：三种类型各三个。从按类型分成三列，转为三个任务组合，每组各含三类之一。浅色空位是原位置记忆，不是新增组件。</desc>
+  <g data-cue="canvas" data-layout-id="canvas" data-layout-role="background">
+    <rect x="0" y="0" width="800" height="450" fill="#F0F3F8" rx="12" />
+  </g>
+  <text x="44" y="53" font-size="34" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#203B42" text-anchor="start" font-weight="600">组件不变，按任务重新组合</text>
+  <text x="92" y="103" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#203B42" text-anchor="start">按类别</text>
+  <text x="526" y="103" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#203B42" text-anchor="start">按任务</text>
+  <g data-cue="task-0" data-layout-id="task-0" data-layout-role="background">
+    <circle cx="510" cy="174" r="66" fill="#E2E8EF" />
+    <circle cx="510" cy="174" r="57" fill="#F9FAFC" />
+  </g>
+  <g data-cue="task-1" data-layout-id="task-1" data-layout-role="background">
+    <circle cx="684" cy="174" r="66" fill="#E2E8EF" />
+    <circle cx="684" cy="174" r="57" fill="#F9FAFC" />
+  </g>
+  <g data-cue="task-2" data-layout-id="task-2" data-layout-role="background">
+    <circle cx="597" cy="346" r="66" fill="#E2E8EF" />
+    <circle cx="597" cy="346" r="57" fill="#F9FAFC" />
+  </g>
+  <g data-cue="origin-piece-0-0" data-layout-id="origin-piece-0-0" data-layout-role="background">
+    <circle cx="104" cy="174" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-0-0" data-layout-id="piece-0-0" transform="translate(104 174)">
+    <circle cx="0" cy="0" r="15" fill="#167C80" />
+    <circle cx="0" cy="0" r="5" fill="#F8FAFC" />
+  </g>
+  <g data-cue="origin-piece-0-1" data-layout-id="origin-piece-0-1" data-layout-role="background">
+    <circle cx="207" cy="174" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-0-1" data-layout-id="piece-0-1" transform="translate(207 174)">
+    <path d="M0 -18 L17 12 H-17 Z" stroke="#B46F35" stroke-width="0" fill="#B46F35" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M0 -4 V4" stroke="#F8FAFC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="origin-piece-0-2" data-layout-id="origin-piece-0-2" data-layout-role="background">
+    <circle cx="310" cy="174" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-0-2" data-layout-id="piece-0-2" transform="translate(310 174)">
+    <rect x="-14" y="-14" width="28" height="28" fill="#74628E" />
+    <path d="M-5 0 H5" stroke="#F8FAFC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="origin-piece-1-0" data-layout-id="origin-piece-1-0" data-layout-role="background">
+    <circle cx="104" cy="260" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-1-0" data-layout-id="piece-1-0" transform="translate(104 260)">
+    <circle cx="0" cy="0" r="15" fill="#167C80" />
+    <circle cx="0" cy="0" r="5" fill="#F8FAFC" />
+  </g>
+  <g data-cue="origin-piece-1-1" data-layout-id="origin-piece-1-1" data-layout-role="background">
+    <circle cx="207" cy="260" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-1-1" data-layout-id="piece-1-1" transform="translate(207 260)">
+    <path d="M0 -18 L17 12 H-17 Z" stroke="#B46F35" stroke-width="0" fill="#B46F35" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M0 -4 V4" stroke="#F8FAFC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="origin-piece-1-2" data-layout-id="origin-piece-1-2" data-layout-role="background">
+    <circle cx="310" cy="260" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-1-2" data-layout-id="piece-1-2" transform="translate(310 260)">
+    <rect x="-14" y="-14" width="28" height="28" fill="#74628E" />
+    <path d="M-5 0 H5" stroke="#F8FAFC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="origin-piece-2-0" data-layout-id="origin-piece-2-0" data-layout-role="background">
+    <circle cx="104" cy="346" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-2-0" data-layout-id="piece-2-0" transform="translate(104 346)">
+    <circle cx="0" cy="0" r="15" fill="#167C80" />
+    <circle cx="0" cy="0" r="5" fill="#F8FAFC" />
+  </g>
+  <g data-cue="origin-piece-2-1" data-layout-id="origin-piece-2-1" data-layout-role="background">
+    <circle cx="207" cy="346" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-2-1" data-layout-id="piece-2-1" transform="translate(207 346)">
+    <path d="M0 -18 L17 12 H-17 Z" stroke="#B46F35" stroke-width="0" fill="#B46F35" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M0 -4 V4" stroke="#F8FAFC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g data-cue="origin-piece-2-2" data-layout-id="origin-piece-2-2" data-layout-role="background">
+    <circle cx="310" cy="346" r="18" fill="none" stroke="#D7DFE6" stroke-width="1.5" />
+  </g>
+  <g data-cue="piece-2-2" data-layout-id="piece-2-2" transform="translate(310 346)">
+    <rect x="-14" y="-14" width="28" height="28" fill="#74628E" />
+    <path d="M-5 0 H5" stroke="#F8FAFC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

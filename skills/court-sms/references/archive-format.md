@@ -74,6 +74,9 @@
 | `download.params` | 否 | 从 URL 提取的参数（如 qdbh/sdbh/sdsin） |
 | `download.method` | 否 | 实际使用的下载方式：`curl` / `cli` / `mcp` / `manual` / `null`（无下载链接） |
 | `download.status` | 是 | 下载状态：`success` / `failed` / `manual` / `skipped` |
+| `download.direct_api` | 否 | 记录匿名探测的accessible/identity_required及请求次数，不保存签名URL或后四位 |
+| `download.identity` | 否 | not_requested/direct_api_accessible表示API可读但未提交身份凭据，不等同于网页开关关闭；从下载清单保留核验状态、lawyer_id与方式即可；不保存完整手机号、证件号码、核验后四位或HTTP Cookie。`verified`不等于法律送达确认 |
+| `download.receipt` | 否 | 签收接口的confirmed/unconfirmed/unknown/not_requested响应状态；与法律送达证据字段分开，不自动填service.served_on |
 | `download.api_response` | 否 | API 完整响应，包含 c_fymc（法院名称）、c_fybh（法院编号）、documents 数组（每份文书详情）。实测 zxfw `getWsListBySdbhNew` 响应**不含** `dt_cjsj`，送达时间须另寻来源（见 `document.sent_at_source`） |
 | `download.api_response.c_fymc` | 否 | 法院名称（来自 API） |
 | `download.api_response.c_fybh` | 否 | 法院编号 |
