@@ -29,7 +29,7 @@
 | [cross-agent-coordination](../../skills/cross-agent-coordination/) | 协调不同 Agent 平台的归属、路由和交接 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/cross-agent-coordination-1.0.0.zip) |
 | [agent-email](../../skills/agent-email/) | 为 Agent 提供统一邮件收发和任务分发通道 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/agent-email-0.4.1.zip) |
 
-旧名历史包：[已发布 v2.30.5](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip)。新名称 3.1.1 源码待发布，旧包不随源码变化。
+旧名历史包：[已发布 v2.30.5](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip)。新名称 multi-agent-orca 的已发布版本见上方成员表，旧包不随源码变化。
 
 ## 建议使用方式
 
