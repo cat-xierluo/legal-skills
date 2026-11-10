@@ -10,7 +10,7 @@
 | Evidence binding | validate 的源码 SHA-256/字节数；测量记录当前产物、浏览器宽度、秒数和截图；变更后重跑 |
 | Fault injection | 错 keyTimes、空目标、重复 cue、同层变换、外部资源、长中文与混排、双重位移反例 |
 | Closure | 本地工具结果、文章回填、平台保存与真机分别结算；未验项明确 NOT_VERIFIED |
-| Composition | 样式、画幅、归档、发布由调用项目控制；协作者交源文件与证据而非只报 PASS |
+| Composition | 按[共享原则](core-principles.md)验画布样式和画幅；交付形式和归档沿调用项目约定，发布须有用户授权。协作者交源文件与证据而非只报 PASS |
 
 Hard Fail：结构/时码/资源校验失败、当前输出未测却声明布局通过、未测真机却声明公众号成功、预览 JS 混入发布 SVG。语义质量、遮挡意图和连续时间全覆盖不伪装成自动证明。
 
