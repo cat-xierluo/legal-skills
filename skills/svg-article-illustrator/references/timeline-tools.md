@@ -63,7 +63,7 @@ preview 将 SVG、布局测量函数与控制脚本嵌入单 HTML，可用 file:
 
 ## 本地 SVG/HTML 片段交接
 
-`publish input.svg -o output.svg [--force]` 默认只接收含原生 SMIL 的动态 SVG；静态例外须在配图计划和交付说明中逐图记录理由后，额外加 `--allow-static`。作者决定原样沿用的旧静态基线同样走这条显式例外路径，不得把“沿用”当成绕过门禁的第二入口。先执行完整现有校验，再删除所有元素上的制作 `data-*` 属性，序列化后重新校验。保留 id、viewBox、文字、图形层级、局部引用、`animate` / `animateTransform` 及其关键属性；不重新编译时间轴，不添加 JS、CSS 动画或外链。现有输出默认拒绝覆盖，`--force` 也不能把输入路径作为输出。无效输入即使配 --force 也不改已有输出。
+`publish input.svg -o output.svg [--force]` 默认只接收含原生 SMIL 的动态 SVG；静态例外须在配图计划和交付说明中逐图记录理由后，额外加 `--allow-static`。先执行完整现有校验，再删除所有元素上的制作 `data-*` 属性，序列化后重新校验。保留 id、viewBox、文字、图形层级、局部引用、`animate` / `animateTransform` 及其关键属性；不重新编译时间轴，不添加 JS、CSS 动画或外链。现有输出默认拒绝覆盖，`--force` 也不能把输入路径作为输出。无效输入即使配 --force 也不改已有输出。
 
 这是本地交付文件整理，命令名不代表已经向公众号发布或通过其后台认证。制作源 SVG 与 timeline 另行保留；清理版不再含 DOM 布局标注，布局测量继续使用制作源，交接后核动画与视觉是否保留。
 
