@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-11-10 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.3 | 统一画布样式规则：外缘圆角必选，内部轮廓和底色按内容决定；下载包仍为 v1.2.0。 |
+| 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
 | 2026-10-30 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.3（源码） | 加固受管写入与隐私校验，回执绑定最终哈希；会话模型探测改为 JSON 解析并支持显式会话文件；人工新会话结果降为 DECLARED，不再宣称自动行为验证。 |
 | 2026-10-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.8 | 修复根 README HTML 技能表内专家套件备注链接不生效：回写时转换为 HTML 链接，并补幂等回归。 |
@@ -42,7 +42,6 @@
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.6 | 专家套件发布 staging 兼容 macOS Info-ZIP 未标记 UTF-8 的中文文件名，避免成员清单误报不匹配。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
 | 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
-| 2026-10-27 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.4 | README 回写区分源码版本与真实 ZIP 版本，支持部分热补、首次发布与幂等重跑；法律套件在根索引中排前。 |
 
 </details>
 
@@ -505,9 +504,9 @@
 <td>工具·配图</td>
 <td style="word-break:break-word">默认输出3–5秒的解释性SMIL动态文章配图，校验与发布默认拒绝静态；静态仅作逐图说明并可显式放行的例外。提供时间轴编译、布局预览与保留原生SMIL的本地交接导出，保留PNG路径</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.2.3</td>
+<td style="text-align:center">v1.2.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/svg-article-illustrator-1.2.0.zip">已发布 v1.2.0</a></td>
-<td>源码 v1.2.3：圆角外缘必选，内部轮廓和底色按内容决定；沿用五档画幅。下载包仍为 v1.2.0。</td>
+<td>源码 v1.2.4：按段落选画法，可混用界面与非界面表达；圆角外缘和五档画幅照旧。下载包仍为 v1.2.0。</td>
 </tr>
 <tr>
 <td><a href="skills/handdrawn-article-illustrator/"><strong>handdrawn-article-illustrator</strong></a></td>
