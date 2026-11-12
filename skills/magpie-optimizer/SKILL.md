@@ -3,7 +3,7 @@ name: magpie-optimizer
 description: 用 Magpie 配置并优化 AI 工作效能：接入供应商、订阅与插件，配置模型路由组与意图规则，管理网关、可见性、共享 MCP 与搜索；盘点额度与套餐，诊断 Token 消耗与限流，把每次调整关联真实任务验收效果。
 license: MIT
 metadata:
-  version: "1.7.0"
+  version: "1.8.0"
   author: 杨卫薪律师（微信ywxlaw）
   homepage: https://github.com/cat-xierluo/legal-skills
 ---
@@ -20,6 +20,7 @@ metadata:
 | 扫描本机 Agent 与供应商、账号和额度现状 | 读[环境体检](references/preflight.md)与[脱敏盘点](references/inventory.md) |
 | 接入新账号、导入供应商或安装插件 | 读[供应商与账号接入](references/provider-integration.md)与[插件与客户端接入](references/plugin-guide.md) |
 | 为什么消耗快，哪里值得优化 | 先采集、核覆盖，再诊断；必要时按会话深入 |
+| 从网关检查 Skill、主/子 Agent 的输入与调用开销 | 读[输入开销与职责交接](references/agent-efficiency.md)，提供分项证据和效果复核；Agent/Skill/编排规则交对应维护方 |
 | 怎样利用套餐和临期积分 | 诊断结合现有任务，读取[资源策略](references/token-strategy.md)，输出当前/稍后/待输入建议 |
 | 新建路由或改已有组 | 先按[智能路由设计](references/adaptive-routing-design.md)生成草案；再读[配置合同](references/cli-contract.md)和[操作入口](references/operations.md)，展示计划，按已有授权执行 |
 | 查某个 magpie 子命令的写法，或接入供应商、订阅、插件 | 读[CLI 命令参考](references/cli-command-reference.md)；涉及写入时按[CLI 与变更边界](references/cli-contract.md)先只读回读并展示计划 |
@@ -30,6 +31,10 @@ metadata:
 | 只用一个组当统一入口、建组/拆组、组内分层与回退治理 | 读取[路由治理](references/routing-governance.md)，按坑位排障、成员分层、计点溢出、规则顺序、出口代理分层与可配置项落地 |
 | 给某 harness 的子 Agent 单独配模型、核优先级与坑 | 读取[子Agent模型指定](references/subagent-models.md)，先核安装版与该客户端可见模型列表 |
 | 派发时指定了子 Agent 模型却没按它跑 | 读取[指名覆盖观测](references/subagent-override.md)，核请求名、统一默认与实际 served 是否一致 |
+| 供应商同时异常、额度停更、模型消失或宿主内存持续增长 | 读取[网关长跑韧性与故障隔离](references/gateway-resilience.md)，分查推理、目录、认证、额度与进程生命周期 |
+| 连续观察宿主内存或认证文件是否反复变化 | 用[有界连续采样](references/gateway-resilience.md#有界连续采样)，只取进程/stat 元数据，保留采样失败与宿主换代边界 |
+| 宿主内存持续增长，要求不中断任务定位插件 | 按[内存增长分层取证](references/memory-growth-triage.md)保留现场、固定身份、对齐事件，再分级归因；共享宿主 RSS 不直接分摊给插件 |
+| MiniMax 登录/额度异常或模型不见 | 读取[网关排障中的 MiniMax 检查](references/gateway-resilience.md#4-minimax-code登录额度与模型消失)，核入口开关、目录、认证和真实回执 |
 | 改完是否有效，是否留下成果 | 关联任务、实际产物与验收；运行效果复核，保留混杂因素和样本边界 |
 
 先运行 `magpie --version`，以安装版 CLI 帮助及实际接口为准。Magpie 可有耗时的会话索引；超时是读取尚未完成，先保留部分状态，不判断能力不存在。使用本机已有网关，端口从实际界面/配置核实；不为诊断启动公开服务或升级软件。
@@ -82,11 +87,13 @@ python3 scripts/magpie_observe.py diagnose --observation /private/path/observati
 
 诊断输出区分观察事实、解释假设、建议动作、验证指标与证据范围。默认阈值只用于选取检查对象。根据用户目标排序少量重要发现，再阅读相关会话与任务；不要把自动检测结果当最终裁决。
 
-- 上下文增长或历史占比高：结合缓存命中、任务进展及压缩检查，比较有界读取、阶段交接或新会话的总成本。
-- 工具定义或结果较重：核任务需要的工具，减少明确无关的定义或重复/过长输出，保留能力和证据。
+- 上下文增长或历史占比高：提供输入、增长、缓存与耗时证据；是否压缩、阶段交接或新开会话，由对应 Agent 管理/编排方结合任务质量判断。
+- 工具定义或结果较重：提供工具/结果分项与重复信号，交对应 Agent、工具或 Skill 维护方核必要性与修改范围；本 Skill 不直接裁剪工具或改会话规则。
 - 重试/排队较多：核共享账号总并发、队列、冷却与回退，不以多建组扩大容量。
 - 复杂度与模型可能不匹配：必须结合任务验收与返工，不能凭短回复、低 Token 或工具次数决定降级。
 - 协作往返多：先核输入、任务边界和交接，不凭消息工具占比否定协作。
+
+细查输入各层、解释网络阶段及复核改动效果时，读[输入开销与职责交接](references/agent-efficiency.md)。本 Skill 不制定全局派工或 worker 上下文规则；这些发现交对应维护方。总 token 下降不能单独证明省钱或提速，仍需缓存、实际模型和任务质量证据。
 
 网关可控制对应路由的请求；原生直连调用另列，不能声称改组就覆盖所有 Agent。已有 Magpie 调优或历史回放只作候选输入；其成本假设不能替代实际任务质量验证。
 
@@ -132,5 +139,8 @@ python3 <skill-dir>/scripts/public_release_check.py check --root <skill-dir>/..
 |---|---|
 | Python 3.10+ | 全部脚本只用标准库，无需 pip；使用本机已有Python，缺失时提示安装 |
 | 已安装 Magpie CLI 与本机网关 | 采集/配置；沿用官方应用已有安装和登录，不自动下载或升级 |
+| bash 3.2+ 与 macOS 自带 ps/sysctl/find | 仅[网关长跑韧性](references/gateway-resilience.md)的只读巡检脚本需要；脚本不安装后台任务 |
 
 采集只请求本机只读接口；CLI可能初始化已安装插件运行时。配置apply会写网关设置并可能同步客户端模型目录；效果复核只读用户具名产物和验收文件。运行时不自动执行模型任务、付费请求、账号切换、耗卡或后台任务。
+
+[网关长跑韧性](references/gateway-resilience.md)的巡检脚本仅报告进程、内存和缓存数量；保留旧子命令名，但不发送信号、不重启、不删除文件。仓库外旧副本须核实际路径及哈希后单独采用，更新 Skill 不证明运行副本已更新。

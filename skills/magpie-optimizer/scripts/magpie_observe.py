@@ -149,7 +149,7 @@ def read_ledger(get, period, day=None, page_size=500, max_pages=100):
 def read_local(config_dir, cache_dir, dates):
     context, session_refs = [], []
     route_files, missing, route_partial = [], [], 0
-    allowed_parts = {'system', 'tools', 'memory', 'files', 'results', 'chat'}
+    allowed_parts = {'system', 'tools', 'skills', 'memory', 'files', 'results', 'chat'}
     for day in dates:
         f = config_dir / 'routing' / (day + '.jsonl')
         if not f.exists():
@@ -187,8 +187,10 @@ def read_local(config_dir, cache_dir, dates):
                     value = project_numbers(part, ('tokens',)).get('tokens', 0)
                     kind = part.get('kind')
                     parts[kind if kind in allowed_parts else 'other'] += value
-                usage = r.get('usage') or []
-                cached = project_numbers(usage[-1], ('cache_read',)).get('cache_read', 0) if usage else None
+                usage = r.get('usage')
+                latest = usage[-1] if isinstance(usage, list) and usage else usage
+                cached = (project_numbers(latest, ('cache_read',)).get('cache_read')
+                          if isinstance(latest, dict) else None)
                 context.append({'agent': r.get('agent'), 'session_ref': ref(str(r.get('agent')) + ':' + str(r.get('session') or r.get('conv') or r.get('id'))),
                                 'project_ref': ref(r.get('folder')), 'model': r.get('served') or r.get('model'), 'time': ts,
                                 **vals, 'parts': dict(parts), 'counted': p.get('counted') is True, 'cache_read': cached})

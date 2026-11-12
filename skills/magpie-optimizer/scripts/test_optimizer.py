@@ -114,6 +114,39 @@ class ObserveTests(unittest.TestCase):
             self.assertEqual(summary['parts_share']['tools'], .2)
             self.assertIsNone(summary['cache_ratio'])
 
+    def test_route_usage_object_and_list_preserve_skills_and_cache(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / 'routing').mkdir()
+            route = {'time': '2026-10-15T12:00:00Z', 'done': True,
+                     'agent': 'fixture', 'status': 200,
+                     'prompt': {'tokens': 100, 'counted': True,
+                                'parts': [{'kind': 'skills', 'tokens': 30},
+                                          {'kind': 'chat', 'tokens': 70}]}}
+            for usage in ({'in': 40, 'cache_read': 60},
+                          [{'in': 40, 'cache_read': 60}]):
+                route['usage'] = usage
+                (root / 'routing/2026-10-15.jsonl').write_text(json.dumps(route) + '\n')
+                result = o.read_local(root, root, ['2026-10-15'])
+                summary = o.summarize_context(result['context']['rows'])[0]
+                self.assertEqual(summary['parts_share']['skills'], .3)
+                self.assertEqual(summary['cache_ratio'], .6)
+
+    def test_missing_route_cache_counter_is_unknown_not_zero(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / 'routing').mkdir()
+            route = {'time': '2026-10-15T12:00:00Z', 'done': True,
+                     'agent': 'fixture', 'status': 200,
+                     'prompt': {'tokens': 100, 'counted': True, 'parts': []}}
+            for usage in ({'in': 100}, [{'in': 100}], [], None, [None]):
+                route['usage'] = usage
+                (root / 'routing/2026-10-15.jsonl').write_text(json.dumps(route) + '\n')
+                result = o.read_local(root, root, ['2026-10-15'])
+                summary = o.summarize_context(result['context']['rows'])[0]
+                self.assertIsNone(result['context']['rows'][0]['cache_read'])
+                self.assertIsNone(summary['cache_ratio'])
+
 
 class OutcomesTests(unittest.TestCase):
     def fixture(self, root):

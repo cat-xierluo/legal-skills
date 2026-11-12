@@ -26,4 +26,6 @@ schema `magpie-observation.v1`。ledger含原生/网关/上报聚合与投影row
 
 schema `magpie-diagnosis.v1`，绑定观察内容哈希。每条含fact、hypothesis、suggested_action、verification_metric、evidence，不写自动完成/浪费判决。当前工具定义10%、结果15%、窗口70%、错误加重试2%是检查对象的筛选阈值；不表示用户任务违规或低效。先确认样本、缓存和任务目标，再提出调整。
 
+输入分项保留独立 `skills` 类别；路由 `usage` 对象和列表均可读取缓存计数，缺失计数保持未知。`prompt.parts` 的估计归因、诊断职责交接、网络阶段与质量/缓存复核见[输入开销与职责交接](agent-efficiency.md)；分项 token 不作为独立账单。
+
 CLI可读 magpie sessions --days N --json 进行日期/模型/项目统计；具体shell命令需要按需读取原始调用参数并脱敏，工具名exec/terminal/js的频次不能解释成shell内部rg/git等频次。缺Skill计数保持未知。
