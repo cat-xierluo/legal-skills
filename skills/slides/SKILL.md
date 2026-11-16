@@ -2,7 +2,7 @@
 name: slides
 license: MIT
 metadata:
-  version: "1.6.0"
+  version: "1.6.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 description: 幻灯片全流程创作工具。本技能应在需要从文稿或主题生成幻灯片、制作讲者可控制的页内动效、将 HTML 转换为可编辑 PPTX/PDF、从现有课件提取风格、或围绕主题做结构化研究时使用。不要用于纯文档排版（用 md2word）或图片处理（用 imagemagick）。
@@ -106,7 +106,7 @@ node scripts/load-profile.js --assets     # 已启用素材的解析路径
 1. **需求澄清**：先读本地配置（`node scripts/load-profile.js`）确定讲者身份、页脚与展示开关；未配置即匿名生成，不补位任何个人信息。再确认受众、场景、页数、交付格式（PPTX/PDF/both）、是否需要后续编辑、证据密度和视觉语气；缺失信息标记为“待补充”。
 2. **研究与大纲**：用户只有主题时，先产出 `research.md` + `slides_outline.json`（参考 `references/research/`）；用户已有文稿时，先拆成分页目标。
 3. **风格与版式选择**：默认风格取配置的 `brand.style`（未配置则由场景决定）；从风格库选择预设或提取旧课件风格；再依据 `references/layout-theme-playbook.md` 选择版式家族。遇到并行汇合、对象变化或操作反馈，先读[页内动效](references/explanatory-motion.md)，决定哪些页值得用动态讲清，旧稿已经明白的页照用。
-4. **生成 HTML**：clone `references/templates/` 中对应的模板文件，替换占位内容，切换 `:root` 主题变量。遵守 `_base.css` 的设计系统：语义标签、本地图片、固定视口。动态背景统一标记 `data-ppt-background`，讲者备注写在 slide 的 `data-note` 或 `[data-speaker-notes]` 中。页内动效按状态设计，挂接原导航，保留独立可读的静态正文。
+4. **生成 HTML**：clone `references/templates/` 中对应的模板文件，替换占位内容，切换 `:root` 主题变量。遵守 `_base.css` 的设计系统：语义标签、本地图片、固定视口。动态背景统一标记 `data-ppt-background`，讲者备注写在 slide 的 `data-note` 或 `[data-speaker-notes]` 中。页内动效嵌入原页正文，讲者控件并到放映 HUD，保留独立可读的静态正文。
 5. **预检验证**：执行 `cd scripts && npm run validate -- ../example.html --strict`；正式文件替换为目标 HTML 路径。先修复 errors，再处理 warnings。
 6. **转换输出**：执行 `node convert.js 新内容.html -o 输出 --format both --background-mode auto`，或按需输出 PPTX/PDF。Codex 环境若提供 Presentations Runtime，优先按 `references/native-pptx-rebuild.md` 用 Artifact Tool 重建并通过 finalizer；本地 CLI 则用内置 PptxGenJS 转换器。
 7. **最终 QA**：在实际放映尺寸检查页面、变化中段、结果停留和讲者操作；离线验证本地交付。按交付格式打开 PPTX/PDF，检查页数、文字裁切、图片、静态正文与讲者备注，并核 PPTX 前景可编辑性。

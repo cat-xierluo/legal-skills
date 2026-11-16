@@ -19,6 +19,8 @@ test('replayable states, keyboard ownership and static reading on the actual tem
     const page = await browser.newPage(options);
     await page.goto(pathToFileURL(example).href);
     const result = page.locator('[data-ready]');
+    assert.equal(await page.locator('.slide button').count(), 0, 'all controls belong to the shared HUD');
+    assert.equal(await page.locator('#cue-number').innerText(), '1/3');
     assert.ok(await result.isHidden());
     await page.keyboard.press('Space');
     assert.equal(await page.locator('.motion').getAttribute('data-step'), '1');
@@ -35,13 +37,17 @@ test('replayable states, keyboard ownership and static reading on the actual tem
     assert.deepEqual(stays, [false, true], 'a fresh key may turn the page, a held key must not');
     await page.keyboard.press('Shift+Space');
     await result.waitFor({ state: 'hidden' });
-    await page.getByRole('button', { name: '汇总' }).focus();
+    await page.getByRole('button', { name: '下一步' }).focus();
     await page.keyboard.press('Space');
     await result.waitFor({ state: 'visible' });
-    await page.getByRole('button', { name: '输入' }).click();
+    await page.getByRole('button', { name: '从头开始' }).click();
     await result.waitFor({ state: 'hidden' });
     await page.keyboard.press('b');
     assert.ok(await page.getByText('回看范围：摘要中的事实仍能追溯到原始记录。').isVisible());
+    assert.ok(await page.locator('#cue-hud').isHidden());
+    await page.keyboard.press('b');
+    await page.locator('.slide').last().scrollIntoViewIfNeeded();
+    await page.locator('#hint').waitFor({ state:'hidden' });
     const noScript = await browser.newPage({ ...options, javaScriptEnabled: false });
     await noScript.goto(pathToFileURL(example).href);
     assert.ok(await noScript.getByRole('heading', { name: '证据摘要', exact: true }).isVisible());

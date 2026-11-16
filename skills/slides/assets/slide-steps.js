@@ -2,14 +2,17 @@
 (() => {
   "use strict";
 
-  function mount(root) {
+  function mount(root, { stepCount } = {}) {
     const choices = [...root.querySelectorAll("[data-step-to]")];
     const moves = [...root.querySelectorAll("[data-step-by]")];
     const notes = [...root.querySelectorAll("[data-step-note]")];
-    const last = choices.length - 1;
-    if (last < 1 || choices.some((button, i) => button.dataset.stepTo !== String(i))) {
-      throw new Error("A slide scene needs consecutive step buttons starting at 0");
+    const count = stepCount ?? choices.length;
+    if (!Number.isInteger(count) || count < 2) throw new Error("A slide scene needs at least two steps");
+    if (choices.length && (choices.length !== count ||
+        choices.some((button, i) => button.dataset.stepTo !== String(i)))) {
+      throw new Error("Local step buttons must be consecutive and start at 0");
     }
+    const last = count - 1;
 
     let current = -1;
     function go(index) {

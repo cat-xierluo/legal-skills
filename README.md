@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.0（源码） | 加入讲者可控的页内动效、小样与静态后备，PPTX/PDF 导出选择静态正文。 |
+| 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
 | 2026-11-01 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.0（源码） | 补网关故障隔离、MiniMax 排障及宿主内存审计边界；只读巡检与有界连续采样，提供本地稳定性缓解与上游复现入口。 |
@@ -424,7 +424,7 @@
 <td>工具·幻灯片创作</td>
 <td style="word-break:break-word">从文稿或主题创作 HTML 幻灯片，支持讲者控制的页内演示及静态后备，可导出可编辑 PPTX、PDF 或双格式；含风格预设、模板与隐私检查。</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.0（源码）</td>
+<td style="text-align:center">v1.6.1（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/slides-1.5.16.zip">已发布 v1.5.16</a></td>
 <td>首次运行安装 npm 依赖与 Playwright Chromium；使用说明见 SKILL.md</td>
 </tr>
