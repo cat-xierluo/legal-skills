@@ -54,7 +54,7 @@ node convert.js 课件.html -o 课件-v2.pptx --background-mode auto --strict
 
 优先用 `@oai/artifact-tool`：
 
-1. Playwright 固定视口打开 HTML，逐页提取 DOM 文本、图片、形状、边框与讲者备注。
+1. Playwright 固定视口打开 HTML；有[页内动效](explanatory-motion.md)时，先给根元素加 `data-slides-static-export` 并确认静态正文可见、播放控件隐藏，再逐页提取 DOM 文本、图片、形状、边框与讲者备注。
 2. 单独截取背景层画面，并作为每页背景图。
 3. 用 Artifact Tool 重建前景对象。
 4. 用官方 finalizer 校验页数、包完整性、字体和几何。

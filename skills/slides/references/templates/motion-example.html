@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>资料如何汇总 · 页内动效示例</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f6f7f5;color:#1b2927;font:22px/1.5 system-ui,sans-serif}
+.slide{width:1280px;height:720px;padding:56px 72px;display:flex;flex-direction:column}
+h1{font-size:52px;line-height:1.15;margin:28px 0 24px} h2{font-size:32px;margin:0 0 10px}
+p{margin:0 0 14px}
+.fallback,.motion{display:flex;flex-direction:column}
+.motion[hidden],.motion [hidden]{display:none!important}
+.slide.is-live .fallback{display:none}
+html[data-slides-static-export] .slide .motion,body.exporting .slide .motion{display:none!important}
+html[data-slides-static-export] .slide .fallback,body.exporting .slide .fallback{display:flex!important}
+@media print{
+  .slide .motion{display:none!important}
+  .slide .fallback{display:flex!important}
+}
+.flow{display:grid;grid-template-columns:1fr 48px 1fr 48px 1.15fr;align-items:stretch;gap:18px;margin:20px 0}
+.flow>div{min-height:166px;padding:23px;border:1px solid #b7c6c1;border-radius:12px;background:#fff;transition:background .28s,border-color .28s}
+.flow>span{align-self:center;text-align:center;color:#486961;font-size:32px}
+.flow b{color:#3d5a52}
+.motion[data-step="1"] .source,.motion[data-step="2"] .result{background:#daf0e8;border-color:#368471}
+.motion [data-ready]{color:#476456;transition:opacity .28s}
+.motion:not([data-step="2"]) [data-ready]{opacity:0;visibility:hidden}
+.controls{display:flex;gap:10px;align-items:center;margin:4px 0 0}
+.controls button{cursor:pointer;font:600 17px system-ui;padding:11px 16px;border-radius:7px;border:1px solid #82928c;color:#17332a;background:white}
+.controls button[aria-pressed="true"]{border-color:#174a3a;background:#174a3a;color:white}
+.controls button[aria-disabled="true"]{cursor:default;color:#666;background:#eceeec}
+.controls button:focus-visible{outline:2px solid #075945;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.motion *{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<section class="slide">
+  <h1>两份资料怎样汇总？</h1>
+  <div class="fallback">
+    <h2>证据摘要</h2>
+    <p>事实表和核对记录可分别整理。两份都就绪，才进入汇总。</p>
+    <p>回看范围：摘要中的事实仍能追溯到原始记录。</p>
+  </div>
+  <div class="motion" data-step="0" hidden>
+    <div class="flow">
+      <div class="source"><h2>事实表</h2><p>整理待引用的事实</p></div>
+      <span aria-hidden="true">＋</span>
+      <div class="source"><h2>核对记录</h2><p>记录事实对应的原始材料</p></div>
+      <span aria-hidden="true">→</span>
+      <div class="result"><h2>汇总区</h2><p data-ready>证据摘要已形成</p></div>
+    </div>
+    <div aria-live="polite">
+      <p data-step-note="0">两份资料可以独立整理。</p>
+      <p data-step-note="1" hidden>两份资料都已就绪，具备汇总条件。</p>
+      <p data-step-note="2" hidden>打开摘要，仍可回到原始记录。</p>
+    </div>
+    <div class="controls" role="group" aria-label="页内步骤">
+      <button type="button" data-step-to="0">输入</button>
+      <button type="button" data-step-to="1">备齐</button>
+      <button type="button" data-step-to="2">汇总</button>
+      <button type="button" data-step-by="-1">上一步</button>
+      <button type="button" data-step-by="1">下一步</button>
+      <button type="button" data-static-toggle>切换静态</button>
+    </div>
+  </div>
+</section>
+<section class="slide">
+  <h1>证据可回看</h1>
+  <p>摘要能简化阅读，原始记录继续保留。</p>
+</section>
+<script src="../../assets/slide-steps.js"></script>
+<script>
+(() => {
+  if (!window.SlidesSteps) return;
+  const root = document.querySelector(".motion");
+  const slide = root.closest(".slide");
+  const control = window.SlidesSteps.mount(root);
+  const staticExport = () => document.documentElement.hasAttribute("data-slides-static-export");
+  function toggle() {
+    if (staticExport()) return;
+    const live = slide.classList.toggle("is-live");
+    root.hidden = !live;
+  }
+  root.querySelector("[data-static-toggle]").addEventListener("click", toggle);
+  window.addEventListener("keydown", event => {
+    if (staticExport()) return;
+    if (event.key.toLowerCase() === "b" && !event.altKey && !event.ctrlKey && !event.metaKey && !event.repeat) {
+      toggle();
+    } else if (!root.hidden && slide.getBoundingClientRect().top >= -30 &&
+               slide.getBoundingClientRect().top < innerHeight / 2) {
+      control.handleKey(event);
+    }
+  });
+  toggle();
+})();
+</script>
+</body>
+</html>

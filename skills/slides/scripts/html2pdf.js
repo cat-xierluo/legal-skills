@@ -37,8 +37,8 @@
  */
 
 const { chromium } = require('playwright');
+const { openStaticSlide } = require('./open-static-slide');
 const path = require('path');
-const { pathToFileURL } = require('node:url');
 
 const PX_PER_IN = 96;
 const MM_PER_IN = 25.4;
@@ -96,7 +96,7 @@ async function html2pdf(htmlFile, pdfPath, options = {}) {
     // Force screen media type so PDF renders exactly like browser view
     await page.emulateMedia({ media: 'screen' });
 
-    await page.goto(pathToFileURL(filePath).href);
+    await openStaticSlide(page, filePath);
     await page.waitForLoadState('networkidle');
 
     // Detect page structure: multi-page slides vs single page
