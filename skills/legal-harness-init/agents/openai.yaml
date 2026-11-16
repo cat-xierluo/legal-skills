@@ -1,4 +1,4 @@
 interface:
   display_name: "法律 AI 上下文初始化"
-  short_description: "把法律业务做法整理为个人、团队和事项的 AI 协作规则"
+  short_description: "把个人偏好、团队规程和事项要求整理成可复用的 AI 上下文"
   default_prompt: "用 $legal-harness-init 为我的法律业务初始化 AI 工作上下文，先列出个人、团队和事项规则的来源、维护人和保存位置。"

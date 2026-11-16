@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 生成法律 AI 工作上下文时列出个人、团队和事项规则的来源、维护人及保存位置；新增同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
+| 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 「法律 AI 上下文初始化」新增三层规则清单，列出规则来源、维护人和保存位置；附同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
@@ -660,7 +660,7 @@
 <tr>
 <td><a href="skills/legal-harness-init/"><strong>legal-harness-init</strong></a></td>
 <td>工具·Agent配置</td>
-<td style="word-break:break-word">按法律业务初始化或更新 AI 工作上下文：列明个人、团队与事项规则的来源、维护人和保存位置，预览后安全合并个人或事项配置</td>
+<td style="word-break:break-word">法律 AI 上下文初始化：列明个人、团队与事项规则的来源、维护人和保存位置，预览后安全合并个人或事项配置</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.5.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-harness-init-0.5.3.zip">已发布 v0.5.3</a></td>

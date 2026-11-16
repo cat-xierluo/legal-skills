@@ -1,6 +1,6 @@
 ---
 name: legal-harness-init
-description: 为律师、法务等法律工作者初始化或更新 AI 工作上下文和协作规则，按业务梳理个人、团队与事项三层，列出各层的规则来源、维护人和保存位置，将已确认的个人或事项规则安全合并到 AGENTS.md/CLAUDE.md。用于想让 AI 了解自己的法律业务和协作方式、建立法律安全基线或配置相关指令文件时。不要用于直接审合同、研判案件、起草文书、创建项目脚手架或开发 Skill。
+description: 法律 AI 上下文初始化。为律师、法务等法律工作者按业务梳理个人、团队与事项三层的协作规则，列出各层的规则来源、维护人和保存位置，将已确认的个人或事项规则安全合并到 AGENTS.md/CLAUDE.md。用于首次配置或更新 AI 工作上下文、建立法律安全基线或设置相关指令文件时。不要用于直接审合同、研判案件、起草文书、创建项目脚手架或开发 Skill。
 license: MIT
 metadata:
   version: "0.5.4"
@@ -8,9 +8,9 @@ metadata:
   homepage: https://github.com/cat-xierluo/legal-skills
 ---
 
-# Legal Harness Init：法律 AI 工作上下文
+# 法律 AI 上下文初始化
 
-把法律人的稳定协作要求写成可加载、可增量更新、可验证的 harness 指令。完成不等于“文件已写入”；必须区分：
+把个人工作习惯、团队规程和事项要求梳理成 AI 可以复用的工作上下文。客户端调用名是 `$legal-harness-init`。配置写入、会话加载和行为验证分别记录：
 
 1. `CONFIG_WRITTEN`：文件与受管区块存在。
 2. `INSTRUCTIONS_DECLARED`：人工证据声明新会话加载了精确来源。
