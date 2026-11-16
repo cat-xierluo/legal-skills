@@ -1,4 +1,4 @@
 interface:
-  display_name: "法律 Harness 初始化"
-  short_description: "为法律工作者安全生成、增量合并并核对 AGENTS.md/CLAUDE.md"
-  default_prompt: "使用 $legal-harness-init 为我的法律工作配置最小安全基线，并记录人工新会话核对结果。"
+  display_name: "法律 AI 上下文初始化"
+  short_description: "把法律业务做法整理为个人、团队和事项的 AI 协作规则"
+  default_prompt: "用 $legal-harness-init 为我的法律业务初始化 AI 工作上下文，先列出个人、团队和事项规则的来源、维护人和保存位置。"

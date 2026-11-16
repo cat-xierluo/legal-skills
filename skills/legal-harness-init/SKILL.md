@@ -1,14 +1,14 @@
 ---
 name: legal-harness-init
-description: 面向法律工作者初始化或增量治理 AGENTS.md/CLAUDE.md：识别当前 AI harness，区分用户级、项目级和团队级指令，生成最小法律安全基线，安全合并受管区块，并区分真实写入与人工新会话行为声明。用户明确提到法律工作且要配置 harness、AGENTS.md、CLAUDE.md、agent 协作规则或 AI 使用基线时使用。不要用于合同审查、案件分析、文书起草、项目脚手架或 Skill 开发。
+description: 为律师、法务等法律工作者初始化或更新 AI 工作上下文和协作规则，按业务梳理个人、团队与事项三层，列出各层的规则来源、维护人和保存位置，将已确认的个人或事项规则安全合并到 AGENTS.md/CLAUDE.md。用于想让 AI 了解自己的法律业务和协作方式、建立法律安全基线或配置相关指令文件时。不要用于直接审合同、研判案件、起草文书、创建项目脚手架或开发 Skill。
 license: MIT
 metadata:
-  version: "0.5.3"
+  version: "0.5.4"
   author: 杨卫薪律师（微信ywxlaw）
   homepage: https://github.com/cat-xierluo/legal-skills
 ---
 
-# Legal Harness Init
+# Legal Harness Init：法律 AI 工作上下文
 
 把法律人的稳定协作要求写成可加载、可增量更新、可验证的 harness 指令。完成不等于“文件已写入”；必须区分：
 
@@ -22,12 +22,14 @@ metadata:
 
 首次使用或判断平台是否支持时，读 [支持矩阵与完整示例](references/23-support-and-walkthrough.md)。检测到平台不等于客户端已实际加载；本 Skill 写入的是协作约定，不是 runtime 权限拦截器。
 
+做演示，或想看同一位律师如何为不同业务分别配置事项上下文，读 [劳动争议与合同审查双业务示例](references/17-examples/dual-business-walkthrough.md)。
+
 ## 适用边界
 
 在以下条件同时满足时使用：
 
 - 用户是律师、法务、合规、知识产权或其他法律工作者；
-- 用户要建立或更新 AI 协作规则、AGENTS.md、CLAUDE.md 或 harness 基线。
+- 用户要初始化或更新法律 AI 工作上下文、协作规则、AGENTS.md、CLAUDE.md 或 harness 基线。
 
 不要用于：
 
@@ -40,7 +42,7 @@ metadata:
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `--guide-mode` | `quick` | `quick` / `guided` / `team` |
-| `--level` | 自动判断 | `user` / `project`；team 模式按组织→项目→个人处理 |
+| `--level` | 自动判断 | 脚本写入仅 `user` / `project`；组织规则由团队指定来源与维护人，在适用事项中引用 |
 | `--platforms` | 当前 runtime + 可写已安装平台 | 平台 key，逗号分隔 |
 | `--runtime` | 自动检测 | 调用方明确知道当前平台时传给 `detect.sh` |
 | `--project-type` | 询问 | `litigation` / `transactional` / `ip` / `in-house` / `research`；只路由问题，不提供标准答案 |
@@ -148,7 +150,9 @@ M6—M8 默认只生成：
 
 若检测到 `project-init` 复合证据，只补法律安全、回溯和受控上下文入口，不改项目脚手架。
 
-## 第五步：用稳定受管区块预览
+## 第五步：预览三层清单与受管区块
+
+生成或更新时，无论采用哪种引导模式，先在答复中给出[三层规则清单](references/20-team-layering.md#生成时交付三层规则清单)，逐层列出**规则来源、维护人、保存位置、本次处理**。多个事项各列一行；不在本次写入范围的层标明沿用、仅引用、待确认或不适用。先展示清单及对应草稿或差异；仅需草稿时直接交回。写入后按实际回执更新清单。
 
 每个模块使用固定 `block-id`，一次只更新一个逻辑区块：
 
@@ -252,7 +256,7 @@ bash scripts/verify.sh \
   --session-evidence <证据文件>
 ```
 
-证据必须包含 `new_session=true`、`loaded=true`、精确 `source_path`、与当前配置一致的 `config_sha256`；四项 `probe_*=pass` 时最多报告 `BEHAVIOR_DECLARED`。`verify.sh` 只在接入受信 runtime 采集器后才允许输出 `BEHAVIOR_VERIFIED`；v0.5.3 永远不输出该状态。配置变化后旧证据失效；当前写入会话的自报不算加载证据。
+证据必须包含 `new_session=true`、`loaded=true`、精确 `source_path`、与当前配置一致的 `config_sha256`；四项 `probe_*=pass` 时最多报告 `BEHAVIOR_DECLARED`。当前没有受信 runtime 采集器，`verify.sh` 不输出 `BEHAVIOR_VERIFIED`。配置变化后旧证据失效；当前写入会话的自报不算加载证据。
 
 ## 验收
 
@@ -264,6 +268,7 @@ bash scripts/test.sh
 
 交付前确认：
 
+- 三层清单与实际来源、维护人和落点一致，标出缺项；实际写入以对应文件的回执为准；
 - 默认产物没有真实可识别案件信息或凭证；
 - 已有文件的非受管内容完整保留；
 - 多平台同路径只写一次，重复执行零 diff；

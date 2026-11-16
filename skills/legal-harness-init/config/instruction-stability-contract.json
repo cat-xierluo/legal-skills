@@ -2,12 +2,13 @@
   "schema_version": 1,
   "skill": {
     "name": "legal-harness-init",
-    "version": "0.5.3"
+    "version": "0.5.4"
   },
   "producer": {
     "id": "legal-harness-init-workflow",
     "implementation_paths": [
       "SKILL.md",
+      "references/20-team-layering.md",
       "scripts/detect.sh",
       "scripts/validate-content.sh",
       "scripts/write.sh",
