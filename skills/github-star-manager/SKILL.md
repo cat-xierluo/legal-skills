@@ -2,9 +2,9 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.17.1"
+version: "0.18.0"
 license: MIT
-description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star 和 Dashboard。不要用于单个未知仓库的一次性深度研究。
+description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star、照片库截图批量处理与 Dashboard。不要用于单个未知仓库的一次性深度研究。
 ---
 
 # GitHub Star 管理器 (GitHub Star Manager)
@@ -45,13 +45,14 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
 **支持的触发方式：**
 - "分析这篇文章并 star 里面的项目"
 - "从这张截图里找 GitHub 项目并 star"
+- "看看我最近的截图里有哪些可以 star 的，处理完把源图删掉"（照片库批量来源 → 走 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)）
 - "Star [内容] 中提到的所有 GitHub 项目"
 
 **工作流程：**
 
 1. **内容提取与上下文分析**
    - 文字/URL：使用 WebFetch 获取文章内容，解析 GitHub URL
-   - 截图/图片：使用图片分析 MCP 提取文字并识别项目引用
+   - 截图/图片：单张附图直接读图提取；**Mac 照片库批量截图**先用 mac-photos 建 OCR 索引再检索，整条「摄取→核实→star→清理源图→索引同步」流程见 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)
    - 评论区/回复也是提取源：作者在评论区亲授的 `owner/repo` 全称是最高优先级证据，优先于一切启发式消歧
 
 2. **仓库发现与智能匹配**
@@ -96,6 +97,11 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
    - 需人工确认的仓库
    - 覆盖率核对：报告前把每个输入（每张截图/每条链接）映射到处置（已 star / 与其他输入去重归并 / 待确认），输入数=处置数才准发报告；“待确认”必须列全所有未解决项，漏报一项会让用户误以为全部完成
    - 用户中途追加输入时沿用同一份映射账本增量更新；同一项目出现在多张截图里按佐证处理（作者亲授/评论区确认优先级最高），不重复 star 也不重复汇报
+
+6. **清理源截图（照片库批量来源时）**
+   - star 处置完成后，用户通常要求删除对应源图以免二次翻看：走「标记待删 → 干跑预览 → 真删」三段，系统确认框点击前先提醒用户，干跑张数须与确认框一致。
+   - uuid 一律从索引按内容取，不手抄；删除失败的先核实资产是否已不在图库，再把悬挂标记同步为「已删·档案」（文字档案保留可搜）。
+   - 完整规则与实测教训见 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)。
 
 ### 2. 更新追踪
 - **版本检测**：检测项目的新 Release 和 Tag
@@ -402,3 +408,4 @@ python scripts/opportunity.py suppress --repo owner/name --project myproj  # 查
 
 - [skill-lint 技能开发规范](../skill-lint/references/skill-dev-guide.md) - 技能开发指南（唯一维护源）
 - [AGENTS.md](../../AGENTS.md) - 项目协作规范
+- [references/screenshot-workflow.md](references/screenshot-workflow.md) - 从照片库截图批量找项目、Star 与清理源图（mac-photos 编排）
