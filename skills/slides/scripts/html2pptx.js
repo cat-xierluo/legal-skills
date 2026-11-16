@@ -35,10 +35,11 @@
  */
 
 const { chromium } = require('playwright');
+const { openStaticSlide } = require('./open-static-slide');
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
-const { fileURLToPath, pathToFileURL } = require('node:url');
+const { fileURLToPath } = require('node:url');
 const sharp = require('sharp');
 
 const PT_PER_PX = 0.75;
@@ -1182,7 +1183,7 @@ async function html2pptx(htmlFile, pres, options = {}) {
         console.log(`Browser console: ${msg.text()}`);
       });
 
-      await page.goto(pathToFileURL(filePath).href);
+      await openStaticSlide(page, filePath);
 
       if (forceViewport) {
         // Force viewport to match PPTX layout dimensions
@@ -1223,7 +1224,7 @@ async function html2pptx(htmlFile, pres, options = {}) {
       });
 
       if (frozenBackgroundPath) {
-        await page.goto(pathToFileURL(filePath).href);
+        await openStaticSlide(page, filePath);
         await page.setViewportSize({ width: Math.round(targetWidth), height: Math.round(targetHeight) });
         await page.evaluate((w, h) => {
           const style = document.createElement('style');
@@ -1334,7 +1335,7 @@ async function html2pptxMulti(htmlFile, pres, options = {}) {
       console.log(`Browser console: ${msg.text()}`);
     });
 
-    await page.goto(pathToFileURL(filePath).href);
+    await openStaticSlide(page, filePath);
 
     // Detect slide containers and their dimensions
     const slideInfo = await page.evaluate(({ sel }) => {
@@ -1402,7 +1403,7 @@ async function html2pptxMulti(htmlFile, pres, options = {}) {
 
       try {
         await slidePage.setViewportSize({ width: Math.round(targetWidth), height: Math.round(targetHeight) });
-        await slidePage.goto(pathToFileURL(filePath).href);
+        await openStaticSlide(slidePage, filePath);
         await waitForStablePaint(slidePage, 0);
 
         const selector = slideSelector || '.slide, section[class*="slide"], section';
@@ -1418,7 +1419,7 @@ async function html2pptxMulti(htmlFile, pres, options = {}) {
         });
 
         if (frozenBackgroundPath) {
-          await slidePage.goto(pathToFileURL(filePath).href);
+          await openStaticSlide(slidePage, filePath);
           await slidePage.setViewportSize({ width: Math.round(targetWidth), height: Math.round(targetHeight) });
           await waitForStablePaint(slidePage, 0);
         }

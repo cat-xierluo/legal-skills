@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
 | 2026-11-01 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.0（源码） | 补网关故障隔离、MiniMax 排障及宿主内存审计边界；只读巡检与有界连续采样，提供本地稳定性缓解与上游复现入口。 |
@@ -42,7 +43,6 @@
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动改为临时目录构建、成功后整批替换，失败不破坏上一批产物；修复资产数输出的变量解析问题，并拒绝符号链接与同名目录目标；补 Bash 实际执行回归。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.6 | 专家套件发布 staging 兼容 macOS Info-ZIP 未标记 UTF-8 的中文文件名，避免成员清单误报不匹配。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
-| 2026-10-28 | 更新 | [self-evolve](skills/self-evolve/) | v1.28.1 | 明确调用宿主与会话来源独立，补充 Qoder 调用条件与课堂提示；Qoder 完整实跑仍待验，不扩大会话来源支持声明。 |
 
 </details>
 
@@ -422,9 +422,9 @@
 <tr>
 <td><a href="skills/slides/"><strong>slides</strong></a></td>
 <td>工具·幻灯片创作</td>
-<td style="word-break:break-word">从文稿或主题创作 HTML 幻灯片，导出可编辑 PPTX、PDF 或双格式；含 38 个风格预设、12 个模板、本地身份配置与发布前隐私检查。</td>
+<td style="word-break:break-word">从文稿或主题创作 HTML 幻灯片，支持讲者控制的页内演示及静态后备，可导出可编辑 PPTX、PDF 或双格式；含风格预设、模板与隐私检查。</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.5.16</td>
+<td style="text-align:center">v1.6.1（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/slides-1.5.16.zip">已发布 v1.5.16</a></td>
 <td>首次运行安装 npm 依赖与 Playwright Chromium；使用说明见 SKILL.md</td>
 </tr>

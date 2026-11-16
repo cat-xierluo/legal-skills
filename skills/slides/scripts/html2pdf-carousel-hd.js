@@ -15,6 +15,7 @@
  */
 
 const { chromium } = require('playwright');
+const { openStaticSlide } = require('./open-static-slide');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -44,7 +45,7 @@ async function html2pdfCarouselHD(htmlFile, pdfPath, options = {}) {
     });
     const page = await context.newPage();
     await page.emulateMedia({ media: 'screen' });
-    await page.goto(`file://${filePath}`);
+    await openStaticSlide(page, filePath);
     await page.waitForLoadState('networkidle');
 
     if (waitForFonts) {

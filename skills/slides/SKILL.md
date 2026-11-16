@@ -2,10 +2,10 @@
 name: slides
 license: MIT
 metadata:
-  version: "1.5.16"
+  version: "1.6.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
-description: 幻灯片全流程创作工具。本技能应在需要从文稿或主题生成精美幻灯片、将 HTML 转换为可编辑 PPTX/PDF、从现有课件提取风格、或围绕主题做结构化研究时使用。不要用于纯文档排版（用 md2word）或图片处理（用 imagemagick）。
+description: 幻灯片全流程创作工具。本技能应在需要从文稿或主题生成幻灯片、制作讲者可控制的页内动效、将 HTML 转换为可编辑 PPTX/PDF、从现有课件提取风格、或围绕主题做结构化研究时使用。不要用于纯文档排版（用 md2word）或图片处理（用 imagemagick）。
 ---
 
 # slides — 幻灯片全流程创作工具
@@ -23,7 +23,7 @@ description: 幻灯片全流程创作工具。本技能应在需要从文稿或�
 - **设计系统**：内置 CSS 设计语言（排版刻度、间距系统、组件模式、视觉层级规则），12 个完整 HTML 模板文件可直接 clone 替换内容
 - **预检验证**：转换前用 Playwright 检查 slide 容器、尺寸、溢出、渐变/inset 阴影、裸 `div` 文本、远程/base64 图片、文字背景/边框等风险
 - **兼容任意 HTML**：自动处理视口相对单位（100vh、clamp()、vw）、flexbox、grid 布局
-- **动画系统**：浏览器模式支持入场动画（fadeSlideUp/Left/Right/Scale）、延迟级联（d1-d6）、页面转场策略（cascade/hero/quote/directional），PPTX 导出时自动降级
+- **浏览器动效**：支持入场和转场；适合演示机制、操作或状态变化的页，可用 HTML 组件、SVG 等做讲者控制的页内演示。PPTX/PDF 使用该页明确写好的静态正文。
 - **多页检测**：自动识别 `.slide` / `section` 容器，单文件多页一键转换
 - **通用可分发**：不内置任何个人信息；讲者身份、联系方式、头像与二维码来自本地配置，未配置时按匿名默认生成，开箱即用
 - **本地转换**：转换引擎不需要云端 API；HTML 中的远程字体、图片或脚本仍可能联网，处理私有材料时应使用本地资源并核对输入来源。
@@ -37,6 +37,7 @@ description: 幻灯片全流程创作工具。本技能应在需要从文稿或�
 - **风格参数**（可选）：`--extract-style` 提取风格，`--save 名称` 保存到风格库
 
 ### 输出
+- **HTML 课件**：用于现场放映；可包含页内动效、翻页导航与静态正文
 - **PPTX 文件**：可编辑 PowerPoint（文字保留为文本框）
 - **PDF 文件**：基于 Chromium 渲染的高保真 PDF
 - **风格 JSON**：`--extract-style` 时输出结构化风格参数
@@ -104,14 +105,15 @@ node scripts/load-profile.js --assets     # 已启用素材的解析路径
 **标准流程**：
 1. **需求澄清**：先读本地配置（`node scripts/load-profile.js`）确定讲者身份、页脚与展示开关；未配置即匿名生成，不补位任何个人信息。再确认受众、场景、页数、交付格式（PPTX/PDF/both）、是否需要后续编辑、证据密度和视觉语气；缺失信息标记为“待补充”。
 2. **研究与大纲**：用户只有主题时，先产出 `research.md` + `slides_outline.json`（参考 `references/research/`）；用户已有文稿时，先拆成分页目标。
-3. **风格与版式选择**：默认风格取配置的 `brand.style`（未配置则由场景决定）；从风格库选择预设或提取旧课件风格；再依据 `references/layout-theme-playbook.md` 选择版式家族，使用 `references/templates/` 下的完整 HTML 模板文件（12 个页面类型，共享 `_base.css` 设计系统）。
-4. **生成 HTML**：clone `references/templates/` 中对应的模板文件，替换占位内容，切换 `:root` 主题变量。遵守 `_base.css` 的设计系统：语义标签、本地图片、固定视口。动态背景统一标记 `data-ppt-background`，讲者备注写在 slide 的 `data-note` 或 `[data-speaker-notes]` 中。
+3. **风格与版式选择**：默认风格取配置的 `brand.style`（未配置则由场景决定）；从风格库选择预设或提取旧课件风格；再依据 `references/layout-theme-playbook.md` 选择版式家族。遇到并行汇合、对象变化或操作反馈，先读[页内动效](references/explanatory-motion.md)，决定哪些页值得用动态讲清，旧稿已经明白的页照用。
+4. **生成 HTML**：clone `references/templates/` 中对应的模板文件，替换占位内容，切换 `:root` 主题变量。遵守 `_base.css` 的设计系统：语义标签、本地图片、固定视口。动态背景统一标记 `data-ppt-background`，讲者备注写在 slide 的 `data-note` 或 `[data-speaker-notes]` 中。页内动效嵌入原页正文，讲者控件并到放映 HUD，保留独立可读的静态正文。
 5. **预检验证**：执行 `cd scripts && npm run validate -- ../example.html --strict`；正式文件替换为目标 HTML 路径。先修复 errors，再处理 warnings。
 6. **转换输出**：执行 `node convert.js 新内容.html -o 输出 --format both --background-mode auto`，或按需输出 PPTX/PDF。Codex 环境若提供 Presentations Runtime，优先按 `references/native-pptx-rebuild.md` 用 Artifact Tool 重建并通过 finalizer；本地 CLI 则用内置 PptxGenJS 转换器。
-7. **最终 QA**：浏览器预览、PPTX 打开、PDF 打开三处复核：页面尺寸、文字裁切、图片缺失、PDF 文字是否可选、PPTX 前景是否可逐项编辑、动态背景是否已在 PPTX 中静态保留、讲者备注是否写入。
+7. **最终 QA**：在实际放映尺寸检查页面、变化中段、结果停留和讲者操作；离线验证本地交付。按交付格式打开 PPTX/PDF，检查页数、文字裁切、图片、静态正文与讲者备注，并核 PPTX 前景可编辑性。
 
 **常用参考**：
 - 版式与主题：`references/layout-theme-playbook.md`
+- 解释性页内演示与静态后备：[页内动效](references/explanatory-motion.md)
 - 完整 HTML 模板：`references/templates/`（12 个页面类型 + `_base.css` 设计系统 + `README.md` 索引）
 - PPTX/PDF 稳定性：`references/pptx-guide.md`
 - 混合式原生重建：`references/native-pptx-rebuild.md`
@@ -416,6 +418,7 @@ slides/
 │   ├── native-pptx-rebuild.md # 动态背景冻结 + 前景原生对象重建工作流
 │   ├── layout-theme-playbook.md # 版式家族、主题字段、反泛化设计规则
 │   ├── browser-guide.md     # 浏览器演示模式（视口适配 + 动画 + scroll-snap）
+│   ├── explanatory-motion.md # 页内解释性动效与静态后备
 │   ├── style-reference.md   # 风格参考（AI 生成时引用）+ 设计哲学 + 反 AI-slop
 │   ├── cn-deck-polish.md    # 中文课件去冗余与隐形坑
 │   ├── templates/           # 完整 HTML 模板库（可直接 clone 替换内容）
