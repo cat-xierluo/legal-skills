@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 「法律 AI 上下文初始化」新增三层规则清单，列出规则来源、维护人和保存位置；附同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
@@ -41,8 +42,6 @@
 | 2026-10-30 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.3（源码） | 加固受管写入与隐私校验，回执绑定最终哈希；会话模型探测改为 JSON 解析并支持显式会话文件；人工新会话结果降为 DECLARED，不再宣称自动行为验证。 |
 | 2026-10-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.8 | 修复根 README HTML 技能表内专家套件备注链接不生效：回写时转换为 HTML 链接，并补幂等回归。 |
 | 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动改为临时目录构建、成功后整批替换，失败不破坏上一批产物；修复资产数输出的变量解析问题，并拒绝符号链接与同名目录目标；补 Bash 实际执行回归。 |
-| 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.6 | 专家套件发布 staging 兼容 macOS Info-ZIP 未标记 UTF-8 的中文文件名，避免成员清单误报不匹配。 |
-| 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.5 | 专家套件成员表支持技能改名后的旧名历史包作为公开下载入口，未声明映射的 slug 不得借用他人资产。 |
 
 </details>
 
@@ -661,11 +660,11 @@
 <tr>
 <td><a href="skills/legal-harness-init/"><strong>legal-harness-init</strong></a></td>
 <td>工具·Agent配置</td>
-<td style="word-break:break-word">面向法律工作者初始化和增量治理 AGENTS.md/CLAUDE.md：三种引导模式、三档隐私治理、法律安全基线、受管区块安全合并及人工新会话核对</td>
+<td style="word-break:break-word">法律 AI 上下文初始化：列明个人、团队与事项规则的来源、维护人和保存位置，预览后安全合并个人或事项配置</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.5.3</td>
+<td style="text-align:center">v0.5.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-harness-init-0.5.3.zip">已发布 v0.5.3</a></td>
-<td>写入成功不等于已加载；无法新建会话时标 NOT_VERIFIED；所属套件：<a href="expert-suites/skill-development-quality/">Skill 开发与质量保障</a></td></tr>
+<td>写入成功不等于已加载；所属套件：<a href="expert-suites/skill-development-quality/">Skill 开发与质量保障</a>；源码 v0.5.4 待发布</td></tr>
 <tr>
 <td><a href="skills/multica-skill-update/"><strong>multica-skill-update</strong></a></td>
 <td>工具·Skill同步</td>
