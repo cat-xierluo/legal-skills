@@ -47,7 +47,8 @@
    ```bash
    UUID="从索引复制的完整UUID"
    EXPORTED_FILE="export 实际产出的文件名"
-   "$OSXPHOTOS_BIN" --library "$HOME/Pictures/Photos Library.photoslibrary" \
+   gsm_osxphotos_bin="${OSXPHOTOS_BIN:-$HOME/venvs/osxphotos/bin/osxphotos}"
+   "$gsm_osxphotos_bin" --library "$HOME/Pictures/Photos Library.photoslibrary" \
      export /tmp/gm-screenshot-pick --uuid "$UUID" --preview-if-missing
    python3 "$mac_photos_dir/scripts/bin/ocr-vision" "/tmp/gm-screenshot-pick/$EXPORTED_FILE"
    ```
@@ -115,12 +116,13 @@ gh api user/starred/owner/repo        # 回读 204 才算成功
 
   2. **不属于本次授权的待删项保留，不得进入本轮删除**。
   3. 执行前重新读一次待删集合，与干跑集合**逐 uuid 比较**；有任何增删或替换，立即停止、重做预览并重新对账。
-  4. 系统确认框弹出前提醒用户点「允许」；确认框里的张数与冻结清单不一致时取消，不要点。
+  4. 上述重读仅用于核对清单，不能证明执行期间队列保持不变。当前版本按 4.4 交回待审清单；不得据此启动 prune 或推动用户点击系统删除确认。
 
 ### 4.4 删除单位是「整个待删队列」——mac-photos 没有精确到 uuid 的删除入口
 
 - 现状核实：`prune`（CLI）与 `serve` 页面的批量删除都以**整个 `to_delete` 队列**为单位，没有「只删这几个 uuid」的参数或接口。
-- 因此只有一种情况可以由本流程执行 prune：**当前整个待删集合与本轮授权集合逐 uuid 完全一致**（队列里没有其他会话或早先任务留下的待删项），此时集合一致由 4.3 的对账保证。
+- 当前工具还没有将干跑清单与实际删除集合原子绑定的接口，也没有本轮已核验、能覆盖执行全程且所有 writer 都遵守的同步保证。**即使执行前读出的整个队列恰好等于授权集合，本流程也停在待审清单，不执行 prune。** 两次读取之间仍可能被并发改写，重读相同不是安全执行证明。
+- 将来若 mac-photos 原工具提供并实际验证了按授权 uuid 限定的执行入口，或能保证整个执行期间集合稳定的合同，再沿该工具的现行合同和已有授权接续。此文档不实现或推定该能力；当前清单可交用户在照片 App 中逐项核对处置。
 - 队列里**混入**任何不属于本次授权的待删项时：
   - **不运行 prune**（它会连同越权项一起删）；
   - 不去清掉、也不去改写那些越权项的状态（那是共享索引上的他人标记，`mark --active` 同样是直接改写索引）；

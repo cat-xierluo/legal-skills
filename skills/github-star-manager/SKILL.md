@@ -104,7 +104,7 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
    - **先判授权层级**：只发现 / 授权 star / 授权删除三者独立。star 授权不含删除授权；用户点系统确认框也不等于事先对具体源图的业务授权。没有明确删除授权就整步跳过，只交结果与候选清单。
    - **脚本在 mac-photos 目录**：先读 mac-photos 的现行 SKILL.md，从它的实际安装目录调用其 `scripts/photos_read.py`；本 Skill 目录没有该脚本。补索引默认 `scan --preview-only`，避免意外触发 iCloud 原片下载。
    - 有删除授权时：标记前冻结完整 uuid 与原状态，`keep` 默认排除（`mark --delete` 会覆盖保护标记）；干跑与执行前都按完整 uuid 集合对账，不以张数一致替代集合一致。
-   - mac-photos 的 prune 以整个待删队列为单位、没有按 uuid 精确删除的入口：队列混入越权项时不执行 prune，改为产出待审删除清单交回原工具或用户；不声称本流程具备精确删除能力。
+   - 当前 mac-photos 的 prune 没有按授权 uuid 限定或原子绑定删除集合的已核能力；即使重读的队列等于授权清单，本流程也停在待审删除清单，交回原工具或用户处置，不调用 prune。将来接续须先核原工具对实际执行集合的保证。
    - 索引失同步只认可验证删除回执：一次 `osxphotos query` 空结果不等于已删除；mac-photos 无受支持的按 uuid 同步入口时保留差异并如实报告，不手工改共享索引。
    - 完整规则与实测教训见 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)。
 
