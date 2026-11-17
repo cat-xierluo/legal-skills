@@ -2,9 +2,9 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.17.1"
+version: "0.18.0"
 license: MIT
-description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star 和 Dashboard。不要用于单个未知仓库的一次性深度研究。
+description: GitHub Star 项目管理、近期关注与更新追踪工具；用于从收藏中发现对本地 Skill 有价值的项目机会、生成证据包与每日候选队列，也支持内容自动 Star、照片库截图批量处理与 Dashboard。不要用于单个未知仓库的一次性深度研究。
 ---
 
 # GitHub Star 管理器 (GitHub Star Manager)
@@ -45,13 +45,16 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
 **支持的触发方式：**
 - "分析这篇文章并 star 里面的项目"
 - "从这张截图里找 GitHub 项目并 star"
+- "看看我最近的截图里有哪些可以 star 的"（只发现，不删图）
+- "从截图里找项目并 star"（授权 star，不含删除授权）
+- "看看我最近的截图里有哪些可以 star 的，处理完把源图删掉"（照片库批量来源 → 走 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)）
 - "Star [内容] 中提到的所有 GitHub 项目"
 
 **工作流程：**
 
 1. **内容提取与上下文分析**
    - 文字/URL：使用 WebFetch 获取文章内容，解析 GitHub URL
-   - 截图/图片：使用图片分析 MCP 提取文字并识别项目引用
+   - 截图/图片：单张附图直接读图提取；**Mac 照片库批量截图**先用 mac-photos 建 OCR 索引再检索，整条「摄取→核实→star→清理源图→索引同步」流程见 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)
    - 评论区/回复也是提取源：作者在评论区亲授的 `owner/repo` 全称是最高优先级证据，优先于一切启发式消歧
 
 2. **仓库发现与智能匹配**
@@ -96,6 +99,14 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
    - 需人工确认的仓库
    - 覆盖率核对：报告前把每个输入（每张截图/每条链接）映射到处置（已 star / 与其他输入去重归并 / 待确认），输入数=处置数才准发报告；“待确认”必须列全所有未解决项，漏报一项会让用户误以为全部完成
    - 用户中途追加输入时沿用同一份映射账本增量更新；同一项目出现在多张截图里按佐证处理（作者亲授/评论区确认优先级最高），不重复 star 也不重复汇报
+
+6. **清理源截图（照片库批量来源时）**
+   - **先判授权层级**：只发现 / 授权 star / 授权删除三者独立。star 授权不含删除授权；用户点系统确认框也不等于事先对具体源图的业务授权。没有明确删除授权就整步跳过，只交结果与候选清单。
+   - **脚本在 mac-photos 目录**：先读 mac-photos 的现行 SKILL.md，从它的实际安装目录调用其 `scripts/photos_read.py`；本 Skill 目录没有该脚本。补索引默认 `scan --preview-only`，避免意外触发 iCloud 原片下载。
+   - 有删除授权时：标记前冻结完整 uuid 与原状态，`keep` 默认排除（`mark --delete` 会覆盖保护标记）；干跑与执行前都按完整 uuid 集合对账，不以张数一致替代集合一致。
+   - 当前 mac-photos 的 prune 没有按授权 uuid 限定或原子绑定删除集合的已核能力；即使重读的队列等于授权清单，本流程也停在待审删除清单，交回原工具或用户处置，不调用 prune。将来接续须先核原工具对实际执行集合的保证。
+   - 索引失同步只认可验证删除回执：一次 `osxphotos query` 空结果不等于已删除；mac-photos 无受支持的按 uuid 同步入口时保留差异并如实报告，不手工改共享索引。
+   - 完整规则与实测教训见 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)。
 
 ### 2. 更新追踪
 - **版本检测**：检测项目的新 Release 和 Tag
@@ -402,3 +413,4 @@ python scripts/opportunity.py suppress --repo owner/name --project myproj  # 查
 
 - [skill-lint 技能开发规范](../skill-lint/references/skill-dev-guide.md) - 技能开发指南（唯一维护源）
 - [AGENTS.md](../../AGENTS.md) - 项目协作规范
+- [references/screenshot-workflow.md](references/screenshot-workflow.md) - 从照片库截图批量找项目、Star 与清理源图（mac-photos 编排）
