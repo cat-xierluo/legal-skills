@@ -1,6 +1,6 @@
 {
   "name": "html2pptx",
-  "version": "1.5.16",
+  "version": "1.6.1",
   "description": "将 HTML 幻灯片转换为高保真可编辑 PPTX 或 PDF",
   "main": "html2pptx.js",
   "scripts": {
@@ -10,6 +10,7 @@
     "previews": "node generate-previews.js",
     "test:privacy": "node --test tests/test-privacy.cjs",
     "test:conversion": "node --test tests/test-conversion.cjs",
+    "test:motion": "node --test tests/test-motion.cjs",
     "test:publication": "node --test tests/test-publication.cjs"
   },
   "dependencies": {

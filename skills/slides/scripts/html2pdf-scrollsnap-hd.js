@@ -21,6 +21,7 @@
  * 已在多套真实 scroll-snap + WebGL 课件上验证。
  */
 const { chromium } = require('playwright');
+const { openStaticSlide } = require('./open-static-slide');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -52,7 +53,7 @@ async function html2pdfScrollsnapHD(htmlFile, pdfPath, options = {}) {
     });
     const page = await context.newPage();
     await page.emulateMedia({ media: 'screen', reducedMotion: 'no-preference' });
-    await page.goto(`file://${filePath}`, { waitUntil: 'load', timeout: 60000 });
+    await openStaticSlide(page, filePath, { waitUntil: 'load', timeout: 60000 });
 
     // 隐藏导航 UI + 关闭 scroll-snap 干扰
     await page.addStyleTag({

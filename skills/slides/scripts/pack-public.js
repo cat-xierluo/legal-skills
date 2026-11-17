@@ -34,6 +34,7 @@ const ALLOW = [
   'CHANGELOG.md',
   '.gitignore',                 // 随包分发：使用者装包后仍需本规则保护自己的私有配置
   'example.html',
+  'assets/slide-steps.js',
   'assets/README.md',            // 素材目录说明（图片本身默认私有不入包）
   'config/profile.schema.json',
   'config/profile.example.json',
@@ -42,6 +43,7 @@ const ALLOW = [
   'references/native-pptx-rebuild.md',
   'references/layout-theme-playbook.md',
   'references/browser-guide.md',
+  'references/explanatory-motion.md',
   'references/style-reference.md',
   'references/cn-deck-polish.md',
   'references/ppt-writing-rules.md',
@@ -54,6 +56,7 @@ const ALLOW = [
   'references/styles',
   'references/research',
   'scripts/convert.js',
+  'scripts/open-static-slide.js',
   'scripts/html2pptx.js',
   'scripts/html2pdf.js',
   'scripts/html2pdf-carousel-hd.js',

@@ -26,6 +26,8 @@
 | `11-training.html` | 培训讲义 | light | 法律培训、课程讲义 |
 | `12-image-text.html` | 图文混排 | light | 案例展示、产品介绍 |
 
+需要在单页内演示因果、并行或操作状态时，参考[页内动效小样](motion-example.html)及[接入指南](../explanatory-motion.md)。
+
 ## 页面节奏建议
 
 | 页码 | 推荐模板 | 主题 | 说明 |
