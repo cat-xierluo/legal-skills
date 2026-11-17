@@ -50,8 +50,10 @@
    gsm_osxphotos_bin="${OSXPHOTOS_BIN:-$HOME/venvs/osxphotos/bin/osxphotos}"
    "$gsm_osxphotos_bin" --library "$HOME/Pictures/Photos Library.photoslibrary" \
      export /tmp/gm-screenshot-pick --uuid "$UUID" --preview-if-missing
-   python3 "$mac_photos_dir/scripts/bin/ocr-vision" "/tmp/gm-screenshot-pick/$EXPORTED_FILE"
+   "$mac_photos_dir/scripts/bin/ocr-vision" "/tmp/gm-screenshot-pick/$EXPORTED_FILE"
    ```
+
+   该 OCR 入口是原生可执行文件，直接调用；逐条检查返回 JSON 的 `error`、`text` 和 `lines`。退出码 0 也可能带 `error`（实测受限环境可返回 `nilError`），错误或空文本不等于截图没有文字，应保留待确认并按原工具排查。
 
    OCR 结果只作为本轮证据写进报告；**索引条目由 mac-photos 的 scan 路径维护，不手工写 index.jsonl**。
 5. **未命中不要直接说「没有」**：说明已查范围（日期窗口、索引张数、排除规则）再下结论。索引为空，与「有截图但 OCR 没识别出关键词」是两回事，要分开说。
