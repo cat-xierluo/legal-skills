@@ -45,6 +45,8 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
 **支持的触发方式：**
 - "分析这篇文章并 star 里面的项目"
 - "从这张截图里找 GitHub 项目并 star"
+- "看看我最近的截图里有哪些可以 star 的"（只发现，不删图）
+- "从截图里找项目并 star"（授权 star，不含删除授权）
 - "看看我最近的截图里有哪些可以 star 的，处理完把源图删掉"（照片库批量来源 → 走 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)）
 - "Star [内容] 中提到的所有 GitHub 项目"
 
@@ -99,8 +101,11 @@ description: GitHub Star 项目管理、近期关注与更新追踪工具；用�
    - 用户中途追加输入时沿用同一份映射账本增量更新；同一项目出现在多张截图里按佐证处理（作者亲授/评论区确认优先级最高），不重复 star 也不重复汇报
 
 6. **清理源截图（照片库批量来源时）**
-   - star 处置完成后，用户通常要求删除对应源图以免二次翻看：走「标记待删 → 干跑预览 → 真删」三段，系统确认框点击前先提醒用户，干跑张数须与确认框一致。
-   - uuid 一律从索引按内容取，不手抄；删除失败的先核实资产是否已不在图库，再把悬挂标记同步为「已删·档案」（文字档案保留可搜）。
+   - **先判授权层级**：只发现 / 授权 star / 授权删除三者独立。star 授权不含删除授权；用户点系统确认框也不等于事先对具体源图的业务授权。没有明确删除授权就整步跳过，只交结果与候选清单。
+   - **脚本在 mac-photos 目录**：先读 mac-photos 的现行 SKILL.md，从它的实际安装目录调用其 `scripts/photos_read.py`；本 Skill 目录没有该脚本。补索引默认 `scan --preview-only`，避免意外触发 iCloud 原片下载。
+   - 有删除授权时：标记前冻结完整 uuid 与原状态，`keep` 默认排除（`mark --delete` 会覆盖保护标记）；干跑与执行前都按完整 uuid 集合对账，不以张数一致替代集合一致。
+   - mac-photos 的 prune 以整个待删队列为单位、没有按 uuid 精确删除的入口：队列混入越权项时不执行 prune，改为产出待审删除清单交回原工具或用户；不声称本流程具备精确删除能力。
+   - 索引失同步只认可验证删除回执：一次 `osxphotos query` 空结果不等于已删除；mac-photos 无受支持的按 uuid 同步入口时保留差异并如实报告，不手工改共享索引。
    - 完整规则与实测教训见 [`references/screenshot-workflow.md`](references/screenshot-workflow.md)。
 
 ### 2. 更新追踪
