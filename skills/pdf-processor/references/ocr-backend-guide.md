@@ -4,20 +4,20 @@
 
 | 需求 | 推荐方案 | 说明 |
 | --- | --- | --- |
-| 默认可搜索双层 PDF | `auto` → PaddleOCR `PP-OCRv6` | 已配置 API 时默认首选并直送原 PDF；行级坐标比 VL 块级坐标更适合文字层匹配 |
-| 自然段 Markdown + 干净文字层 | `PP-OCRv6` 文字 + `PP-StructureV3` 版面 | 只按几何关系融合，不采用 Structure 块文本；过滤 `seal` 区域 OCR 噪声 |
-| 干净扫描件、表格密集页 | PaddleOCR `PP-StructureV3` | 从 `overall_ocr_res` 读取行级坐标；带重复水印的拍照件可能产生较多噪声，不作为默认 |
-| 复杂版面结构提取 | PaddleOCR-VL-1.6 / 1.5 | 返回版面块和阅读结构，但块级坐标较粗，不作为双层 PDF 默认模型 |
-| 已接入 MinerU 并复用其服务 | `--backend mineru_api` 或 `auto` | 支持双层 PDF + 结构化解析（Markdown/JSON/docx/html/latex），但无图像预处理能力 |
-| 敏感材料禁止外传 | `--local-only` | 跳过已配置的 PaddleOCR/MinerU，仅运行本地 `ocrmypdf`；统一入口默认保留原扫描分辨率并使用 OCRmyPDF 内置预处理 |
-| 外部 API 故障兜底 | `local_ocrmypdf` | `auto` 在外部服务全部失败后自动进入该路径 |
+| 默认可搜索双层 PDF | `auto` → RapidOCR | 全程本地、原图直送；超过阈值的页内倾斜先用 PDF 内容流无损旋正 |
+| 敏感材料或禁止外传 | `auto` | 默认不上传；RapidOCR 不可用或失败时回退本地 `ocrmypdf` |
+| 外部 API 故障兜底 | `local_ocrmypdf` | `auto` 的本地第二优先引擎 |
+| 自然段 Markdown + 干净文字层 | 显式 `PP-OCRv6` 文字 + `PP-StructureV3` 版面 | 只按几何关系融合，不采用 Structure 块文本；过滤 `seal` 区域 OCR 噪声 |
+| 干净扫描件、表格密集页 | 显式 PaddleOCR `PP-StructureV3` | 从 `overall_ocr_res` 读取行级坐标；带重复水印的拍照件可能产生较多噪声，不作为默认 |
+| 复杂版面结构提取 | 显式 PaddleOCR-VL-1.6 / 1.5 | 返回版面块和阅读结构，但块级坐标较粗，不作为双层 PDF 默认模型 |
+| 已接入 MinerU 并复用其服务 | 显式 `--backend mineru_api` | 支持双层 PDF + 结构化解析（Markdown/JSON/docx/html/latex），但无图像预处理能力 |
 | 需要归档标准 | `--backend local_ocrmypdf --output-type pdfa` | PDF/A-2b 格式 |
 
 > 历史保留的本地 PaddleOCR 双层 PDF 实现已移至 `scripts/pdf_ocr_paddle_local.py`。该实现不属于公开默认后端，后续如需在高性能本地硬件上恢复实验，可通过内部编排接入。
 
-> `auto` 在 API 已配置时会传输完整 PDF。输入含姓名、案号、医疗、账号等敏感信息时，Agent 必须先取得针对当前文件的明确上传授权；授权不自动覆盖同目录或其他材料。材料不允许外传时必须使用 `--local-only`。旧参数 `--allow-external-upload` 只保留命令兼容，不再充当上传门禁。OCR 可读文本归档仍默认关闭，需显式使用 `--archive-results`。
+> `auto` 不再读取 API 顺序，也不会传输 PDF。显式选择 PaddleOCR/MinerU 且输入含姓名、案号、医疗、账号等敏感信息时，Agent 必须先取得针对当前文件的明确上传授权；授权不自动覆盖同目录或其他材料。旧参数 `--local-only`、`--allow-external-upload` 和 `--api-order` 只保留命令兼容。OCR 可读文本归档仍默认关闭，需显式使用 `--archive-results`。
 
-> 本地 `ocrmypdf` 的文字层是真实 Tesseract 输出，但“文字框对齐、可选择、关键词命中”不代表逐字正确。统一入口不会再默认先重采样、预压缩后交给 Tesseract；需要裁剪时显式使用 `--enable-crop`，需要复现统一栅格预处理时使用 `--force-raster-preprocess`。中文法律扫描件对准确率要求较高且允许外传时，仍优先使用 PaddleOCR `PP-OCRv6`。
+> 本地 `ocrmypdf` 的文字层是真实 Tesseract 输出，但“文字框对齐、可选择、关键词命中”不代表逐字正确。统一入口不会再默认先重采样、预压缩后交给 Tesseract；需要裁剪时显式使用 `--enable-crop`，需要复现统一栅格预处理时使用 `--force-raster-preprocess`。中文法律扫描件默认优先 RapidOCR；仅在用户显式授权上传时可试验 PaddleOCR `PP-OCRv6`。
 
 > PaddleOCR `PP-OCRv6` 也默认接收原 PDF，不再由统一入口先栅格化和预压缩。真实拍照扫描样本中，v5/v6 原图直送的原始全文 CER 均为 2.98%；以 Structure 版面区域排除两行印章噪声并重建自然段后，v6 输出在 470 字符人工基准上为 0%。该结果只证明本样本，不替代跨文档基准。`--enable-crop` 或 `--force-raster-preprocess` 会显式覆盖原图直送策略。
 

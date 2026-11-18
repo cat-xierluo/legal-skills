@@ -68,20 +68,17 @@ TOKEN="your_access_token"                          # → PADDLE_OCR_API_KEY
 ### 4.2 运行命令
 
 ```bash
-# 零参数自动流程（默认使用 PP-OCRv6，适用双层 PDF）
+# 零参数自动流程（默认全程本地 RapidOCR，不上传）
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf
 
-# 显式指定后端和模型
+# 显式指定后端和模型；先确认当前文件允许上传
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PP-OCRv6
 
 # 使用 StructureV3 的 overall_ocr_res 行级坐标
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PP-StructureV3
 
-# 使用 VL-1.6 获得块级结构
+# 使用 VL-1.6 获得块级结构；同样需显式 backend 与上传授权
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PaddleOCR-VL-1.6
-
-# 敏感材料禁止上传外部服务
-python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
 ```
 
 ### 4.3 自然段融合
@@ -402,7 +399,7 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --ocr-resume /tmp/ocr_dump
 - `TOKEN` 属于敏感凭证，不要提交到 Git 仓库
 - `config/.env` 已被仓库忽略；仅提交 `config/.env.example`
 - 若凭证泄露，请立即在服务端吊销并重新生成
-- `auto` 在 Paddle/MinerU 已配置时会上传完整 PDF；禁止外传的材料必须使用 `--local-only`
+- `auto` 默认全程本地，不上传 PDF；只有显式 `--backend paddle_api` 会调用外部服务
 - `--allow-external-upload` 仅为旧命令兼容参数，不再是上传开关
 - 服务端方向/去畸变默认关闭，以保持 OCR 坐标与输入图片一致；显式开启后必须重新核验文字层与底图对齐
 - 本 Skill 不把 OCR 结果发送给 Qwen/GLM 等视觉模型，也不在此流程中执行字段、签章或语义识别

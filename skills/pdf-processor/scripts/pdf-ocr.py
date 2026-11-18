@@ -7,8 +7,8 @@ PDF OCR 工具（统一入口）
 - 本地中文优先兜底：RapidOCR（onnx 本地推理，未安装时回退 ocrmypdf）
 - 兼容外部 PaddleOCR API 后端（官方协议优先，旧协议兼容）
 - 新增外部 MinerU API 后端（异步任务 + ZIP 结果解析 + 本地叠层）
-- 提供 auto 后端：默认按 Paddle/MinerU 顺序尝试已配置 API，失败后回退本地（RapidOCR 优先）
-- 提供 --local-only：对不允许外传的材料强制只用本地引擎（RapidOCR 优先，未安装时 ocrmypdf）
+- 提供 auto 后端：默认全程本地（RapidOCR 优先，未安装或失败时回退 ocrmypdf）
+- 外部 PaddleOCR/MinerU 仅在显式选择对应 backend 时使用
 - 本地 Paddle 双层实现仅保留为内部历史实现，不再作为公开 CLI 选项
 
 模块拆分：
@@ -225,7 +225,7 @@ def run_local_ocrmypdf_backend(args):
 def run_local_first_backend(args):
     """
     本地引擎优先链：RapidOCR 可用时优先（中文行级识别质量高、不出本机），
-    未安装或执行失败时回退 ocrmypdf。供 auto 与 --local-only 共用。
+    未安装或执行失败时回退 ocrmypdf。供 auto 使用。
     """
     from pdf_ocr_rapid_local import is_rapidocr_available, run_rapidocr_local_backend
 
@@ -295,72 +295,19 @@ def resolve_external_api_order(args) -> list[str]:
 
 def run_auto_backend(args):
     """
-    自动后端策略：
-    1) 默认按 paddle/mineru 顺序尝试已配置服务
-    2) --local-only 时不调用任何外部 API
-    3) 外部服务不可用时回退本地 ocrmypdf
+    自动后端策略：全程本地执行，优先 RapidOCR，失败时回退 ocrmypdf。
+    PaddleOCR/MinerU 仅在用户显式选择对应 backend 时上传。
     """
-    api_errs = []
-
-    external_candidates: list[str] = []
-    for provider in args.external_api_order:
-        if provider == "mineru" and args.mineru_api_base:
-            external_candidates.append("mineru")
-        elif provider == "paddle" and args.paddle_api_endpoint:
-            external_candidates.append("paddle")
-
-    configured_external = bool(external_candidates)
-    if external_candidates and getattr(args, "local_only", False):
-        if not args.quiet:
-            print(
-                "提示: 已启用 --local-only；跳过已配置的外部 OCR API。"
-            )
-        external_candidates = []
-
-    if external_candidates:
-        prev_no_fallback = args.no_paddle_fallback_local
-        args.no_paddle_fallback_local = True
-        try:
-            for provider in external_candidates:
-                try:
-                    if provider == "mineru":
-                        run_mineru_api_backend(args)
-                    else:
-                        run_paddle_api_backend(args)
-                    return
-                except Exception as e:
-                    api_errs.append(f"{provider}:{e}")
-                    if not args.quiet:
-                        print(f"警告: 外部 API({provider}) 不可用，尝试下一个。原因: {e}")
-        finally:
-            args.no_paddle_fallback_local = prev_no_fallback
-
-        try:
-            run_local_first_backend(args)
-            return
-        except Exception as e:
-            raise RuntimeError(
-                "auto 后端失败（API 优先路径）。"
-                f"api_errors={api_errs}; local_error={e}"
-            )
-
     if not args.quiet:
-        if not configured_external:
-            print(
-                "提示: 当前未配置外部 OCR API，将使用本地引擎（RapidOCR 优先，未安装时 ocrmypdf）。"
-            )
-        elif getattr(args, "local_only", False):
-            print("提示: 当前强制使用本地引擎（RapidOCR 优先，未安装时 ocrmypdf）。")
-        else:
-            print("提示: 外部 API 均不可用，回退本地引擎（RapidOCR 优先，未安装时 ocrmypdf）。")
+        print(
+            "提示: auto 默认全程本地执行（RapidOCR 优先，未安装或失败时回退 ocrmypdf）；"
+            "外部 API 需显式选择 backend。"
+        )
 
     try:
         run_local_first_backend(args)
     except Exception as e:
-        raise RuntimeError(
-            "auto 后端全部失败。"
-            f"api_errors={api_errs}; local_error={e}"
-        )
+        raise RuntimeError(f"auto 本地后端失败。local_error={e}") from e
 
 
 # ---------- 公共入口函数 ----------
@@ -565,20 +512,7 @@ def run_ocr(**kwargs):
         print(f"输出文件: {args.output}")
         print(f"后端: {args.backend}")
         if args.backend == "auto":
-            configured_api = [
-                p for p in args.external_api_order
-                if (p == "mineru" and args.mineru_api_base) or (p == "paddle" and args.paddle_api_endpoint)
-            ]
-            print(
-                "auto策略: "
-                + (
-                    f"按顺序优先外部API({','.join(configured_api)})"
-                    if configured_api and not args.local_only
-                    else "已启用 local-only，强制本地引擎（RapidOCR 优先）"
-                    if args.local_only
-                    else "未配置外部API，当前使用本地引擎（RapidOCR 优先）"
-                )
-            )
+            print("auto策略: 全程本地（RapidOCR 优先，未安装或失败时回退 ocrmypdf）")
         print(f"OCR 模式: {args.mode}")
         print(f"语言: {args.language}")
         print(f"输出类型: {args.output_type}")
@@ -618,11 +552,8 @@ def main():
         epilog="""
 示例:
   # 默认推荐：自动后端
-  # 已配置 PaddleOCR 时优先 Paddle，其次 MinerU，最后回退本地（RapidOCR 优先）
+  # 默认全程本地（RapidOCR 优先，未安装或失败时回退 ocrmypdf）
   python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf
-
-  # 敏感材料强制不外传（本地 RapidOCR 优先，未安装时 ocrmypdf）
-  python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
 
   # 强制本地 RapidOCR（中文质量好、不出本机）
   python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend rapidocr_local
@@ -647,7 +578,7 @@ def main():
         choices=["auto", "rapidocr_local", "local_ocrmypdf", "paddle_api", "mineru_api"],
         default="auto",
         help=(
-            "OCR 后端：auto（已配置时 Paddle/MinerU 优先，失败回退本地 RapidOCR→ocrmypdf） / "
+            "OCR 后端：auto（全程本地，RapidOCR 优先，失败回退 ocrmypdf） / "
             "rapidocr_local（本地 RapidOCR，中文质量好且不出本机） / "
             "local_ocrmypdf / paddle_api / mineru_api"
         ),
@@ -822,19 +753,18 @@ def main():
     parser.add_argument(
         "--api-order",
         help=(
-            "auto 模式下外部 API 顺序，逗号分隔（例如 paddle,mineru）；"
-            f"不传则读取 {DEFAULT_OCR_API_ORDER_ENV} 或按 .env 配置顺序推断"
+            "兼容旧参数；auto 已改为全程本地，此顺序不再影响后端选择"
         ),
     )
     parser.add_argument(
         "--local-only",
         action="store_true",
-        help="强制不调用外部 OCR API，仅使用本地引擎（优先 RapidOCR，未安装时 ocrmypdf）",
+        help="兼容旧参数；auto 默认已全程本地，显式外部 API 后端会拒绝该参数",
     )
     parser.add_argument(
         "--allow-external-upload",
         action="store_true",
-        help="兼容旧版本；auto 现已默认使用已配置 API，如需禁止外传请用 --local-only",
+        help="兼容旧参数；auto 默认不上传，外部处理需显式选择 API 后端",
     )
     parser.add_argument(
         "--archive-results",

@@ -2,7 +2,7 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.13.0"
+version: "2.14.0"
 description: PDF 处理工具，支持扫描件预处理、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
@@ -24,9 +24,9 @@ license: MIT
 ## 默认策略
 
 - 不修改原始文件；输出到新文件，重名时加 `_1`、`_2` 等序号。
-- 扫描件、拍照件、证据材料默认继续生成可搜索双层 PDF；PaddleOCR 与本地 `ocrmypdf` 默认直接保留原 PDF，只有 MinerU 或显式图像处理请求才走统一栅格预处理。
-- `auto` 在已配置时默认优先 PaddleOCR API，再尝试 MinerU，最后回退本地引擎（已安装 RapidOCR 时优先 RapidOCR，否则 `ocrmypdf`）；明确禁止外传的材料必须使用 `--local-only`。
-- 输入含姓名、案号、医疗、账号等敏感信息且用户尚未明确授权该文件外传时，先说明将上传完整 PDF 并取得一次确认；已授权当前文件后不重复询问，授权不扩展到同目录或其他材料。
+- 扫描件、拍照件、证据材料默认继续生成可搜索双层 PDF；本地 RapidOCR 与显式 PaddleOCR 路径直接保留原 PDF，并在 OCR 前做内容流无损倾斜检测与旋正；本地 `ocrmypdf` 使用其原生方向检测、纠偏和清理。
+- `auto` 默认全程本地：优先 RapidOCR，未安装或失败时回退 `ocrmypdf`；PaddleOCR/MinerU 仅在显式选择对应 backend 时使用。
+- 显式选择外部 API 且输入含姓名、案号、医疗、账号等敏感信息时，先说明将上传完整 PDF 并取得一次当前文件授权；授权不扩展到同目录或其他材料。
 - 电子 PDF 或混合 PDF 默认保留文字、矢量、图片和批注层，跳过栅格化预处理与重压缩；只有用户明确接受层丢失风险时才使用 `--force-raster-preprocess`。
 - “只预处理”“不要 OCR”“只矫正压缩”才使用 `--preprocess-only`。
 - “合并”“加页码”“解密”“去水印”“压缩”只执行对应工具，不自动进入预处理/OCR。
@@ -41,7 +41,7 @@ license: MIT
 python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf
 ```
 
-`auto` 选中已配置的 PaddleOCR 时，默认把原 PDF 直接送给 `PP-OCRv6`，跳过统一栅格化和 OCR 前压缩，以保留扫描分辨率、图像层和 API 坐标空间；实际后端确定为本地 `ocrmypdf` 时同样保留原扫描页，并使用 OCRmyPDF 自带的方向检测、纠偏和清理。MinerU 或显式预处理路径仍以 `medium` 的 200 DPI、JPEG 质量 72、色度子采样 1 为目标，并以 25MP 保护异常大画布。确需裁剪或统一重栅格化时使用 `--enable-crop` 或 `--force-raster-preprocess`。电子/混合 PDF 自动保留原有层。文件大小限制很严时使用：
+`auto` 默认使用本地 RapidOCR 原图直送：先逐页检测页内倾角，超过 0.3° 且不超过 5° 时在 PDF 内容流上无损旋正，不重栅格化、不重压缩扫描图像；OCR 再基于旋正后的页面生成透明文字层。无可靠正文墨迹、页面盒异常或角度超出安全阈值的页面保持原状并记录原因。RapidOCR 不可用或失败时回退 `ocrmypdf` 原生方向检测、纠偏和清理。显式预处理路径仍以 `medium` 的 200 DPI、JPEG 质量 72、色度子采样 1 为目标，并以 25MP 保护异常大画布；确需裁剪或统一重栅格化时使用 `--enable-crop` 或 `--force-raster-preprocess`。电子/混合 PDF 自动保留原有层。文件大小限制很严时使用：
 
 ```bash
 python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf --compress-level high
@@ -49,11 +49,7 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf --co
 
 确需保留超大栅格时可显式调高上限；`--max-preprocess-megapixels 0` 会关闭保护，但可能显著增加内存占用和 OCR 跳页风险。
 
-敏感材料用统一入口但禁止外传：
-
-```bash
-python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf --local-only
-```
+`--local-only` 保留为兼容参数；`auto` 默认已不上传。
 
 页面方向已正确的大批量扫描件可提速：
 
@@ -81,13 +77,7 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
 python3 scripts/pdf-ocr.py --input input.pdf --output output.pdf
 ```
 
-默认后端为 `auto`：已配置 PaddleOCR 时先用 `PP-OCRv6` 的行级坐标生成文字层，再按 `OCR_API_ORDER` 尝试 MinerU；外部服务失败或未配置时回退本地引擎——已安装 RapidOCR 时优先本地 RapidOCR（中文行级识别质量好、不出本机），否则回退本地 `ocrmypdf`。该默认路径会上传完整 PDF，不允许外传时使用：
-
-```bash
-python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
-```
-
-`--local-only` 同样走本地优先链（RapidOCR → ocrmypdf）。敏感材料的本地中文 OCR 推荐先安装 RapidOCR：
+默认后端为 `auto`：全程本地优先 RapidOCR（中文行级识别质量好、不出本机），未安装或失败时回退 `ocrmypdf`。敏感材料的本地中文 OCR 推荐先安装 RapidOCR：
 
 ```bash
 pip install rapidocr
@@ -102,7 +92,7 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend local_ocrmypdf
 # 强制本地 RapidOCR（onnx 本地推理，中文质量好且不出本机）
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend rapidocr_local
 
-# 强制 PaddleOCR API；PP-OCRv6 是双层 PDF 默认模型
+# 显式使用 PaddleOCR API；需确认当前文件允许上传
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
   --backend paddle_api --paddle-model PP-OCRv6
 
@@ -243,7 +233,7 @@ sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim
 pip install rapidocr
 ```
 
-安装后 `auto` 的本地回退与 `--local-only` 都会优先使用 RapidOCR（onnx 本地推理，中文行级识别质量明显高于 tesseract，且全程不出本机）；首次运行自动下载检测/识别模型（各约 5-16MB，仅一次）。也可显式指定 `--backend rapidocr_local`。
+安装后 `auto` 会优先使用 RapidOCR（onnx 本地推理，中文行级识别质量明显高于 tesseract，且全程不出本机）；首次运行自动下载检测/识别模型（各约 5-16MB，仅一次）。也可显式指定 `--backend rapidocr_local`。
 
 完整可选依赖清单见 `references/optional-dependencies.txt`。历史保留的本地 Paddle 双层实现已拆到 `scripts/pdf_ocr_paddle_local.py`，不属于默认生产链路；需要实验时再安装 `paddleocr paddlepaddle` 并单独接入。
 
@@ -269,7 +259,7 @@ python3 scripts/pdf-ocr-benchmark.py \
 ## 交付前检查
 
 1. 确认输出页数与原始文件一致。
-2. 抽查页面方向、清晰度、裁剪边界和文件体积。
+2. 逐页实测并记录页内倾角、方向、清晰度、裁剪边界和文件体积；正文页残余倾角超过 0.3° 时必须矫正或说明原因。
 3. 对双层 PDF 测试文字搜索、复制和关键词命中。
 4. 向用户说明实际使用的后端、输出文件路径和任何回退情况。
 

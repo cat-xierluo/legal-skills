@@ -9,8 +9,8 @@ PDF 预处理 + OCR（生产路径）
 4) 默认调用 OCR 后端生成双层可搜索 PDF；显式 --preprocess-only 时在 OCR 前停止
 
 说明：
-- 默认后端：auto（优先使用已配置的 PaddleOCR/MinerU，失败后回退本地）
-- 敏感材料使用 --local-only 强制不调用外部 API
+- 默认后端：auto（全程本地，RapidOCR 优先，失败后回退 ocrmypdf）
+- 外部 PaddleOCR/MinerU 仅在显式选择对应 backend 时使用
 - 通过直接调用 pdf-ocr.py 的 run_ocr() 函数实现，无 subprocess 开销
 """
 
@@ -78,7 +78,6 @@ MERGED_PREPROCESS_OUTPUT_PROFILES = {
     },
 }
 DEFAULT_MAX_PREPROCESS_MEGAPIXELS = 25.0
-DEFAULT_OCR_API_ORDER_ENV = "OCR_API_ORDER"
 
 
 def _copy_file_times(src: str | Path, dst: str | Path) -> None:
@@ -228,8 +227,6 @@ def should_run_standalone_compress(
 def should_use_ocrmypdf_native_preprocess(
     *,
     backend: str,
-    local_only: bool,
-    external_backend_configured: bool,
     skip_preprocess: bool,
     preprocess_only: bool,
     enable_crop: bool,
@@ -246,59 +243,29 @@ def should_use_ocrmypdf_native_preprocess(
     if skip_preprocess or preprocess_only or enable_crop or force_raster_preprocess:
         return False
     local_engine_is_ocrmypdf = backend == "local_ocrmypdf" or (
-        backend == "auto"
-        and (local_only or not external_backend_configured)
-        and not rapid_local_available
+        backend == "auto" and not rapid_local_available
     )
     return local_engine_is_ocrmypdf
-
-
-def resolve_configured_external_order(
-    raw_order: str | None,
-    *,
-    paddle_configured: bool,
-    mineru_configured: bool,
-) -> list[str]:
-    """Return configured external providers in the order auto will try them."""
-    order = []
-    for value in (raw_order or "").split(","):
-        provider = value.strip().lower()
-        if provider in {"paddle", "mineru"} and provider not in order:
-            order.append(provider)
-    if not order:
-        order = ["paddle", "mineru"]
-    return [
-        provider
-        for provider in order
-        if (provider == "paddle" and paddle_configured)
-        or (provider == "mineru" and mineru_configured)
-    ]
 
 
 def should_use_paddle_original_input(
     *,
     backend: str,
-    local_only: bool,
-    paddle_selected_by_auto: bool,
     skip_preprocess: bool,
     preprocess_only: bool,
     enable_crop: bool,
     force_raster_preprocess: bool,
 ) -> bool:
-    """Keep the original PDF when Paddle is the effective first OCR backend."""
+    """Keep the original PDF when Paddle is explicitly selected."""
     if skip_preprocess or preprocess_only or enable_crop or force_raster_preprocess:
         return False
-    paddle_selected = backend == "paddle_api" or (
-        backend == "auto" and not local_only and paddle_selected_by_auto
-    )
+    paddle_selected = backend == "paddle_api"
     return paddle_selected
 
 
 def should_use_rapid_original_input(
     *,
     backend: str,
-    local_only: bool,
-    external_backend_configured: bool,
     rapid_local_available: bool,
     skip_preprocess: bool,
     preprocess_only: bool,
@@ -314,9 +281,7 @@ def should_use_rapid_original_input(
         return False
     if not rapid_local_available:
         return False
-    rapid_selected = backend == "rapidocr_local" or (
-        backend == "auto" and (local_only or not external_backend_configured)
-    )
+    rapid_selected = backend in {"auto", "rapidocr_local"}
     return rapid_selected
 
 
@@ -607,16 +572,16 @@ def main():
         "--backend",
         choices=["auto", "rapidocr_local", "local_ocrmypdf", "paddle_api", "mineru_api"],
         default="auto",
-        help="OCR 后端，默认 auto（已配置时 Paddle/MinerU 优先，失败回退本地 RapidOCR→ocrmypdf）",
+        help="OCR 后端，默认 auto（全程本地，RapidOCR 优先，失败回退 ocrmypdf）",
     )
     parser.add_argument(
         "--api-order",
-        help="auto 模式外部 API 顺序，逗号分隔（例如 paddle,mineru）",
+        help="兼容旧参数；auto 已改为全程本地，此顺序不再影响后端选择",
     )
     parser.add_argument(
         "--local-only",
         action="store_true",
-        help="强制不调用外部 OCR API，仅使用本地引擎（优先 RapidOCR，未安装时 ocrmypdf）",
+        help="兼容旧参数；auto 默认已全程本地，显式外部 API 后端会拒绝该参数",
     )
     parser.add_argument(
         "--mode",
@@ -710,7 +675,7 @@ def main():
     parser.add_argument(
         "--allow-external-upload",
         action="store_true",
-        help="兼容旧版本；auto 现已默认使用已配置 API，如需禁止外传请用 --local-only",
+        help="兼容旧参数；auto 默认不上传，外部处理需显式选择 API 后端",
     )
     parser.add_argument(
         "--archive-results",
@@ -780,30 +745,10 @@ def main():
                 "默认跳过栅格化预处理与重压缩；如确需强制处理请传 --force-raster-preprocess"
             )
 
-        paddle_endpoint = (
-            args.paddle_api_endpoint
-            or os.getenv(DEFAULT_PADDLE_API_ENDPOINT_ENV, "").strip()
-        )
-        mineru_endpoint = (
-            args.mineru_api_base
-            or os.getenv(args.mineru_api_base_env, "").strip()
-        )
-        external_backend_configured = bool(paddle_endpoint or mineru_endpoint)
-        configured_external_order = resolve_configured_external_order(
-            args.api_order or os.getenv(DEFAULT_OCR_API_ORDER_ENV, ""),
-            paddle_configured=bool(paddle_endpoint),
-            mineru_configured=bool(mineru_endpoint),
-        )
-        paddle_selected_by_auto = (
-            bool(configured_external_order)
-            and configured_external_order[0] == "paddle"
-        )
         paddle_original_input_shortcut = (
             not preserve_original_layers
             and should_use_paddle_original_input(
                 backend=args.backend,
-                local_only=args.local_only,
-                paddle_selected_by_auto=paddle_selected_by_auto,
                 skip_preprocess=args.skip_preprocess,
                 preprocess_only=args.preprocess_only,
                 enable_crop=args.enable_crop,
@@ -824,8 +769,6 @@ def main():
             not preserve_original_layers
             and should_use_rapid_original_input(
                 backend=args.backend,
-                local_only=args.local_only,
-                external_backend_configured=external_backend_configured,
                 rapid_local_available=rapid_local_available,
                 skip_preprocess=args.skip_preprocess,
                 preprocess_only=args.preprocess_only,
@@ -842,8 +785,6 @@ def main():
             not preserve_original_layers
             and should_use_ocrmypdf_native_preprocess(
                 backend=args.backend,
-                local_only=args.local_only,
-                external_backend_configured=external_backend_configured,
                 skip_preprocess=args.skip_preprocess,
                 preprocess_only=args.preprocess_only,
                 enable_crop=args.enable_crop,
@@ -857,7 +798,7 @@ def main():
                 "交由 OCRmyPDF 对原始扫描页执行方向检测、纠偏和清理"
             )
 
-        # PaddleOCR API 预处理短路：仅当 API 端确实启用了方向/去畸变时才跳过本地预处理
+        # PaddleOCR API 预处理短路：仅显式选择 API 且服务端启用方向/去畸变时生效
         # 默认 useDocOrientationClassify=False, useDocUnwarping=False，不走短路
         # 如果用户显式请求了 --enable-crop，API 不做裁剪，必须走本地预处理
         api_preprocessing_shortcut = False
@@ -865,9 +806,6 @@ def main():
             using_paddle_api = False
             if args.backend == "paddle_api":
                 using_paddle_api = True
-            elif args.backend == "auto" and not args.local_only:
-                if paddle_selected_by_auto:
-                    using_paddle_api = True
 
             if using_paddle_api:
                 # 检查 --paddle-api-extra-json 是否启用了方向矫正或去畸变
@@ -892,6 +830,34 @@ def main():
 
             if api_preprocessing_shortcut and not args.quiet:
                 print("\n[预处理短路] PaddleOCR API 已启用服务端方向/扭曲矫正，跳过本地预处理阶段")
+
+        stream_deskew_result = None
+        should_stream_deskew = (
+            not args.dry_run
+            and not args.skip_preprocess
+            and not preserve_original_layers
+            and not args.preprocess_only
+            and not args.enable_crop
+            and not args.force_raster_preprocess
+            and not api_preprocessing_shortcut
+            and not local_native_preprocess_shortcut
+            and (paddle_original_input_shortcut or rapid_original_input_shortcut)
+        )
+        if should_stream_deskew:
+            from pdf_stream_deskew import deskew_pdf_content_streams
+
+            stream_deskew_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            stream_deskew_path = stream_deskew_temp.name
+            stream_deskew_temp.close()
+            cleanup_files.append(stream_deskew_path)
+            stream_deskew_result = deskew_pdf_content_streams(
+                working_input,
+                stream_deskew_path,
+                skew_threshold=args.skew_threshold,
+                skip_pages=parse_skip_pages(args.skip_pages),
+                quiet=args.quiet,
+            )
+            working_input = stream_deskew_path
 
         # 阶段 1：预处理
         preprocessed = False
@@ -965,7 +931,7 @@ def main():
             preprocessed = True
         elif not args.quiet:
             if args.skip_preprocess:
-                print("\n[跳过] 预处理阶段已跳过（--skip-preprocess）")
+                print("\n[未矫正] --skip-preprocess 已跳过预处理，本次不检测或旋正页内倾斜")
             elif paddle_original_input_shortcut:
                 print("\n[跳过] 预处理阶段已跳过（PaddleOCR 原 PDF 直送）")
             elif rapid_original_input_shortcut:
@@ -1157,8 +1123,11 @@ def main():
             ),
             "layer_profile": layer_profile,
             "preserve_original_layers": preserve_original_layers,
+            "stream_deskew": stream_deskew_result,
             "preprocess_shortcut_reason": (
-                "paddle_original"
+                "rapid_original"
+                if rapid_original_input_shortcut
+                else "paddle_original"
                 if paddle_original_input_shortcut
                 else "paddle_api"
                 if api_preprocessing_shortcut

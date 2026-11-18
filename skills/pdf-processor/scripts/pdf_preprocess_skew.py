@@ -39,7 +39,7 @@ class SkewDetector:
         max_reasonable_skew: float = 15.0,
         hough_confidence_threshold: float = 0.35,
         projection_coarse_step: float = 0.5,
-        projection_fine_step: float = 0.2,
+        projection_fine_step: float = 0.1,
         projection_fine_window: float = 0.5,
     ):
         self.skew_threshold = skew_threshold
@@ -213,12 +213,14 @@ class SkewDetector:
             maxLineGap=10,
         )
 
-        if lines is None or len(lines) < 3:
+        if lines is None:
+            return 0.0, 0.0
+        lines = np.asarray(lines).reshape(-1, 4)
+        if len(lines) < 3:
             return 0.0, 0.0
 
         weighted_angles = []
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
+        for x1, y1, x2, y2 in lines:
             dx, dy = x2 - x1, y2 - y1
             length = np.sqrt(dx * dx + dy * dy)
             angle = np.degrees(np.arctan2(dy, dx))

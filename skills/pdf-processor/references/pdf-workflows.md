@@ -59,11 +59,11 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --mode force
 # 已预处理文件，不重复 rotate/deskew
 python3 scripts/pdf-ocr.py -i preprocessed.pdf -o output.pdf --preprocessed
 
-# 指定 API 顺序
+# 兼容旧参数；auto 已全程本地，不再读取 API 顺序
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
   --backend auto --api-order paddle,mineru
 
-# 禁止材料外传，只使用本地 ocrmypdf
+# 兼容旧参数；auto 默认不上传
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
 
 # 电子/混合 PDF 只有在明确接受矢量、文字和批注层被栅格化的风险时才强制预处理
