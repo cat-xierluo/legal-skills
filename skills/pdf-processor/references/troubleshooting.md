@@ -21,7 +21,7 @@
 
 ## MinerU 401 Unauthorized
 
-Token 有效期约 90 天，过期后 `auto` 会跳过 MinerU 直接走 Paddle；到 https://mineru.net/apiManage/token 更新并同步 `config/.env` 的 `MINERU_API_TOKEN`。
+Token 有效期约 90 天，过期只会影响显式 `--backend mineru_api`；到 https://mineru.net/apiManage/token 更新并同步 `config/.env` 的 `MINERU_API_TOKEN`。`auto` 不再读取该 API 配置。
 
 ## PDF 预处理报错
 
@@ -40,8 +40,8 @@ sudo apt-get install poppler-utils
 ## OCR 识别失败
 
 ```bash
-# 优先确认是否已配置外部 API；如果没有，可先配置 config/.env
-# 若暂时不配 API，则至少确保本地兜底依赖已安装
+# 本地优先安装 RapidOCR；未安装或失败时确保 ocrmypdf 兜底可用
+pip install rapidocr
 
 pip install ocrmypdf
 
@@ -56,13 +56,13 @@ sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim
 
 先区分“文字层损坏”和“OCR 本身误识别”：至少用 PyMuPDF、pypdf、`pdftotext` 交叉抽取，并把结果与 OCR sidecar 对比。三种抽取结果一致且与 sidecar 一致时，说明 PDF Unicode 映射正常，错误来自识别引擎；不要再用关键词命中或词框越界率证明逐字准确。
 
-敏感材料使用统一入口的本地路径：
+敏感材料使用统一入口默认本地路径：
 
 ```bash
 python3 scripts/pdf-preprocess-ocr.py -i input.pdf -o output.pdf --local-only
 ```
 
-该路径默认保留原扫描分辨率并使用 OCRmyPDF 内置方向检测、纠偏和清理，避免统一重采样及预压缩降低 Tesseract 识别率。若仍有明显中文错字，本地 Tesseract 已达到能力边界；允许外传时改用默认 PaddleOCR `PP-OCRv6`，不允许外传时必须把结果标为需要人工复核，不能把可搜索性等同于文本正确性。
+该路径优先保留原扫描分辨率并由 RapidOCR 生成中文文字层；超过阈值的页内倾斜先通过 PDF 内容流无损旋正，不重编码图像。若 RapidOCR 不可用而回退 Tesseract 后仍有明显中文错字，属于本地兜底能力边界；显式授权上传时可试验 PaddleOCR `PP-OCRv6`，不允许外传时必须把结果标为需要人工复核，不能把可搜索性等同于文本正确性。
 
 PaddleOCR 路径同样默认直送原 PDF。若文字选区位置正确但复制内容仍有少量错误，先区分正文误识与印章/水印噪声；不要为单份材料写死自动删除规则。需要零差异交付时，保留 Paddle 原始版，并另生成明确标注的人工复核版。
 

@@ -2,10 +2,12 @@
 """Regression tests for skew angle decision logic."""
 
 import unittest
+from unittest import mock
 
+import numpy as np
 from PIL import Image, ImageDraw
 
-from pdf_preprocess_skew import SkewDetector
+from pdf_preprocess_skew import SkewDetector, cv2
 
 
 def make_synthetic_text_page(rotation_angle: float) -> Image.Image:
@@ -79,7 +81,26 @@ class SkewDetectorDecisionTest(unittest.TestCase):
     def test_default_projection_search_keeps_legacy_angle_grid(self):
         angle = self.detector.projection_profile_angle(make_synthetic_text_page(1.3))
 
-        self.assertAlmostEqual(angle / 0.2, round(angle / 0.2), places=6)
+        step = self.detector.projection_fine_step
+        self.assertAlmostEqual(angle / step, round(angle / step), places=6)
+
+    def test_hough_supports_opencv_5_flat_line_shape(self):
+        lines = np.array(
+            [
+                [100, 120, 800, 120],
+                [100, 190, 800, 190],
+                [100, 260, 800, 260],
+                [100, 330, 800, 330],
+            ],
+            dtype=np.int32,
+        )
+        with mock.patch.object(cv2, "HoughLinesP", return_value=lines):
+            angle, confidence = self.detector.hough_skew_angle(
+                make_synthetic_text_page(0.0)
+            )
+
+        self.assertAlmostEqual(angle, 0.0, delta=0.2)
+        self.assertGreater(confidence, 0.0)
 
 
 if __name__ == "__main__":

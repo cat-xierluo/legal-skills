@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import fitz
+import numpy as np
 from PIL import Image
 
 SCRIPT_DIR = Path(__file__).parent
@@ -67,6 +68,25 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
 
         self.assertEqual(result.rotation_angle, 0.0)
         self.assertEqual(result.confidence, 0.0)
+
+    def test_coarse_rotation_supports_opencv_5_flat_line_shape(self):
+        preprocessor = preprocess_core.PDFPreprocessor(enable_coarse_rotation=False)
+        image = Image.new("RGB", (300, 400), "white")
+        lines = np.array(
+            [
+                [20, 100, 280, 100],
+                [20, 160, 280, 160],
+                [20, 220, 280, 220],
+                [20, 280, 280, 280],
+                [20, 340, 280, 340],
+            ],
+            dtype=np.int32,
+        )
+        with mock.patch.object(preprocess_core.cv2, "HoughLinesP", return_value=lines):
+            angle, confidence = preprocessor._hough_rotation_detect(image)
+
+        self.assertIsInstance(angle, float)
+        self.assertIsInstance(confidence, float)
 
     def test_tesseract_osd_lowercase_dict_maps_to_pil_rotation(self):
         preprocessor = preprocess_core.PDFPreprocessor()
@@ -176,8 +196,6 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
     def test_local_ocr_prefers_ocrmypdf_native_preprocess(self):
         base = {
             "backend": "auto",
-            "local_only": True,
-            "external_backend_configured": True,
             "skip_preprocess": False,
             "preprocess_only": False,
             "enable_crop": False,
@@ -186,24 +204,18 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
         self.assertTrue(preprocess_ocr.should_use_ocrmypdf_native_preprocess(**base))
         self.assertTrue(
             preprocess_ocr.should_use_ocrmypdf_native_preprocess(
-                **{**base, "backend": "local_ocrmypdf", "local_only": False}
+                **{**base, "backend": "local_ocrmypdf"}
             )
         )
         self.assertTrue(
             preprocess_ocr.should_use_ocrmypdf_native_preprocess(
-                **{
-                    **base,
-                    "local_only": False,
-                    "external_backend_configured": False,
-                }
+                **{**base, "rapid_local_available": False}
             )
         )
 
     def test_local_native_preprocess_respects_explicit_overrides(self):
         base = {
             "backend": "local_ocrmypdf",
-            "local_only": False,
-            "external_backend_configured": False,
             "skip_preprocess": False,
             "preprocess_only": False,
             "enable_crop": False,
@@ -224,50 +236,27 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
 
         self.assertFalse(
             preprocess_ocr.should_use_ocrmypdf_native_preprocess(
-                **{
-                    **base,
-                    "backend": "auto",
-                    "external_backend_configured": True,
-                }
+                **{**base, "backend": "auto", "rapid_local_available": True}
             )
-        )
-
-    def test_configured_external_order_defaults_to_paddle(self):
-        self.assertEqual(
-            preprocess_ocr.resolve_configured_external_order(
-                None, paddle_configured=True, mineru_configured=True,
-            ),
-            ["paddle", "mineru"],
-        )
-        self.assertEqual(
-            preprocess_ocr.resolve_configured_external_order(
-                "mineru,paddle", paddle_configured=True, mineru_configured=True,
-            ),
-            ["mineru", "paddle"],
         )
 
     def test_paddle_prefers_original_pdf_input(self):
         base = {
             "backend": "paddle_api",
-            "local_only": False,
-            "paddle_selected_by_auto": True,
             "skip_preprocess": False,
             "preprocess_only": False,
             "enable_crop": False,
             "force_raster_preprocess": False,
         }
         self.assertTrue(preprocess_ocr.should_use_paddle_original_input(**base))
-        self.assertTrue(
-            preprocess_ocr.should_use_paddle_original_input(
-                **{**base, "backend": "auto"}
-            )
+        self.assertFalse(
+            preprocess_ocr.should_use_paddle_original_input(**{**base, "backend": "auto"})
         )
         self.assertFalse(
             preprocess_ocr.should_use_paddle_original_input(
                 **{
                     **base,
-                    "backend": "auto",
-                    "paddle_selected_by_auto": False,
+                    "backend": "rapidocr_local",
                 }
             )
         )
@@ -275,8 +264,6 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
     def test_paddle_original_pdf_respects_explicit_preprocess_requests(self):
         base = {
             "backend": "paddle_api",
-            "local_only": False,
-            "paddle_selected_by_auto": True,
             "skip_preprocess": False,
             "preprocess_only": False,
             "enable_crop": False,
@@ -415,7 +402,7 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
         )
         self.assertTrue(quality_check.keyword_matches_text("ABC合同", "ＡＢＣ 合 同"))
 
-    def test_auto_backend_uses_configured_paddle_by_default(self):
+    def test_auto_backend_stays_local_even_when_api_is_configured(self):
         pdf_ocr = load_module("pdf_ocr_auto_default", "pdf-ocr.py")
         args = SimpleNamespace(
             external_api_order=["paddle"], paddle_api_endpoint="https://example.invalid/ocr",
@@ -423,10 +410,17 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
             no_paddle_fallback_local=False,
         )
         calls = []
-        with mock.patch.object(pdf_ocr, "run_paddle_api_backend", side_effect=lambda _args: calls.append("api")), \
-             mock.patch.object(pdf_ocr, "run_local_ocrmypdf_backend", side_effect=lambda _args: calls.append("local")):
+        with mock.patch.object(
+            pdf_ocr,
+            "run_paddle_api_backend",
+            side_effect=lambda _args: calls.append("api"),
+        ), mock.patch.object(
+            pdf_ocr,
+            "run_local_first_backend",
+            side_effect=lambda _args: calls.append("local"),
+        ):
             pdf_ocr.run_auto_backend(args)
-        self.assertEqual(calls, ["api"])
+        self.assertEqual(calls, ["local"])
 
     def test_auto_backend_local_only_never_uploads(self):
         pdf_ocr = load_module("pdf_ocr_auto_local_only", "pdf-ocr.py")
@@ -436,8 +430,15 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
             no_paddle_fallback_local=False,
         )
         calls = []
-        with mock.patch.object(pdf_ocr, "run_paddle_api_backend", side_effect=lambda _args: calls.append("api")), \
-             mock.patch.object(pdf_ocr, "run_local_ocrmypdf_backend", side_effect=lambda _args: calls.append("local")):
+        with mock.patch.object(
+            pdf_ocr,
+            "run_paddle_api_backend",
+            side_effect=lambda _args: calls.append("api"),
+        ), mock.patch.object(
+            pdf_ocr,
+            "run_local_first_backend",
+            side_effect=lambda _args: calls.append("local"),
+        ):
             pdf_ocr.run_auto_backend(args)
         self.assertEqual(calls, ["local"])
 

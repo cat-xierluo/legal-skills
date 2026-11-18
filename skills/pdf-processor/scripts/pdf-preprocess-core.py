@@ -287,13 +287,15 @@ class PDFPreprocessor:
             maxLineGap=10
         )
 
-        if lines is None or len(lines) < 5:
+        if lines is None:
+            return 0.0, 0.0
+        lines = np.asarray(lines).reshape(-1, 4)
+        if len(lines) < 5:
             return 0.0, 0.0
 
         # 统计直线角度
         angles = []
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
+        for x1, y1, x2, y2 in lines:
             angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
             # 标准化到 0-180
             if angle < 0:

@@ -6,7 +6,7 @@
 
 定位：中文扫描件的本地高识别质量兜底。相较 tesseract（ocrmypdf）路径，
 RapidOCR 的中文行级识别与坐标明显更稳，且全程不出本机，适合敏感材料
---local-only 场景；作为 auto 链的本地第一优先（未安装时仍回退 ocrmypdf）。
+默认 auto 链的本地第一优先（未安装时仍回退 ocrmypdf），全程不出本机。
 
 依赖（可选）：
     pip install rapidocr              # 推荐：新版统一包（默认 onnxruntime 引擎）
@@ -16,6 +16,8 @@ RapidOCR 的中文行级识别与坐标明显更稳，且全程不出本机，�
 
 from __future__ import annotations
 
+import collections
+import collections.abc
 import shutil
 from pathlib import Path
 
@@ -37,6 +39,17 @@ except Exception:
 RapidOCR = None
 RAPID_FLAVOR: str | None = None  # "rapidocr" / "rapidocr_onnxruntime"
 _RAPID_IMPORT_TRIED = False
+_COLLECTIONS_ABC_ALIASES = {
+    "Callable": collections.abc.Callable,
+    "Hashable": collections.abc.Hashable,
+    "Iterable": collections.abc.Iterable,
+    "Mapping": collections.abc.Mapping,
+    "MutableMapping": collections.abc.MutableMapping,
+    "MutableSequence": collections.abc.MutableSequence,
+    "MutableSet": collections.abc.MutableSet,
+    "Sequence": collections.abc.Sequence,
+    "Set": collections.abc.Set,
+}
 
 
 def _try_import_rapidocr() -> bool:
@@ -44,6 +57,9 @@ def _try_import_rapidocr() -> bool:
     if _RAPID_IMPORT_TRIED:
         return RapidOCR is not None
     _RAPID_IMPORT_TRIED = True
+    for alias_name, alias_value in _COLLECTIONS_ABC_ALIASES.items():
+        if not hasattr(collections, alias_name):
+            setattr(collections, alias_name, alias_value)
     try:
         from rapidocr import RapidOCR as _RapidOCR  # 新统一包
 
@@ -89,7 +105,7 @@ def ensure_rapidocr_available() -> bool:
                 "pip install rapidocr pymupdf numpy",
             ],
             extra_notes=[
-                "未安装 RapidOCR 时，auto/local-only 会继续回退 ocrmypdf。",
+                "未安装 RapidOCR 时，auto 会继续回退 ocrmypdf。",
                 "首次运行会自动下载检测/识别 onnx 模型（仅一次）。",
             ],
         )
