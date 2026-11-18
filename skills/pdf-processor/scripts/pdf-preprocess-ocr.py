@@ -854,6 +854,10 @@ def main():
                 working_input,
                 stream_deskew_path,
                 skew_threshold=args.skew_threshold,
+                max_pixels=max(
+                    0,
+                    int(args.max_preprocess_megapixels * 1_000_000),
+                ),
                 skip_pages=parse_skip_pages(args.skip_pages),
                 quiet=args.quiet,
             )

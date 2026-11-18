@@ -341,7 +341,7 @@ def run_ocr(**kwargs):
         env_file: .env 文件路径
         no_env_file: 禁用 .env
         api_order: 外部 API 顺序
-        local_only: 强制不调用外部 API
+        local_only: 兼容旧参数；auto 默认全程本地
         paddle_api_endpoint: Paddle API 地址
         paddle_api_endpoint_env: Paddle endpoint 环境变量名
         paddle_api_key_env: Paddle API Key 环境变量名

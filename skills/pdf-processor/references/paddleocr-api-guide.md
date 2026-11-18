@@ -3,7 +3,7 @@
 本文档用于指导 `pdf-processor` 使用外部 PaddleOCR API 完成 OCR，再由本 Skill 自动生成双层 PDF。
 
 > 若需接入 MinerU API，请另见：`references/mineru-api-guide.md`
-> 当 Paddle 与 MinerU 同时配置时，可在 `config/.env` 中通过 `OCR_API_ORDER` 指定优先级（如 `paddle,mineru`）。
+> `auto` 默认全程本地；`OCR_API_ORDER` 仅保留为旧脚本兼容，不再影响后端选择。
 
 ## 1. 推荐模型与使用建议
 

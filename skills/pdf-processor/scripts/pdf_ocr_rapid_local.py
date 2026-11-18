@@ -105,7 +105,7 @@ def ensure_rapidocr_available() -> bool:
                 "pip install rapidocr pymupdf numpy",
             ],
             extra_notes=[
-                "未安装 RapidOCR 时，auto/local-only 会继续回退 ocrmypdf。",
+                "未安装 RapidOCR 时，auto 会继续回退 ocrmypdf。",
                 "首次运行会自动下载检测/识别 onnx 模型（仅一次）。",
             ],
         )

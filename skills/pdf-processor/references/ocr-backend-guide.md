@@ -28,7 +28,7 @@
 cp config/.env.example config/.env
 
 # 在 config/.env 中填写：
-# OCR_API_ORDER="paddle,mineru"
+# OCR_API_ORDER="paddle,mineru"  # 兼容旧参数；auto 不再读取
 # PADDLE_OCR_API_ENDPOINT="https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
 # PADDLE_OCR_API_KEY="..."
 # MINERU_API_BASE="https://mineru.net/api/v4"
