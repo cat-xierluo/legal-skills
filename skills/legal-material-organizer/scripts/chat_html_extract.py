@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""chat-html 抽取器：识别 Cubox/微信等聊天工具导出 HTML，抽取三类外链资源。
+
+引入版本：v0.12.0；v0.13.0 加固 URL、重定向、大小与覆盖边界。
+与 references/chat-html-extract.md 配合使用。
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import ipaddress
+import re
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+
+# frozenset 防止运行时误改；不出现在 __all__ 中。
+DOWNLOAD_DOMAIN_WHITELIST = frozenset({
+    "cubox.pro",
+    "files.cubox.pro",
+    "images.cubox.pro",
+    "weixin.qq.com",
+    "szfiles.wx.qq.com",
+    "wenshu.court.gov.cn",
+    "aliyundrive.com",
+    "weiyun.com",
+    "pan.baidu.com",
+})
+
+VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".m4v", ".mkv", ".webm"})
+
+CHAT_HTML_HINTS = (
+    'class="reader-page"',
+    "chatlog",
+    "群聊的聊天记录",
+    "微信聊天记录",
+)
+
+# inner 限制为非 `<>` 字符，避免 regex 越过嵌套标签切错。
+_TAG_A_HREF = re.compile(
+    r'<a\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*>([^<>]*?)</a>',
+    re.DOTALL | re.IGNORECASE,
+)
+_TAG_IMG_SRC = re.compile(r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']', re.IGNORECASE)
+_TAG_VIDEO_SRC = re.compile(r'<video\b[^>]*\bsrc=["\']([^"\']+)["\']', re.IGNORECASE)
+_TAG_SOURCE_SRC = re.compile(r'<source\b[^>]*\bsrc=["\']([^"\']+)["\']', re.IGNORECASE)
+_DOWNLOAD_TEXT_HINT = ("下载文件", "下载")
+MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
+
+
+@dataclass
+class DownloadResult:
+    """单条资源下载结果。status: 'ok' | 'failed' | 'access_denied'."""
+
+    url: str
+    status: str
+    path: Optional[Path] = None
+    error: str = ""
+    attempts: int = 0
+    bytes: int = 0
+
+
+@dataclass
+class ResourceCandidate:
+    """单条外链资源候选。
+
+    Note: `download_status` 等下载运行期字段由调用方（scanner / downloader）通过 extra 注入，
+    不在抽取层产生。
+    """
+    resource_id: str
+    kind: str
+    url: str
+    display_filename: str
+    sender_context: str = ""
+    extra: dict = field(default_factory=dict)
+
+    def to_manifest_extra(self) -> dict:
+        """转换为 manifest extra dict。
+
+        Note: `download_status` 等下载运行期字段由调用方（scanner / downloader）通过 extra 注入，
+        不在抽取层产生。
+        """
+        return {
+            "resource_id": self.resource_id,
+            "kind": self.kind,
+            "url": self.url,
+            "display_filename": self.display_filename,
+            "context": self.sender_context,
+            **self.extra,
+        }
+
+
+def recognize_chat_html(html_text: str) -> bool:
+    if not html_text:
+        return False
+    return any(hint in html_text for hint in CHAT_HTML_HINTS)
+
+
+def _is_public_http_url(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        return False
+    host = parsed.hostname.rstrip(".").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return False
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return not (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_reserved
+        or address.is_unspecified
+    )
+
+
+def _host_matches(host: str, domain: str) -> bool:
+    return host == domain or host.endswith(f".{domain}")
+
+
+def _is_download_url(url: str) -> bool:
+    if not _is_public_http_url(url):
+        return False
+    host = (urllib.parse.urlsplit(url).hostname or "").rstrip(".").lower()
+    return any(_host_matches(host, domain) for domain in DOWNLOAD_DOMAIN_WHITELIST)
+
+
+def _is_image_url(url: str) -> bool:
+    lower = url.lower()
+    if lower.startswith("data:image/"):
+        return True
+    if not _is_public_http_url(url):
+        return False
+    parsed = urllib.parse.urlsplit(url)
+    host = (parsed.hostname or "").rstrip(".").lower()
+    if _host_matches(host, "images.cubox.pro") or _host_matches(host, "images.weserv.nl"):
+        return True
+    return _host_matches(host, "cubox.pro") and "/images/" in parsed.path.lower()
+
+
+def _is_video_url(url: str) -> bool:
+    lower = url.lower()
+    if not _is_public_http_url(url):
+        return False
+    path = urllib.parse.urlsplit(url).path.lower()
+    return any(path.endswith(ext) for ext in VIDEO_EXTENSIONS)
+
+
+def _display_filename_from_url(url: str) -> str:
+    if url.lower().startswith("data:image/"):
+        media_type = url[5:].split(";", 1)[0].split(",", 1)[0]
+        extension = media_type.split("/", 1)[-1] or "bin"
+        return f"inline-image.{extension}"
+    name = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rstrip("/").split("/")[-1])
+    return name or url
+
+
+def _new_id() -> str:
+    return "R" + uuid.uuid4().hex[:8]
+
+
+_FILENAME_RE = re.compile(
+    r"\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|jpg|jpeg|png|gif|mp4|mov|m4v|webm|mkv|csv)\b",
+    re.IGNORECASE,
+)
+# 微信/Cubox 聊天中常见的时间戳形态：M-D HH:MM、YYYY-MM-DD HH:MM 等
+_TIMESTAMP_RE = re.compile(
+    r"^\s*(\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}|\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}|\d{1,2}:\d{2})\s*$"
+)
+# 含较多汉字则大概率是消息正文（不像文件名）
+_CHINESE_CHAR_RE = re.compile(r"[一-鿿]")
+
+
+def _is_skip_context(text: str) -> bool:
+    """判断是否为"应跳过的上下文片段"——文件名、时间戳或纯数字编号。"""
+    if not text:
+        return True
+    if _FILENAME_RE.search(text):
+        return True
+    if _TIMESTAMP_RE.match(text):
+        return True
+    if not _CHINESE_CHAR_RE.search(text):
+        # 无汉字且仅由字母/数字/下划线/连字符/空格/点/括号组成 → 视作文件名或编号
+        if re.fullmatch(r"[A-Za-z0-9_\-.\s()（）]+", text):
+            return True
+        # 纯数字编号（如 1783761818764）
+        if re.fullmatch(r"\d+", text):
+            return True
+    return False
+
+
+def _extract_sibling_text(html_text: str, end_pos: int, window: int = 800) -> str:
+    """从 end_pos（通常 = `<a>` 标签结束位置）向前看 window 字符，截取最近的 tag-pair 内文字。
+
+    策略：从 end_pos 向前回溯，先定位本锚点 `<a` 的起点。如果紧邻的 tag-pair 内
+    是文件名（如 `<span>xxx.pdf</span>`），跳过它继续向上找，再上一个 tag-pair 内的
+    文字通常是同发送者的"前一条消息"或上下文注释。
+    """
+    head = html_text[max(0, end_pos - window):end_pos]
+    a_open = head.rfind("<a")
+    if a_open == -1:
+        # 非锚点路径（img / video / source）：窗口为最近 `</` 之前的 `>` 到 end_pos
+        last_close = head.rfind("</")
+        if last_close == -1:
+            return ""
+        open_gt = head.rfind(">", 0, last_close)
+        if open_gt == -1:
+            return ""
+        window_segment = head[open_gt:]
+    else:
+        # 锚点 `<a>` 路径：循环向前找最近的"非文件名" tag-pair 文本
+        cursor = a_open
+        last_text = ""
+        while cursor > 0:
+            prev_close = head.rfind("</", 0, cursor)
+            if prev_close == -1:
+                break
+            prev_gt = head.rfind(">", 0, prev_close)
+            if prev_gt == -1:
+                break
+            window_segment = head[prev_gt: cursor]
+            pieces = re.findall(r'>([^<>]{4,80})<', window_segment)
+            if pieces:
+                candidate = pieces[-1].strip()
+                if candidate and not _is_skip_context(candidate):
+                    return candidate
+                # 是文件名/时间戳/编号，先记住；如果以后再也找不到更合适的文本，至少能用
+                if not last_text:
+                    last_text = candidate
+                cursor = prev_gt
+            else:
+                cursor = prev_gt
+        return last_text
+    pieces = re.findall(r'>([^<>]{4,80})<', window_segment)
+    return pieces[-1].strip() if pieces else ""
+
+
+def extract_external_resources(html_text: str) -> list[ResourceCandidate]:
+    candidates: list[ResourceCandidate] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _add(kind: str, url: str, pos: int) -> None:
+        key = (kind, url)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(
+            ResourceCandidate(
+                resource_id=_new_id(),
+                kind=kind,
+                url=url,
+                display_filename=_display_filename_from_url(url),
+                sender_context=_extract_sibling_text(html_text, pos),
+            )
+        )
+
+    for match in _TAG_A_HREF.finditer(html_text):
+        url, inner = match.group(1), match.group(2)
+        if any(h in inner for h in _DOWNLOAD_TEXT_HINT) and _is_download_url(url):
+            _add("download", url, match.end())
+
+    for match in _TAG_IMG_SRC.finditer(html_text):
+        url = match.group(1)
+        if _is_image_url(url):
+            _add("image", url, match.end())
+
+    for match in _TAG_VIDEO_SRC.finditer(html_text):
+        url = match.group(1)
+        if _is_video_url(url):
+            _add("video", url, match.end())
+
+    for match in _TAG_SOURCE_SRC.finditer(html_text):
+        url = match.group(1)
+        if _is_video_url(url):
+            _add("video", url, match.end())
+
+    return candidates
+
+
+def _safe_filename(name: str) -> str:
+    """把一个原始文件名清洗成合法的本地文件名。
+
+    - 替换 /\\:?"<>| 等非法字符为 _
+    - 空名用 'untitled'
+    - 截断到 120 字符
+    """
+    name = (name or "").strip() or "untitled"
+    cleaned = re.sub(r'[\\/:*?"<>|]+', "_", name)
+    cleaned = cleaned.lstrip(".") or "untitled"
+    return cleaned[:120]
+
+
+def _available_target(dest_dir: Path, filename: str) -> Path:
+    target = dest_dir / filename
+    if not target.exists():
+        return target
+    stem = target.stem or "untitled"
+    suffix = target.suffix
+    index = 2
+    while True:
+        candidate = dest_dir / f"{stem}_{index}{suffix}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        if not _is_public_http_url(newurl):
+            raise urllib.error.HTTPError(newurl, 403, "redirect target rejected", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _request_url(url: str, timeout: int = 30, max_bytes: int = MAX_DOWNLOAD_BYTES) -> bytes:
+    """读取受支持资源，拒绝本地 URL、私网字面地址和超限响应。"""
+    if url.lower().startswith("data:image/"):
+        try:
+            header, payload = url.split(",", 1)
+            content = base64.b64decode(payload, validate=True) if ";base64" in header.lower() else urllib.parse.unquote_to_bytes(payload)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError("invalid data image") from exc
+        if len(content) > max_bytes:
+            raise ValueError(f"resource exceeds {max_bytes} bytes")
+        return content
+    if not _is_public_http_url(url):
+        raise ValueError("only public HTTP/HTTPS URLs or data:image are allowed")
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "legal-material-organizer/0.16.0"},
+    )
+    opener = urllib.request.build_opener(_SafeRedirectHandler())
+    with opener.open(req, timeout=timeout) as resp:
+        final_url = resp.geturl()
+        if not _is_public_http_url(final_url):
+            raise ValueError("final URL rejected")
+        declared_size = resp.headers.get("Content-Length")
+        if declared_size:
+            try:
+                if int(declared_size) > max_bytes:
+                    raise ValueError(f"resource exceeds {max_bytes} bytes")
+            except ValueError as exc:
+                if "exceeds" in str(exc):
+                    raise
+        content = resp.read(max_bytes + 1)
+        if len(content) > max_bytes:
+            raise ValueError(f"resource exceeds {max_bytes} bytes")
+        return content
+
+
+def download_resource(
+    url: str,
+    dest_dir: Path,
+    display_filename: str,
+    max_retries: int = 3,
+    timeout: int = 30,
+    max_bytes: int = MAX_DOWNLOAD_BYTES,
+) -> DownloadResult:
+    """下载一个外链资源到 dest_dir/display_filename，失败不抛异常。
+
+    参数:
+        url: 公网 HTTP/HTTPS URL 或 data:image URL。
+        dest_dir: 目标目录，必须存在或可创建。
+        display_filename: 文件展示名。
+        max_retries: 最大尝试次数，至少执行一次。
+        timeout: 单次请求超时秒数。
+        max_bytes: 单个资源大小上限。
+
+    返回:
+        DownloadResult。status ∈ {ok, failed, access_denied}。
+    """
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return DownloadResult(
+            url=url,
+            status="failed",
+            error=f"mkdir failed: {exc}",
+            attempts=0,
+        )
+
+    target = _available_target(dest_dir, _safe_filename(display_filename))
+    last_err = ""
+    max_attempts = max(1, int(max_retries))
+    for attempt in range(1, max_attempts + 1):
+        try:
+            content = _request_url(url, timeout=timeout, max_bytes=max_bytes)
+            if not content:
+                return DownloadResult(
+                    url=url,
+                    status="access_denied",
+                    error="empty body",
+                    attempts=attempt,
+                )
+            target.write_bytes(content)
+            return DownloadResult(
+                url=url,
+                status="ok",
+                path=target,
+                attempts=attempt,
+                bytes=len(content),
+            )
+        except urllib.error.HTTPError as exc:
+            last_err = f"HTTP {exc.code}"
+            if exc.code in (401, 403):
+                return DownloadResult(
+                    url=url,
+                    status="access_denied",
+                    error=last_err,
+                    attempts=attempt,
+                )
+        except ValueError as exc:
+            return DownloadResult(
+                url=url,
+                status="access_denied",
+                error=str(exc),
+                attempts=attempt,
+            )
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_err = f"{type(exc).__name__}: {exc}"
+        except Exception as exc:  # noqa: BLE001 — 防御性兜底，不让 bad input kill pipeline
+            last_err = f"{type(exc).__name__}: {exc}"
+        if attempt < max_attempts:
+            time.sleep(min(2 * attempt, 6))
+
+    return DownloadResult(
+        url=url,
+        status="failed",
+        error=last_err,
+        attempts=max_attempts,
+    )
+
+
+__all__ = [
+    "recognize_chat_html",
+    "extract_external_resources",
+    "ResourceCandidate",
+    "download_resource",
+    "DownloadResult",
+]

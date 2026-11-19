@@ -1,0 +1,45 @@
+{
+  "archive_dir": "/workspace/case/.legal-material-organizer/sample/archive/run-001",
+  "work_dir": "/workspace/case/.legal-material-organizer/sample/work",
+  "material_count": 1,
+  "total_record_count": 1,
+  "materials": [
+    {
+      "material_id": "M-000001",
+      "parent_material_id": null,
+      "display_code": "D001",
+      "primary_variant_id": "variant_M_000001_original",
+      "primary_readable_variant_id": null,
+      "absolute_path": "/workspace/case/source/sample.pdf",
+      "extracted_from_archive": false,
+      "source_chain": [],
+      "lifecycle_status": "active",
+      "readability_status": "unknown",
+      "processing_need": "need_ocr_or_visual",
+      "needs_human_review": false
+    }
+  ],
+  "variants": [
+    {
+      "variant_id": "variant_M_000001_original",
+      "material_id": "M-000001",
+      "variant_kind": "original",
+      "file_path": "/workspace/case/source/sample.pdf"
+    }
+  ],
+  "material_sets": [
+    {
+      "set_id": "set_documents",
+      "material_ids": ["M-000001"]
+    }
+  ],
+  "processing_runs": [],
+  "follow_up_candidates": [
+    {
+      "candidate_id": "follow_M_000001_need_ocr_or_visual",
+      "material_id": "M-000001",
+      "status": "candidate",
+      "reason": "need_ocr_or_visual"
+    }
+  ]
+}

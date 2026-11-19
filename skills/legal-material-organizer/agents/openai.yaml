@@ -1,0 +1,4 @@
+interface:
+  display_name: "法律材料整理"
+  short_description: "扫描、提取、注解并整理多来源法律案件材料，生成可追溯清单"
+  default_prompt: "使用 $legal-material-organizer 清点、理解并整理这批案件材料。"

@@ -57,6 +57,7 @@ skills/local-asr/assets/speaker-profiles.json
 **/config/*.bak*
 !skills/de-ai-polish/config/instruction-stability-contract.json
 !skills/de-ai-polish/config/quality-score-rubric.json
+!skills/legal-material-organizer/config/instruction-stability-contract.json
 !skills/legal-visualization/config/visual-role-registry.json
 !skills/patent-analysis/config/legal-source-register.json
 !skills/legal-harness-init/config/instruction-stability-contract.json
