@@ -303,7 +303,7 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 
 | ID | 专家套件 | 主要成员 Skill | 主要用途 |
 | :--- | :--- | :--- | :--- |
-| `legal-material-evidence` | 法律材料与证据处理 | `legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`local-asr`、`transcription-corrector`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 把原始文档、扫描件和音视频转成可分析材料 |
+| `legal-material-evidence` | 法律材料与证据处理 | `legal-material-organizer`、`legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`local-asr`、`transcription-corrector`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 清点混合材料包，把原始文档、扫描件和音视频转成可分析材料 |
 | `litigation-analysis-drafting` | 诉讼分析及文书撰写 | `new-case`、`court-sms`、`legal-ocr`、`pdf-organizer`、`legal-case-analysis`、`judgment-analysis`、`yuandian-law-search`、`legal-visualization`、`elements-complaint-generator`、`legal-proposal-generator`、`md2word` | 诉讼案件材料、事实证据分析、检索、起诉答辩与方案文书撰写 |
 | `contract-business-counsel` | 合同审查与企业顾问 | `opc-legal-counsel`、`contract-copilot`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`legal-visualization`、`md2word` | 企业问题分诊、合同审查和顾问交付 |
 | `intellectual-property-practice` | 知识产权业务 | `patent-download`、`patent-analysis`、`code2patent`、`trademark-assistant`、`new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-visualization` | 专利分析、代码专利化和商标申请规划 |

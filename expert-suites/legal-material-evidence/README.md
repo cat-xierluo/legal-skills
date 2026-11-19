@@ -1,6 +1,8 @@
 # 法律材料与证据处理专家套件
 
-> [已发布 v0.1.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-material-evidence-0.1.1.zip)
+> [旧包 v0.1.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-material-evidence-0.1.1.zip)
+> 整套源码 v0.2.0 待发布
+> 上方旧包内容不随源码变化。
 
 把法院文书、扫描件、PDF、图片、录音、视频和会议记录整理成可归档、可检索、可继续分析的数字化材料。
 
@@ -20,8 +22,9 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
+| [legal-material-organizer](../../skills/legal-material-organizer/) | 清点混合材料包，生成材料 manifest、处理任务和整理计划；源码 v0.16.0 待发布 | 尚无公开下载 |
 | [legal-ocr](../../skills/legal-ocr/) | 统一路由 PDF、图片、Office 和网页内容识别 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-ocr-1.6.0.zip) |
-| [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF | [已发布 v2.13.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-processor-2.13.0.zip) |
+| [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF；源码 v2.14.0 待发布 | [旧版 v2.13.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-processor-2.13.0.zip) |
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名 | [已发布 v0.6.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-organizer-0.6.1.zip) |
 | [video-screenshot](../../skills/video-screenshot/) | 从录屏或视频中筛选关键帧和证据线索 | [已发布 v1.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/video-screenshot-1.2.0.zip) |
 | [local-asr](../../skills/local-asr/) | 本地语音识别转写音视频，保留时间戳与说话人 | [已发布 v2.3.5](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/local-asr-2.3.5.zip) |
@@ -32,11 +35,11 @@
 
 ## 建议使用方式
 
-1. 先用 `court-sms`、`dingtalk-minutes` 或转录 Skill 取得原始内容；
-2. 用 `legal-ocr` 路由文档识别，必要时交给 `pdf-processor` 做双层化和预处理；
+1. 收到混合目录、压缩包或聊天导出件时，先用 `legal-material-organizer` 清点、编号并生成 manifest；
+2. 按它的处理任务获取或识别材料：`court-sms`、`dingtalk-minutes` 或转录 Skill 取得原始内容，`legal-ocr` 路由文档识别，必要时交给 `pdf-processor` 做双层化和预处理；
 3. 用 `pdf-organizer` 建立页级索引、拆分和命名；
 4. 视频类材料用 `video-screenshot` 提取关键帧，转录稿再用 `transcription-corrector` 纠错；
-5. 人工核对页码、时间戳、原件对应关系和识别错误后，再交给分析类 Skill。
+5. 处理结果回写 manifest 后，人工核对页码、时间戳、原件对应关系和识别错误，再交给分析类 Skill。
 
 ## 安装方法
 
@@ -53,4 +56,4 @@ OCR 和语音识别结果必须与原件抽样核对。涉及证据提交、期�
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.1`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.2.0`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。

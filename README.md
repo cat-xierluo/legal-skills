@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-19 | 新上传 | [legal-material-organizer](skills/legal-material-organizer/) | v0.16.0（源码） | 混合案件材料清点、编号、处理分流和整理计划入口加入「法律材料与证据处理」套件；提供匿名示例，尚无公开下载。 |
 | 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 「法律 AI 上下文初始化」新增三层规则清单，列出规则来源、维护人和保存位置；附同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
@@ -41,7 +42,6 @@
 | 2026-11-01 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.0（源码） | 补网关故障隔离、MiniMax 排障及宿主内存审计边界；只读巡检与有界连续采样，提供本地稳定性缓解与上游复现入口。 |
 | 2026-10-30 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.3（源码） | 加固受管写入与隐私校验，回执绑定最终哈希；会话模型探测改为 JSON 解析并支持显式会话文件；人工新会话结果降为 DECLARED，不再宣称自动行为验证。 |
 | 2026-10-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.8 | 修复根 README HTML 技能表内专家套件备注链接不生效：回写时转换为 HTML 链接，并补幂等回归。 |
-| 2026-10-29 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.7 | 发布驱动改为临时目录构建、成功后整批替换，失败不破坏上一批产物；修复资产数输出的变量解析问题，并拒绝符号链接与同名目录目标；补 Bash 实际执行回归。 |
 
 </details>
 
@@ -88,9 +88,9 @@
 
 专家套件只负责选择、说明和分发，不会自动编排成员 Skill。真正的跨 Skill 工作流仍遵循下方开发与编排指南。
 
-| 专家套件 | 适用场景 | 成员数 | 版本 | 整套下载 |
+| 专家套件 | 适用场景 | 成员数 | 源码版本 | 整套下载 |
 | :--- | :--- | ---: | :---: | :---: |
-| [法律材料与证据处理](expert-suites/legal-material-evidence/) | 文档、扫描件、PDF、音视频、法院来文的数字化和归档 | 9 | v0.1.1 | [已发布 v0.1.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-material-evidence-0.1.1.zip) |
+| [法律材料与证据处理](expert-suites/legal-material-evidence/) | 混合材料清点、文档识别、扫描件、PDF、音视频、法院来文的数字化和归档 | 10 | v0.2.0 | [旧包 v0.1.1；新源码尚无下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-material-evidence-0.1.1.zip) |
 | [诉讼分析及文书撰写](expert-suites/litigation-analysis-drafting/) | 诉讼案件材料、事实证据分析、法律检索、起诉答辩与方案文书撰写 | 11 | v0.2.0 | [已发布 v0.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-litigation-analysis-drafting-0.2.0.zip) |
 | [合同审查与小微企业顾问](expert-suites/contract-business-counsel/) | 合同起草审查、OPC / 小微企业经营分诊和顾问交付 | 6 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-contract-business-counsel-0.1.0.zip) |
 | [知识产权实务](expert-suites/intellectual-property-practice/) | 专利下载及初步分析、商标申请辅助；双入口分流 | 5 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-intellectual-property-practice-0.1.0.zip) |
@@ -132,6 +132,15 @@
 <td style="text-align:center">v1.4.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/wechat-article-fetch-1.4.0.zip">已发布 v1.4.0</a></td>
 <td>所属套件：<a href="expert-suites/legal-research-client-insight/">法律研究与客户洞察</a></td>
+</tr>
+<tr>
+<td><a href="skills/legal-material-organizer/"><strong>legal-material-organizer</strong></a></td>
+<td>工具·材料整理</td>
+<td style="word-break:break-word">清点目录、压缩包和聊天导出件，生成材料清单、manifest、处理任务和整理计划；工具中落地分流 OCR、ASR、视觉理解等能力，不直接形成案情结论</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v0.16.0</td>
+<td style="text-align:center">尚无公开下载</td>
+<td>所属套件：<a href="expert-suites/legal-material-evidence/">法律材料与证据处理</a>；源码 v0.16.0 待发布</td>
 </tr>
 <tr>
 <td><a href="skills/legal-ocr/"><strong>legal-ocr</strong></a></td>

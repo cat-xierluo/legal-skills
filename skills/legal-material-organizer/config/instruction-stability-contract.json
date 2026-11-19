@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "skill": {
+    "name": "legal-material-organizer",
+    "version": "0.16.0"
+  },
+  "producer": {
+    "id": "material-manifest-producer",
+    "implementation_paths": [
+      "scripts/scan_materials.py",
+      "scripts/material_processing_handoff.py"
+    ]
+  },
+  "artifacts": [
+    {
+      "id": "materials-manifest",
+      "stage": "final",
+      "required": true
+    }
+  ],
+  "checkers": [
+    {
+      "id": "material-manifest-check",
+      "kind": "active",
+      "modality": "schema",
+      "artifact_stages": [
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/check_material_manifest.py",
+      "args": [
+        "--input",
+        "{artifact:materials-manifest}"
+      ],
+      "timeout_seconds": 30
+    }
+  ],
+  "constraints": [
+    {
+      "id": "STORAGE-SEPARATION",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#STORAGE-SEPARATION"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "case_ids": [
+        "valid-material-manifest",
+        "storage-material-under-archive",
+        "historical-skill-archive-payload"
+      ],
+      "historical_failure_known": true
+    },
+    {
+      "id": "TRACEABILITY-INTEGRITY",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#TRACEABILITY-INTEGRITY"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "case_ids": [
+        "valid-material-manifest",
+        "trace-broken-primary-variant"
+      ],
+      "historical_failure_known": false
+    },
+    {
+      "id": "UNCERTAINTY-ROUTING",
+      "severity": "hard",
+      "requirement_type": "coverage",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#UNCERTAINTY-ROUTING"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "case_ids": [
+        "valid-material-manifest",
+        "uncertainty-without-route"
+      ],
+      "historical_failure_known": false
+    },
+    {
+      "id": "PROCESSING-CLOSURE",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#PROCESSING-CLOSURE"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "case_ids": [
+        "valid-material-manifest",
+        "valid-processing-closure",
+        "completed-candidate-without-writeback"
+      ],
+      "historical_failure_known": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "valid-material-manifest",
+      "kind": "positive",
+      "constraint_ids": [
+        "STORAGE-SEPARATION",
+        "TRACEABILITY-INTEGRITY",
+        "UNCERTAINTY-ROUTING",
+        "PROCESSING-CLOSURE"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "materials-manifest",
+          "path": "assets/stability-manifest-valid.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "valid-processing-closure",
+      "kind": "positive",
+      "constraint_ids": [
+        "PROCESSING-CLOSURE"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "materials-manifest",
+          "path": "assets/stability-manifest-processing-complete.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "storage-material-under-archive",
+      "kind": "mutation",
+      "constraint_ids": [
+        "STORAGE-SEPARATION"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "materials-manifest",
+          "path": "assets/stability-manifest-storage-under-archive.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "historical-skill-archive-payload",
+      "kind": "historical",
+      "constraint_ids": [
+        "STORAGE-SEPARATION"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "materials-manifest",
+          "path": "assets/stability-manifest-historical-archive-payload.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "trace-broken-primary-variant",
+      "kind": "mutation",
+      "constraint_ids": [
+        "TRACEABILITY-INTEGRITY"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "materials-manifest",
+          "path": "assets/stability-manifest-broken-reference.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "uncertainty-without-route",
+      "kind": "mutation",
+      "constraint_ids": [
+        "UNCERTAINTY-ROUTING"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "materials-manifest",
+          "path": "assets/stability-manifest-unrouted-uncertainty.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "completed-candidate-without-writeback",
+      "kind": "mutation",
+      "constraint_ids": [
+        "PROCESSING-CLOSURE"
+      ],
+      "checker_ids": [
+        "material-manifest-check"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "materials-manifest",
+          "path": "assets/stability-manifest-processing-without-writeback.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    }
+  ],
+  "stability": {
+    "minimum_runs": 3,
+    "measurements": [
+      {
+        "id": "storage-violation-count",
+        "checker_id": "material-manifest-check",
+        "constraint_id": "STORAGE-SEPARATION",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "traceability-violation-count",
+        "checker_id": "material-manifest-check",
+        "constraint_id": "TRACEABILITY-INTEGRITY",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "uncertainty-violation-count",
+        "checker_id": "material-manifest-check",
+        "constraint_id": "UNCERTAINTY-ROUTING",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "processing-closure-violation-count",
+        "checker_id": "material-manifest-check",
+        "constraint_id": "PROCESSING-CLOSURE",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      }
+    ],
+    "observables": [
+      {
+        "id": "storage-layout",
+        "checker_id": "material-manifest-check",
+        "constraint_ids": [
+          "STORAGE-SEPARATION"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "material-id-set",
+        "checker_id": "material-manifest-check",
+        "constraint_ids": [
+          "TRACEABILITY-INTEGRITY"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "uncertainty-route-set",
+        "checker_id": "material-manifest-check",
+        "constraint_ids": [
+          "UNCERTAINTY-ROUTING"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "processing-closure-set",
+        "checker_id": "material-manifest-check",
+        "constraint_ids": [
+          "PROCESSING-CLOSURE"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      }
+    ]
+  }
+}
