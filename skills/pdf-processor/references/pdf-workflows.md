@@ -44,6 +44,42 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
 
 表中 DPI 是目标值。默认单页像素上限为 25MP；当手机图片 PDF 把 2305×3310 像素直接写成 2305×3310 point 等异常物理页面尺寸时，统一入口会自动降低实际 DPI，避免预处理生成超大位图后又被 OCR 的 `--skip-big` 跳过。普通 A4、Letter 页面通常不会触发。
 
+## 拍照件规整参数
+
+```bash
+# 默认流程包含纸边透视、表框精校、去阴影和 A4 排版
+python3 scripts/pdf-photo-normalize.py \
+  --input photo.jpg --output photo.pdf \
+  --report /tmp/photo-report.json --debug-image /tmp/photo-debug.jpg
+
+# 按校正后的纸面比例设置 PDF 页框
+python3 scripts/pdf-photo-normalize.py \
+  --input photo.jpg --output photo.pdf --page-size original
+
+# 淡墨材料可减轻附加对比度增强
+python3 scripts/pdf-photo-normalize.py \
+  --input photo.jpg --output photo.pdf --contrast-strength 0.3
+
+# 明确指定方向，跳过 Tesseract OSD
+python3 scripts/pdf-photo-normalize.py \
+  --input photo.jpg --output photo.pdf --rotate 90
+```
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `--page-size` | `a4` | A4 页框为 210 × 297 mm，横纵随纸面方向，内容等比居中。也可选 `letter`、`original` 或按纸面比例选择的 `auto` |
+| `--rotate` | `auto` | 应用 EXIF 方向后，使用可用的 Tesseract OSD 检查 90° 倍数方向。也可指定顺时针角度 |
+| `--illumination-strength` | `0.78` | 亮度阴影归一强度，取值 0–1 |
+| `--contrast-strength` | `0.7` | 附加亮度曲线强度，取值 0–1。设 `0` 保留基础去阴影与局部对比度处理 |
+| `--dpi` | `300` | 输出栅格分辨率。标准页框的物理尺寸固定 |
+| `--jpeg-quality` | `90` | PDF 内嵌 JPEG 质量 |
+| `--report` | 无 | 输出 JSON 报告，记录纸面四边、方向、表框精校状态和校正前的角度、亮度离散指标、页面和内容尺寸 |
+| `--debug-image` | 无 | 在原图上标出检测到的纸面四边 |
+
+表框精校适用于纸边可定位且有连贯横竖边和多个单元格的平面表格。估计变形较大、表框残缺或纸面弯曲明显时，检查报告中的 `table_alignment.status`，并以实际渲染复核。自动裁边需要至少三条候选边能将纸面与较暗的外部区域区分开。证据不足时保留整幅图像，可结合 `--debug-image` 核查。
+
+入口一次处理一张单帧照片。多页 TIFF 或其他多帧图像须先拆为单页再处理。PDF、报告和调试图均需指定独立且尚不存在的文件路径，已有文件请另选文件名重试。
+
 ## OCR 参数
 
 ```bash
