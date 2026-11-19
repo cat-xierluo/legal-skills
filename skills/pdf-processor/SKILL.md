@@ -2,8 +2,8 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.15.1"
-description: PDF 处理工具，支持扫描件预处理、拍照件转规整 PDF、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
+version: "2.16.0"
+description: PDF 处理工具，支持扫描件预处理、拍照件单张或批量规整合并、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
 
@@ -16,7 +16,7 @@ license: MIT
 核心职责：
 
 1. 扫描件一键处理：解密 → 页面预处理 → 合并输出 → OCR 双层 PDF。
-2. 拍照件规整：EXIF 转正 → 纸面透视校正 → 可靠表框精校 → 去阴影和增强对比度 → A4 PDF。
+2. 拍照件规整：EXIF 转正 → 纸面透视校正；无完整纸边时识别可见文字主体 → 可靠表框精校 → 去阴影和增强对比度 → A4 PDF；多张照片可逐页规整后合并。
 3. 单项处理：只预处理、只 OCR、只压缩、只解密、只去水印、只合并、只加页码。
 4. 用户没有特别说明时，扫描 PDF 走默认统一入口；手机拍摄的 JPG/PNG/TIFF/BMP/WebP 先走拍照件规整入口；明确提出单项需求时只执行对应工具。
 
@@ -30,7 +30,8 @@ license: MIT
 - 显式选择外部 API 且输入含姓名、案号、医疗、账号等敏感信息时，先说明将上传完整 PDF 并取得一次当前文件授权；授权不扩展到同目录或其他材料。
 - 电子 PDF 或混合 PDF 默认保留文字、矢量、图片和批注层，跳过栅格化预处理与重压缩；只有用户明确接受层丢失风险时才使用 `--force-raster-preprocess`。
 - “只预处理”“不要 OCR”“只矫正压缩”才使用 `--preprocess-only`。
-- 拍照件纸边通过检测时，将完整校正纸面铺满 A4 页框。检测证据不足时等比保留整幅图像，并在报告中说明。需要保留纸面估计比例时使用 `--page-size original`。
+- 拍照件纸边通过检测时，将完整校正纸面铺满 A4 页框；无完整纸边但可见文字主体可靠时，按主体及邻近印章、手写痕迹估计比例裁切并等比排版，不虚构缺失的完整纸面。两类证据都不足或候选框过宽时等比保留整幅图像，并在报告中说明。需要保留检测比例时使用 `--page-size original`。
+- 多张拍照件默认先按自然文件名顺序逐页规整并合并为一个 PDF，再交给本地 OCR；任一页面失败时停止输出，避免材料缺页。
 - “合并”“加页码”“解密”“去水印”“压缩”只执行对应工具，不自动进入预处理/OCR。
 - 压缩只有用户明确提出时才单独执行；统一入口中的默认压缩是预处理输出策略的一部分。
 - 水印去除只在用户明确要求时执行，不作为默认自动步骤。
@@ -82,7 +83,7 @@ python3 scripts/pdf-photo-normalize.py \
   --report /tmp/summons-report.json
 ```
 
-先按纸边纠正透视，再用可靠表框校正残余的横竖偏斜，合成映射后从原图取样。A4 排版按标准比例校正纸面，保留纸上的原有留白。适度增强文字和纸底的对比度。多页 TIFF 等多帧输入须先拆成单页图像，各输出使用独立的新文件名。需要可搜索文本时，用既有本地 OCR 处理规整件。 [拍照件参数和回退规则](references/pdf-workflows.md#拍照件规整参数)
+先按纸边纠正透视；纸边缺失时按文本行簇识别可见主体和主文书。再用可靠表框校正残余的横竖偏斜，合成映射后从原图取样。完整纸边选用 A4 时铺满标准页框；内容主体按可见比例等比排版。适度增强文字和纸底的对比度。多页 TIFF 等多帧输入须先拆成单页图像。需要可搜索文本时，用既有本地 OCR 处理规整件。 [拍照件参数和回退规则](references/pdf-workflows.md#拍照件规整参数)
 
 ```bash
 python3 scripts/pdf-ocr.py \
@@ -90,6 +91,17 @@ python3 scripts/pdf-ocr.py \
   --output summons-searchable.pdf \
   --backend rapidocr_local --preprocessed
 ```
+
+多张照片按自然文件名顺序合成一个 PDF：
+
+```bash
+python3 scripts/pdf-photo-batch.py \
+  --input /path/to/photo-dir \
+  --output merged-regular.pdf \
+  --report /tmp/photo-batch-report.json
+```
+
+目录内 JPG/PNG/TIFF/BMP/WebP 逐张进入单页规整流程后合并；也可显式传入多个文件或目录，顺序为参数顺序加目录内自然文件名排序。任一张失败即停止，不输出缺页 PDF。
 
 ### 4. 只做 OCR 文字层
 
