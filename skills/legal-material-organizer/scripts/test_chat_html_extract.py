@@ -254,13 +254,17 @@ class DownloadResourceTest(unittest.TestCase):
         """不可达 URL 应当重试后 mark 为 failed；不抛异常。"""
         with tempfile.TemporaryDirectory() as tmp:
             dest_dir = Path(tmp) / "out"
-            result = download_resource(
-                url="https://example.invalid/missing.pdf",
-                dest_dir=dest_dir,
-                display_filename="missing.pdf",
-                max_retries=2,
-                timeout=2,
-            )
+            with patch(
+                "chat_html_extract.socket.getaddrinfo",
+                side_effect=socket.gaierror("dns unavailable"),
+            ):
+                result = download_resource(
+                    url="https://files.cubox.pro/missing.pdf",
+                    dest_dir=dest_dir,
+                    display_filename="missing.pdf",
+                    max_retries=2,
+                    timeout=2,
+                )
             self.assertIn(result.status, {"failed", "access_denied"})
             self.assertIsNone(result.path)
             self.assertTrue(result.error)
