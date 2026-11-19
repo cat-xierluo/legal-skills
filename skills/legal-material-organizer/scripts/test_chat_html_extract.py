@@ -4,11 +4,16 @@
 
 from __future__ import annotations
 
+import base64
+import socket
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
+import chat_html_extract
 from chat_html_extract import (
     recognize_chat_html,
     extract_external_resources,
@@ -33,6 +38,214 @@ class RecognizeChatHtmlTest(unittest.TestCase):
     def test_chatlog_keyword_recognized(self) -> None:
         html = "<html><body>chatlog 12345</body></html>"
         self.assertTrue(recognize_chat_html(html))
+
+
+class DnsBindingTest(unittest.TestCase):
+    """DNS 解析结果必须为公网地址，并真正作为连接目标。"""
+
+    def test_private_dns_answer_is_rejected(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))],
+        ):
+            with self.assertRaises(chat_html_extract.UnsafeHostError):
+                chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+
+    def test_unresolvable_host_is_rejected(self) -> None:
+        with patch("chat_html_extract.socket.getaddrinfo", side_effect=socket.gaierror("no dns")):
+            with self.assertRaises(chat_html_extract.HostResolutionError):
+                chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+
+    def test_public_dns_answer_is_accepted(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))],
+        ):
+            host = chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+        self.assertEqual(host, "files.cubox.pro")
+
+    def test_ipv6_unique_local_address_is_rejected(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("fd00::1", 0, 0, 0))],
+        ):
+            with self.assertRaises(chat_html_extract.UnsafeHostError):
+                chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+
+    def test_ipv6_link_local_address_is_rejected(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("fe80::1", 0, 0, 0))],
+        ):
+            with self.assertRaises(chat_html_extract.UnsafeHostError):
+                chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+
+    def test_request_rejects_host_resolving_to_private_address(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 0))],
+        ):
+            with self.assertRaises(chat_html_extract.UnsafeHostError):
+                chat_html_extract._request_url("https://files.cubox.pro/a.pdf")
+
+    def test_connection_target_is_pinned_to_validated_ip(self) -> None:
+        """连接必须使用已校验 IP，TLS SNI 与 Host 保留原主机名。"""
+        captured = {}
+
+        class _FakeConnection:
+            def __init__(self, host: str, *, pinned_ip: str, port: int, timeout: int) -> None:
+                captured["host"] = host
+                captured["pinned_ip"] = pinned_ip
+                captured["port"] = port
+
+            def request(self, method: str, target: str, headers=None):  # type: ignore[no-untyped-def]
+                captured["method"] = method
+                captured["target"] = target
+                captured["headers"] = headers or {}
+
+            def getresponse(self):  # type: ignore[no-untyped-def]
+                raise AssertionError("no response expected")
+
+            def close(self) -> None:
+                captured["closed"] = True
+
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))],
+        ):
+            with patch("chat_html_extract._PinnedHTTPSConnection", _FakeConnection):
+                with self.assertRaises(AssertionError):
+                    chat_html_extract._request_url("https://files.cubox.pro/a.pdf")
+        self.assertEqual(captured["host"], "files.cubox.pro")
+        self.assertEqual(captured["pinned_ip"], "93.184.216.34")
+        self.assertEqual(captured["port"], 443)
+        self.assertEqual(captured["headers"]["Host"], "files.cubox.pro")
+        self.assertTrue(captured["closed"])
+
+    def test_connection_does_not_resolve_dns_again(self) -> None:
+        """DNS rebinding 防护：连接只使用首次校验的地址，请求期不再解析 DNS。"""
+        calls = {"n": 0}
+
+        def fake_getaddrinfo(host, port, family, *args, **kwargs):  # type: ignore[no-untyped-def]
+            calls["n"] += 1
+            if family == socket.AF_INET:
+                return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+            return [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2606:4700::1111", 0, 0, 0))]
+
+        with patch("chat_html_extract.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+            host, addresses, _scheme, _port, _target = chat_html_extract._prepare_request_target(
+                "https://files.cubox.pro/a.pdf"
+            )
+        self.assertEqual(host, "files.cubox.pro")
+        self.assertEqual(addresses, ["2606:4700::1111", "93.184.216.34"])
+        resolution_calls = calls["n"]
+
+        with patch("chat_html_extract.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+            connection = chat_html_extract._open_pinned_connection(
+                host, addresses, "https", 443, 5
+            )
+        self.assertEqual(calls["n"], resolution_calls)
+        self.assertEqual(connection._pinned_ip, addresses[0])
+        self.assertEqual(connection.host, "files.cubox.pro")
+        connection.close()
+
+    def test_mixed_public_and_private_answers_are_rejected(self) -> None:
+        """任一解析结果指向私网即整体拒绝，不做部分放行。"""
+        def fake_getaddrinfo(*args, **kwargs):  # type: ignore[no-untyped-def]
+            family = args[0] if args else kwargs.get("family")
+            if family == socket.AF_INET:
+                return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+            return [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("fd00::1", 0, 0, 0))]
+
+        with patch("chat_html_extract.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+            with self.assertRaises(chat_html_extract.UnsafeHostError):
+                chat_html_extract._prepare_request_target("https://files.cubox.pro/a.pdf")
+
+    def test_redirect_to_private_host_is_rejected(self) -> None:
+        handler = chat_html_extract._SafeRedirectHandler()
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.10", 0))],
+        ):
+            with self.assertRaises(urllib.error.HTTPError):
+                handler.redirect_request(
+                    urllib.request.Request("https://files.cubox.pro/a.pdf"),
+                    None,
+                    302,
+                    "Found",
+                    {},
+                    "http://files.cubox.pro/redirect.pdf",
+                )
+
+
+class DownloadErrorClassificationTest(unittest.TestCase):
+    """永久失败与可重试失败必须区分，避免无效重试或误放行。"""
+
+    def test_dns_failure_is_retried(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch(
+                "chat_html_extract.socket.getaddrinfo",
+                side_effect=socket.gaierror("dns unavailable"),
+            ):
+                result = download_resource(
+                    url="https://files.cubox.pro/missing.pdf",
+                    dest_dir=Path(tmp) / "out",
+                    display_filename="missing.pdf",
+                    max_retries=3,
+                    timeout=2,
+                )
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.attempts, 3)
+
+    def test_private_address_is_rejected_without_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch(
+                "chat_html_extract.socket.getaddrinfo",
+                return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 0))],
+            ):
+                result = download_resource(
+                    url="https://files.cubox.pro/missing.pdf",
+                    dest_dir=Path(tmp) / "out",
+                    display_filename="missing.pdf",
+                    max_retries=3,
+                    timeout=2,
+                )
+        self.assertEqual(result.status, "access_denied")
+        self.assertEqual(result.attempts, 1)
+
+    def test_oversized_response_is_rejected_without_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch(
+                "chat_html_extract._request_url",
+                side_effect=chat_html_extract.PermanentDownloadError("resource exceeds 10 bytes"),
+            ):
+                result = download_resource(
+                    url="https://files.cubox.pro/big.pdf",
+                    dest_dir=Path(tmp) / "out",
+                    display_filename="big.pdf",
+                    max_retries=3,
+                    timeout=2,
+                )
+        self.assertEqual(result.status, "access_denied")
+        self.assertEqual(result.attempts, 1)
+
+
+class InlineImageTest(unittest.TestCase):
+    """data:image 只允许明确类型，并校验内容签名。"""
+
+    def test_unsupported_inline_type_is_rejected(self) -> None:
+        with self.assertRaises(chat_html_extract.PermanentDownloadError):
+            chat_html_extract._request_url("data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=")
+
+    def test_inline_content_signature_mismatch_is_rejected(self) -> None:
+        payload = base64.b64encode(b"not-a-png").decode()
+        with self.assertRaises(chat_html_extract.PermanentDownloadError):
+            chat_html_extract._request_url(f"data:image/png;base64,{payload}")
+
+    def test_valid_inline_png_is_accepted(self) -> None:
+        payload = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 16).decode()
+        content = chat_html_extract._request_url(f"data:image/png;base64,{payload}")
+        self.assertTrue(content.startswith(b"\x89PNG"))
 
 
 class ExtractResourcesTest(unittest.TestCase):
@@ -201,13 +414,17 @@ class DownloadResourceTest(unittest.TestCase):
         """不可达 URL 应当重试后 mark 为 failed；不抛异常。"""
         with tempfile.TemporaryDirectory() as tmp:
             dest_dir = Path(tmp) / "out"
-            result = download_resource(
-                url="https://example.invalid/missing.pdf",
-                dest_dir=dest_dir,
-                display_filename="missing.pdf",
-                max_retries=2,
-                timeout=2,
-            )
+            with patch(
+                "chat_html_extract.socket.getaddrinfo",
+                side_effect=socket.gaierror("dns unavailable"),
+            ):
+                result = download_resource(
+                    url="https://files.cubox.pro/missing.pdf",
+                    dest_dir=dest_dir,
+                    display_filename="missing.pdf",
+                    max_retries=2,
+                    timeout=2,
+                )
             self.assertIn(result.status, {"failed", "access_denied"})
             self.assertIsNone(result.path)
             self.assertTrue(result.error)

@@ -3,7 +3,7 @@ name: legal-material-organizer
 description: 对律师收到的混合案件材料执行清点、解包、处理分流、内容注解、归类命名和结构化交接。本技能应在用户要求“整理案件材料”“生成材料清单/说明”“理解后归档”，或输入包含目录、压缩包、聊天导出、图片、PDF、音视频、办公文档等多源材料时使用。不要用于直接形成案情结论、争议焦点、证据证明目的或正式法律意见；只需处理单个文件时交给当前环境中合适的专项能力。
 license: CC-BY-NC
 metadata:
-  version: "0.16.0"
+  version: "0.16.1"
   author: "杨卫薪律师（微信ywxlaw）"
   homepage: "https://github.com/cat-xierluo/legal-skills"
 ---
@@ -95,7 +95,7 @@ metadata:
 
 | 依赖 | 适用功能 | 安装方式 |
 |------|----------|----------|
-| Python 3.9+ | 扫描、编目、chat-html 抽取 | 系统 Python 或官方安装包 |
+| Python 3.10+ | 扫描、编目、chat-html 抽取 | 系统 Python 或官方安装包 |
 | `7z` 或 `unar`（可选） | 经用户确认后解压 RAR/7z | macOS: `brew install sevenzip` 或 `brew install unar`<br>Linux: `sudo apt-get install p7zip-full` |
 
 ### Python 包
@@ -107,7 +107,7 @@ metadata:
 - 只读取用户明确指定的源材料，写入路径仅限源目录 Markdown 投影、显式指定的 `archive-dir` 与 `work-dir`。
 - 可选外部解压器仅以参数数组调用 `7z` 或 `unar`，不通过 shell 拼接命令。
 - 清理操作仅限本次运行控制的 `work/extracted_containers/`，不删除源材料或用户其他目录。
-- chat-html 下载必须先获得用户确认，仅接受公网 HTTP/HTTPS 或受限 `data:image`；其他网络识别、OCR、ASR 或视觉理解由外部能力按其自身权限声明执行。
+- chat-html 下载必须先获得用户确认，仅接受公网 HTTP/HTTPS 或受限 `data:image`；主机名须经 DNS 解析且全部指向公网地址，连接固定到已校验 IP（TLS SNI 与 Host 仍用原主机名），重定向目标同样复核；其他网络识别、OCR、ASR 或视觉理解由外部能力按其自身权限声明执行。
 
 ## 快速开始
 

@@ -66,7 +66,7 @@ Markdown 只展示 `display_code`，不展示后台 `material_id`。
 ```markdown
 # <文件夹名称>
 
-> 本文件由 AI 自动生成（legal-material-organizer Skill v0.16.0）。内容用于快速了解和整理材料，请以原始文件为准；AI 归纳不构成法律意见。
+> 本文件由 AI 自动生成（legal-material-organizer Skill v0.16.1）。内容用于快速了解和整理材料，请以原始文件为准；AI 归纳不构成法律意见。
 
 ## A001 <原始文件名>
 
@@ -99,7 +99,7 @@ Markdown 只展示 `display_code`，不展示后台 `material_id`。
 {
   "generated_at": "<ISO-8601>",
   "skill": "legal-material-organizer",
-  "skill_version": "0.16.0",
+  "skill_version": "0.16.1",
   "source": "<源路径>",
   "markdown_output_dir": "<Markdown 输出目录>",
   "archive_dir": "<元数据归档目录>",
