@@ -2,8 +2,8 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.14.0"
-description: PDF 处理工具，支持扫描件预处理、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
+version: "2.15.0"
+description: PDF 处理工具，支持扫描件预处理、拍照件转规整 PDF、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
 
@@ -11,13 +11,14 @@ license: MIT
 
 ## 定位
 
-本技能是 PDF 处理的统一入口，覆盖扫描件预处理、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩。优先保护原始文件，按用户意图选择最短可用流程。
+本技能是 PDF 处理的统一入口，覆盖扫描件预处理、拍照件转规整 PDF、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩。优先保护原始文件，按用户意图选择最短可用流程。
 
 核心职责：
 
 1. 扫描件一键处理：解密 → 页面预处理 → 合并输出 → OCR 双层 PDF。
-2. 单项处理：只预处理、只 OCR、只压缩、只解密、只去水印、只合并、只加页码。
-3. 用户没有特别说明时，扫描件走默认统一入口；明确提出单项需求时只执行对应工具。
+2. 拍照件规整：EXIF 转正 → 纸面透视校正 → 可靠表框精校 → 去阴影和增强对比度 → A4 PDF。
+3. 单项处理：只预处理、只 OCR、只压缩、只解密、只去水印、只合并、只加页码。
+4. 用户没有特别说明时，扫描 PDF 走默认统一入口；手机拍摄的 JPG/PNG/TIFF/BMP/WebP 先走拍照件规整入口；明确提出单项需求时只执行对应工具。
 
 本技能不做纯文本 PDF 内容编辑、PDF 阅读批注、电子签名、非压缩目的的格式转换。
 
@@ -29,6 +30,7 @@ license: MIT
 - 显式选择外部 API 且输入含姓名、案号、医疗、账号等敏感信息时，先说明将上传完整 PDF 并取得一次当前文件授权；授权不扩展到同目录或其他材料。
 - 电子 PDF 或混合 PDF 默认保留文字、矢量、图片和批注层，跳过栅格化预处理与重压缩；只有用户明确接受层丢失风险时才使用 `--force-raster-preprocess`。
 - “只预处理”“不要 OCR”“只矫正压缩”才使用 `--preprocess-only`。
+- 拍照件检测不到可靠纸面四边时保留整幅图像并在报告中说明；需要强制保留检测比例时使用 `--page-size original`。
 - “合并”“加页码”“解密”“去水印”“压缩”只执行对应工具，不自动进入预处理/OCR。
 - 压缩只有用户明确提出时才单独执行；统一入口中的默认压缩是预处理输出策略的一部分。
 - 水印去除只在用户明确要求时执行，不作为默认自动步骤。
@@ -71,7 +73,25 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
   --preprocess-only --no-compress
 ```
 
-### 3. 只做 OCR 文字层
+### 3. 拍照件转规整 PDF
+
+```bash
+python3 scripts/pdf-photo-normalize.py \
+  --input summons.jpg \
+  --output summons-regular.pdf \
+  --report /tmp/summons-report.json
+```
+
+先按纸边纠正透视，再用可靠表框校正残余的横竖偏斜，合成映射后从原图取样。默认等比放入 A4 页面，保留纸面内容，适度增强文字和纸底的对比度。参数和回退规则见 [`references/pdf-workflows.md`](references/pdf-workflows.md#拍照件规整参数)。需要可搜索文本时，用既有本地 OCR 处理规整件。
+
+```bash
+python3 scripts/pdf-ocr.py \
+  --input summons-regular.pdf \
+  --output summons-searchable.pdf \
+  --backend rapidocr_local --preprocessed
+```
+
+### 4. 只做 OCR 文字层
 
 ```bash
 python3 scripts/pdf-ocr.py --input input.pdf --output output.pdf
@@ -111,9 +131,9 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --archive-results
 
 PaddleOCR-VL-1.5/1.6 也可解析，但只提供块级坐标，文字层定位粒度低于 `PP-OCRv5/v6` / `PP-StructureV3`。本技能不接入 Qwen/GLM 等视觉识别链路，也不宣称云端结果含字符级坐标。
 
-PP-OCRv6 文字模型默认开启 `--actualtext`：文字层生成后再调一次 PP-StructureV3 拿版面，融合出自然段并以 `/ActualText` marked-content 写入 PDF。Paddle 文字层还会用本地几何规则识别正文多行段落，把段内字号向下统一到现有最小安全值，同时保留原行坐标和横向框宽，用于改善 PDF Expert 的段落推断。`--no-actualtext` 可关闭；`--layout-dump FILE` 复用已有版面 dump 避免二次 API 调用。阅读器兼容性见下文第 4 节。
+PP-OCRv6 文字模型默认开启 `--actualtext`：文字层生成后再调一次 PP-StructureV3 拿版面，融合出自然段并以 `/ActualText` marked-content 写入 PDF。Paddle 文字层还会用本地几何规则识别正文多行段落，把段内字号向下统一到现有最小安全值，同时保留原行坐标和横向框宽，用于改善 PDF Expert 的段落推断。`--no-actualtext` 可关闭；`--layout-dump FILE` 复用已有版面 dump 避免二次 API 调用。阅读器兼容性见下文第 5 节。
 
-### 4. 自然段文本与 PDF 复制换行
+### 5. 自然段文本与 PDF 复制换行
 
 双层 PDF 的文字层按行叠层（保护选区坐标精度），直接从 PDF 复制会按物理行断行。解决方式有两条：
 
@@ -259,7 +279,7 @@ python3 scripts/pdf-ocr-benchmark.py \
 ## 交付前检查
 
 1. 确认输出页数与原始文件一致。
-2. 逐页实测并记录页内倾角、方向、清晰度、裁剪边界和文件体积；正文页残余倾角超过 0.3° 时必须矫正或说明原因。
+2. 逐页实测并记录页内倾角、方向、清晰度、裁剪边界和文件体积。正文页残余倾角超过 0.3° 时需要矫正或说明原因。拍照件另检查表格横竖线、细字与印章在导出页面上的可读性。
 3. 对双层 PDF 测试文字搜索、复制和关键词命中。
 4. 向用户说明实际使用的后端、输出文件路径和任何回退情况。
 
