@@ -84,6 +84,29 @@ def _has_document_edges(gray: np.ndarray, quad: np.ndarray) -> bool:
     return supported_edges >= 3
 
 
+def _has_exterior_ink(gray: np.ndarray, quad: np.ndarray) -> bool:
+    """Treat concentrated dark marks beyond the candidate as possible content."""
+    short_edge = min(gray.shape)
+    paper_mask = np.zeros_like(gray)
+    cv2.fillConvexPoly(paper_mask, np.rint(quad).astype(np.int32), 255)
+    edge_padding = 2 * round(0.012 * short_edge) + 1
+    paper_mask = cv2.dilate(
+        paper_mask, np.ones((edge_padding, edge_padding), dtype=np.uint8)
+    )
+
+    background_span = max(15, 2 * round(0.024 * short_edge) + 1)
+    local_contrast = cv2.morphologyEx(
+        gray, cv2.MORPH_BLACKHAT,
+        np.ones((background_span, background_span), dtype=np.uint8),
+    )
+    marks = ((paper_mask == 0) & (gray <= 100) & (local_contrast >= 35)).astype(np.float32)
+    window = max(7, round(0.07 * short_edge))
+    ink_counts = cv2.boxFilter(
+        marks, -1, (window, window), normalize=False, borderType=cv2.BORDER_CONSTANT
+    )
+    return bool(ink_counts.max() >= max(12, 0.045 * window ** 2))
+
+
 def detect_document_quad(image: Image.Image) -> np.ndarray | None:
     """Detect the dominant bright, low-saturation document quadrilateral."""
     image_array = np.asarray(image)
@@ -124,7 +147,7 @@ def detect_document_quad(image: Image.Image) -> np.ndarray | None:
         return None
     _, _, best_points = max(candidates, key=lambda item: item[0])
     gray = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
-    if not _has_document_edges(gray, best_points):
+    if not _has_document_edges(gray, best_points) or _has_exterior_ink(gray, best_points):
         return None
     return best_points / scale
 

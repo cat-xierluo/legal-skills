@@ -195,11 +195,17 @@ class PhotoNormalizeTest(unittest.TestCase):
                 self.assertAlmostEqual(document[0].rect.height * 25.4 / 72, 210, places=3)
 
     def test_ambiguous_paper_edge_preserves_heading_outside_white_panel(self):
+        self._assert_heading_outside_panel_is_preserved((223, 191, 145))
+
+    def test_ink_outside_panel_preserved_on_darker_paper(self):
+        self._assert_heading_outside_panel_is_preserved((145, 115, 85))
+
+    def _assert_heading_outside_panel_is_preserved(self, paper_color):
         with tempfile.TemporaryDirectory() as tempdir:
             source = Path(tempdir) / "photo.png"
             target = Path(tempdir) / "output.pdf"
             report_file = Path(tempdir) / "report.json"
-            photo = Image.new("RGB", (640, 860), (223, 191, 145))
+            photo = Image.new("RGB", (640, 860), paper_color)
             draw = ImageDraw.Draw(photo)
             draw.rectangle((142, 204, 504, 699), fill="white")
             draw.rectangle((174, 124, 336, 133), fill="black")
