@@ -41,7 +41,7 @@ from chat_html_extract import (  # noqa: E402
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SKILL_VERSION = "0.16.0"
+SKILL_VERSION = "0.16.1"
 MAX_ARCHIVE_MEMBERS = 10_000
 MAX_ARCHIVE_EXPANDED_BYTES = 2 * 1024 * 1024 * 1024
 REFERENCE_LEVELS = ("A", "B", "C", "D")

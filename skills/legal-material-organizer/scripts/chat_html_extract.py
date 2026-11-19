@@ -12,6 +12,7 @@ import base64
 import binascii
 import ipaddress
 import re
+import socket
 import time
 import urllib.error
 import urllib.parse
@@ -54,6 +55,15 @@ _TAG_VIDEO_SRC = re.compile(r'<video\b[^>]*\bsrc=["\']([^"\']+)["\']', re.IGNORE
 _TAG_SOURCE_SRC = re.compile(r'<source\b[^>]*\bsrc=["\']([^"\']+)["\']', re.IGNORECASE)
 _DOWNLOAD_TEXT_HINT = ("下载文件", "下载")
 MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
+DNS_RESOLVE_TIMEOUT = 5
+
+
+class HostResolutionError(ValueError):
+    """DNS 解析暂时失败，可重试。"""
+
+
+class UnsafeHostError(ValueError):
+    """主机解析到非公网地址或形式非法，永久拒绝。"""
 
 
 @dataclass
@@ -126,6 +136,64 @@ def _is_public_http_url(url: str) -> bool:
         or address.is_reserved
         or address.is_unspecified
     )
+
+
+def _is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return not (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_reserved
+        or address.is_unspecified
+    )
+
+
+def _resolve_public_addresses(host: str) -> list[str]:
+    """解析主机名并只保留公网地址；解析失败或含非公网地址时拒绝。
+
+    目的：避免白名单域名经 DNS 指向私网/回环地址造成 SSRF 绕过。
+    """
+    normalized = host.rstrip(".").lower()
+    try:
+        literal = ipaddress.ip_address(normalized)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if not _is_public_ip(literal):
+            raise UnsafeHostError(f"host resolves to non-public address: {normalized}")
+        return [str(literal)]
+    try:
+        infos = socket.getaddrinfo(
+            normalized, None, proto=socket.IPPROTO_TCP, flags=socket.AI_ADDRCONFIG
+        )
+    except socket.gaierror as exc:
+        raise HostResolutionError(f"host cannot be resolved: {normalized}") from exc
+    addresses: list[str] = []
+    for info in infos:
+        sockaddr = info[4]
+        if not sockaddr:
+            continue
+        try:
+            address = ipaddress.ip_address(sockaddr[0])
+        except ValueError:
+            continue
+        if not _is_public_ip(address):
+            raise UnsafeHostError(f"host resolves to non-public address: {normalized}")
+        addresses.append(str(address))
+    if not addresses:
+        raise HostResolutionError(f"host has no usable address: {normalized}")
+    return sorted(set(addresses))
+
+
+def _assert_resolved_public_host(url: str) -> str:
+    """校验 URL 主机可解析且全部解析结果为公网地址，返回规范化主机名。"""
+    parsed = urllib.parse.urlsplit(url)
+    host = (parsed.hostname or "").rstrip(".").lower()
+    if not host:
+        raise UnsafeHostError("URL has no host")
+    _resolve_public_addresses(host)
+    return host
 
 
 def _host_matches(host: str, domain: str) -> bool:
@@ -322,6 +390,12 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
         if not _is_public_http_url(newurl):
             raise urllib.error.HTTPError(newurl, 403, "redirect target rejected", headers, fp)
+        try:
+            _assert_resolved_public_host(newurl)
+        except UnsafeHostError as exc:
+            raise urllib.error.HTTPError(newurl, 403, str(exc), headers, fp) from exc
+        except HostResolutionError as exc:
+            raise urllib.error.HTTPError(newurl, 503, str(exc), headers, fp) from exc
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -337,10 +411,11 @@ def _request_url(url: str, timeout: int = 30, max_bytes: int = MAX_DOWNLOAD_BYTE
             raise ValueError(f"resource exceeds {max_bytes} bytes")
         return content
     if not _is_public_http_url(url):
-        raise ValueError("only public HTTP/HTTPS URLs or data:image are allowed")
+        raise UnsafeHostError("only public HTTP/HTTPS URLs or data:image are allowed")
+    _assert_resolved_public_host(url)
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "legal-material-organizer/0.16.0"},
+        headers={"User-Agent": "legal-material-organizer/0.16.1"},
     )
     opener = urllib.request.build_opener(_SafeRedirectHandler())
     with opener.open(req, timeout=timeout) as resp:
@@ -422,13 +497,15 @@ def download_resource(
                     error=last_err,
                     attempts=attempt,
                 )
-        except ValueError as exc:
+        except UnsafeHostError as exc:
             return DownloadResult(
                 url=url,
                 status="access_denied",
                 error=str(exc),
                 attempts=attempt,
             )
+        except HostResolutionError as exc:
+            last_err = f"{type(exc).__name__}: {exc}"
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last_err = f"{type(exc).__name__}: {exc}"
         except Exception as exc:  # noqa: BLE001 — 防御性兜底，不让 bad input kill pipeline

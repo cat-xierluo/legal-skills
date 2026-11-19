@@ -4,11 +4,15 @@
 
 from __future__ import annotations
 
+import socket
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
+import chat_html_extract
 from chat_html_extract import (
     recognize_chat_html,
     extract_external_resources,
@@ -33,6 +37,55 @@ class RecognizeChatHtmlTest(unittest.TestCase):
     def test_chatlog_keyword_recognized(self) -> None:
         html = "<html><body>chatlog 12345</body></html>"
         self.assertTrue(recognize_chat_html(html))
+
+
+class DnsBindingTest(unittest.TestCase):
+    """DNS 解析结果必须为公网地址，防止白名单域名指向私网造成 SSRF 绕过。"""
+
+    def test_private_dns_answer_is_rejected(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))],
+        ):
+            with self.assertRaises(ValueError):
+                chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+
+    def test_unresolvable_host_is_rejected(self) -> None:
+        with patch("chat_html_extract.socket.getaddrinfo", side_effect=socket.gaierror("no dns")):
+            with self.assertRaises(ValueError):
+                chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+
+    def test_public_dns_answer_is_accepted(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))],
+        ):
+            host = chat_html_extract._assert_resolved_public_host("https://files.cubox.pro/a.pdf")
+        self.assertEqual(host, "files.cubox.pro")
+
+    def test_request_rejects_host_resolving_to_private_address(self) -> None:
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 0))],
+        ):
+            with self.assertRaises(ValueError):
+                chat_html_extract._request_url("https://files.cubox.pro/a.pdf")
+
+    def test_redirect_to_private_host_is_rejected(self) -> None:
+        handler = chat_html_extract._SafeRedirectHandler()
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.10", 0))],
+        ):
+            with self.assertRaises(urllib.error.HTTPError):
+                handler.redirect_request(
+                    urllib.request.Request("https://files.cubox.pro/a.pdf"),
+                    None,
+                    302,
+                    "Found",
+                    {},
+                    "http://files.cubox.pro/redirect.pdf",
+                )
 
 
 class ExtractResourcesTest(unittest.TestCase):
