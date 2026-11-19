@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-19 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.5.0（源码） | 审定方案可选设计版 HTML，内置服务蓝图、决策策略和 A4 打印样式。 |
 | 2026-11-19 | 新上传 | [legal-material-organizer](skills/legal-material-organizer/) | v0.16.1（源码） | 混合案件材料清点、编号、处理分流和整理计划入口加入「法律材料与证据处理」套件。聊天附件下载已绑定经校验的 IP，源码待发布。 |
 | 2026-11-19 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.0（源码） | 新增单项争点备忘录，聚焦决定性事实、已核法源、相反论证与结论的使用边界。 |
 | 2026-11-19 | 更新 | [pdf-processor](skills/pdf-processor/) | v2.15.0（源码） | 新增拍照件规整，可校正纸面透视和表框，按纸张规格生成 PDF。源码待发布。 |
@@ -41,7 +42,6 @@
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
-| 2026-11-01 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.0（源码） | 补网关故障隔离、MiniMax 排障及宿主内存审计边界；只读巡检与有界连续采样，提供本地稳定性缓解与上游复现入口。 |
 
 </details>
 
@@ -273,11 +273,11 @@
 <tr>
 <td><a href="skills/legal-proposal-generator/"><strong>legal-proposal-generator</strong></a></td>
 <td>通用·文书</td>
-<td style="word-break:break-word">根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告、结案汇报等）。采用模块化架构自动匹配场景，生成接近定稿质量的专业文档</td>
+<td style="word-break:break-word">根据案件材料或沟通记录生成诉讼方案、咨询报告、非诉方案、建议书、沟通报告和结案汇报。对外方案支持可编辑 Word，设计版 HTML 内置服务蓝图与决策策略模板</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.4.1</td>
+<td style="text-align:center">v0.5.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-proposal-generator-0.4.1.zip">已发布 v0.4.1</a></td>
-<td>所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td>
+<td>源码 v0.5.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td>
 </tr>
 <tr>
 <td><a href="skills/legal-client-brief/"><strong>legal-client-brief</strong></a></td>

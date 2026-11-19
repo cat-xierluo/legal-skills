@@ -30,7 +30,7 @@
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索命题并核验法规、正反类案和文内法律依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/yuandian-law-search-1.10.1.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵和庭审路线图 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-visualization-0.8.2.zip) |
 | [elements-complaint-generator](../../skills/elements-complaint-generator/) | 把已写好的常规起诉状或答辩材料转成官方要素式示范文本结构 | [已发布 v0.16.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/elements-complaint-generator-0.16.1.zip) |
-| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 把案件判断转成诉讼方案、建议书、咨询报告、结案汇报和客户沟通材料 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-proposal-generator-0.4.1.zip) |
+| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 把案件判断转成诉讼方案、建议书、咨询报告、结案汇报和客户沟通材料，可选设计版 HTML；源码 v0.5.0 待发布 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-proposal-generator-0.4.1.zip) |
 | [md2word](../../skills/md2word/) | 把审定后的 Markdown 转成正式 Word 文档 | [已发布 v1.3.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/md2word-1.3.8.zip) |
 
 ## 工作流

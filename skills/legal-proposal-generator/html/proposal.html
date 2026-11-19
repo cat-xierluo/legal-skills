@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+  <title>$title</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #fffdf9;
+      --canvas: #eeebe5;
+      --ink: #292623;
+      --muted: #665f56;
+      --accent: #69432d;
+      --rule: #d8cec0;
+      --wash: #f4eee4;
+      --heading: "Songti SC", "Noto Serif CJK SC", "Noto Serif SC", SimSun, serif;
+      --body: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { background: var(--canvas); }
+    body {
+      max-width: 76rem;
+      margin: 2.5rem auto;
+      background: var(--paper);
+      color: var(--ink);
+      font: 1rem/1.82 var(--body);
+      overflow-wrap: anywhere;
+    }
+    a { color: var(--accent); text-underline-offset: .22em; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .cover, main { padding-inline: clamp(1.35rem, 6vw, 6rem); }
+    .cover {
+      position: relative;
+      border-top: .42rem solid var(--accent);
+      border-bottom: 1px solid var(--rule);
+      padding-block: clamp(1.8rem, 5vw, 4rem);
+      background: linear-gradient(135deg, var(--paper) 54%, var(--wash));
+    }
+    .firm { margin: 0; color: var(--accent); font-weight: 650; letter-spacing: .1em; }
+    .cover-content {
+      display: grid;
+      grid-template-columns: minmax(0, 2.5fr) minmax(0, 1fr);
+      gap: clamp(1.5rem, 5vw, 5rem);
+      align-items: end;
+      margin-top: clamp(2rem, 8vw, 7rem);
+    }
+    h1, article h2, article h3 { font-family: var(--heading); }
+    h1 {
+      max-width: 18ch;
+      margin: 0;
+      color: var(--accent);
+      font-size: clamp(2.3rem, 5.5vw, 4.8rem);
+      line-height: 1.17;
+      text-wrap: balance;
+    }
+    .subtitle { color: var(--muted); margin: 1rem 0 0; font-size: 1.1rem; }
+    .cover dl { margin: 0; }
+    .cover dl div { padding-block: .6rem; border-top: 1px solid var(--rule); }
+    .cover dt { color: var(--muted); font-size: .82rem; }
+    .cover dd { margin: 0; font-weight: 550; }
+    main { display: grid; gap: clamp(2rem, 5vw, 4rem); padding-block: clamp(2rem, 6vw, 5rem); }
+    main:has(nav) { grid-template-columns: minmax(9rem, 1fr) minmax(0, 3fr); }
+    .contents { align-self: start; position: sticky; top: 1.25rem; max-height: calc(100vh - 2.5rem); overflow-y: auto; }
+    .contents h2 {
+      margin: 0 0 .4rem;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: .65rem;
+      color: var(--muted);
+      font: 650 .82rem/1.5 var(--body);
+      letter-spacing: .12em;
+    }
+    .contents ol { list-style: none; margin: 0; padding: 0; }
+    .contents a { display: block; padding: .45rem 0; text-decoration: none; }
+    .contents a:hover { text-decoration: underline; }
+    article { min-width: 0; }
+    article h2 {
+      margin: 2.6em 0 .8em;
+      padding-top: .55em;
+      border-top: 1px solid var(--rule);
+      color: var(--accent);
+      font-size: clamp(1.45rem, 3vw, 2rem);
+      line-height: 1.35;
+      scroll-margin-top: 1.25rem;
+    }
+    article h2:first-child { margin-top: 0; }
+    article h3 { margin-top: 1.7em; font-size: 1.22rem; line-height: 1.45; }
+    p, ul, ol, blockquote, .table-scroll, pre, hr { margin-block: 0 1.15em; }
+    blockquote { margin-inline: 0; padding: .9rem 1.1rem; border-inline-start: .22rem solid var(--accent); background: var(--wash); }
+    blockquote > :last-child { margin-bottom: 0; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; line-height: 1.55; }
+    th, td { padding: .65rem .8rem; border-block-end: 1px solid var(--rule); text-align: start; vertical-align: top; }
+    th { background: var(--wash); color: var(--accent); }
+    .scene-service-blueprint {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+      gap: .75rem;
+      padding: 0;
+      list-style-position: inside;
+    }
+    .scene-service-blueprint > li {
+      padding: .85rem 1rem;
+      border-block-start: 2px solid var(--accent);
+      background: var(--wash);
+    }
+    .scene-service-blueprint > li::marker { color: var(--accent); font-weight: 650; }
+    .scene-service-blueprint > li > :last-child { margin-bottom: 0; }
+    .scene-decision-strategy th { border-top: 2px solid var(--accent); }
+    .scene-decision-strategy th:nth-child(2), .scene-decision-strategy td:nth-child(2) {
+      border-inline: 1px solid var(--rule);
+      color: var(--accent);
+      font-weight: 650;
+    }
+    .scene-decision-strategy td:last-child { color: var(--muted); }
+    img { max-width: 100%; height: auto; display: block; margin: .8rem auto; }
+    pre { white-space: pre-wrap; }
+    hr { border: 0; border-top: 1px solid var(--rule); }
+    @media (max-width: 48rem) {
+      body { margin: 0; }
+      .cover-content, main:has(nav) { grid-template-columns: minmax(0, 1fr); }
+      .contents { position: static; max-height: none; overflow: visible; }
+      th, td { padding: .5rem; }
+    }
+    @media (max-width: 34rem) {
+      .scene-service-blueprint { grid-template-columns: minmax(0, 1fr); }
+    }
+    @page { size: A4; margin: 17mm; }
+    @media print {
+      html, body { background: white; }
+      body { max-width: none; margin: 0; font-size: 11pt; }
+      .cover, main { padding-inline: 0; }
+      .cover { min-height: 245mm; padding-block: 15mm; background: none; break-after: page; }
+      .cover-content { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12mm; margin-top: 40mm; }
+      h1 { font-size: 32pt; }
+      main, main:has(nav) { display: block; padding-block: 0; }
+      .contents { margin-bottom: 8mm; position: static; max-height: none; overflow: visible; }
+      .contents a { display: inline; }
+      article h2 { font-size: 16pt; margin-top: 1.25em; }
+      article h2, article h3, article h4, article h5, article h6 { break-after: avoid; }
+      p, li { orphans: 2; widows: 2; }
+      .table-scroll { overflow: visible; }
+      .scene-service-blueprint { display: block; }
+      .scene-service-blueprint > li { margin-block-end: .45rem; break-inside: avoid; }
+      thead { display: table-header-group; }
+      tr, img { break-inside: avoid; }
+      img { max-height: 210mm; object-fit: contain; }
+    }
+  </style>
+</head>
+<body>
+  <header class="cover">
+    <p class="firm">$law_firm</p>
+    <div class="cover-content">
+      <div>
+        <h1>$heading</h1>
+        $subtitle
+      </div>
+      <dl>$cover_details</dl>
+    </div>
+  </header>
+  <main>
+    $navigation
+    <article>
+      $article
+    </article>
+  </main>
+</body>
+</html>

@@ -2,9 +2,9 @@
 name: legal-proposal-generator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: 0.4.1
+version: 0.5.0
 license: CC-BY-NC
-description: 根据案件材料或沟通记录生成诉讼方案、非诉方案、建议书、咨询报告、结案汇报等法律服务文档；对外方案可直接生成带设计版式、可编辑的 Word（C/D/E/F 四款封面，可选团队与律所附页）。用户需要法律服务文档或设计版 Word 方案时使用。
+description: 根据案件材料或沟通记录生成诉讼方案、非诉方案、建议书、咨询报告、结案汇报等法律服务文档。对外方案可生成可编辑的设计版 Word，或按审定源稿生成带目录和打印样式的 HTML。用户需要法律服务文档或设计版方案时使用。
 disable-model-invocation: true
 ---
 
@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 从案件材料或沟通记录生成专业法律服务文档。支持多种文档类型，采用模块化架构自动匹配场景。
 
-对外服务方案的主交付形态为**逐案 Markdown 源稿 + 可编辑设计版 Word**。需要不再修改、直接发送的 HTML/PDF 时，另用 `legal-proposal-designer` 渲染同一份内容；该 Skill 的其他设计化能力继续独立演进。
+对外服务方案默认以**逐案 Markdown 源稿 + 可编辑设计版 Word**交付。浏览器阅读和打印可选[设计版 HTML](references/editorial-html.md)。需要复杂跨栏、逐页定版或特定品牌版式时，可将同一份审定源稿交给已安装的 `legal-proposal-designer` 渲染。
 
 **核心原则**：
 
@@ -139,6 +139,8 @@ disable-model-invocation: true
 
 ## 工作流程
 
+已有审定源稿且只需要排版时，直接进入步骤 4。
+
 ### 步骤 1: 分析输入并确定文档类型
 
 文档类型的选择应综合考虑**案件性质**（诉讼 vs 非诉）、**客户阶段**和**文档目的**。
@@ -217,6 +219,8 @@ disable-model-invocation: true
 
 先保存 Markdown 源稿，文件名格式为文档类型+案件/项目名称。诉讼服务方案、非诉服务方案和法律服务建议书如需向客户交付，默认再生成设计版 Word；用户只要 Markdown 时仅交付源稿。其他文档类型按用户指定格式处理。
 
+用户选用设计版 HTML 时，按[设计版 HTML 使用说明](references/editorial-html.md)选用连续阅读、服务蓝图或决策策略版式。基于同一份审定源稿渲染，复核目录、正文、附录和打印效果后交付。
+
 Word 源稿须在顶部提供 `law_firm`、`client`、`lawyer`、`date`，首个 `#` 为封面标题；也可在命令行补充这些字段。正文可用章/节标题、段落、简单列表、表格、引文和加粗。**不要在 Word 源稿中重复插入 team-config 的 HTML 团队页**。先核实内容和团队选择，再渲染；排版器不负责补全事实、法条或报价。运行方式、JSON 内容契约、模板 token 快速通道及跨引擎验收见 [Word 管线说明](word/README.md)。
 
 **生成设计版 Word 的依赖**：Node.js ≥ 22、`docx` 包。首次使用执行 `npm install -g docx`；在本 Skill 根目录运行：
@@ -228,6 +232,10 @@ NODE_PATH=$(npm root -g) node word/render.js \
 
 用户要包含承办团队、相关裁判文书、律所简介和荣誉的完整版时，增加 `--full --lawyers 姓名1,姓名2`；渲染器默认从本地 `config/team-config.md` 读取，经 `--team-config` 可覆盖。未选主办律师时先根据已提供材料确定，不能随意把配置中所有人列为承办团队。交付前检查所有引用图片已脱敏；逐页检查 DOCX 及导出的 PDF，并在实际 WPS、Microsoft Word 中核对封面和分页。页数随内容变化，不把既有案例的 6/10 页当作固定规范。
 
-Word 的正文页码从 1 起算，后部附页用页名作页脚；HTML/PDF 的“当前页 / 正文总页数”在 Word 中只保留可更新的当前页。具体版式对应关系和限制见 [Word 管线说明](word/README.md)。
+Word 的正文页码从 1 起算，后部附页用页名作页脚。具体版式和页码限制见 [Word 管线说明](word/README.md)。
 
 少量变量填充的 `word/fill.py` 需 `python-docx`，首次使用执行 `python3 -m pip install python-docx`；它只用于固定模板，不代替逐案正文生成。
+
+## 所需权限
+
+设计版 HTML 本地读取指定的 Markdown 源稿及其中引用的同目录图件，并写入指定的新文件。渲染过程无需网络。
