@@ -9,6 +9,7 @@ from urllib.parse import unquote, urlsplit
 
 COVER_FIELDS = {"client": "委托方", "lawyer": "承办律师", "date": "编制日期"}
 IMAGE_SIGNATURES = {".png": b"\x89PNG\r\n\x1a\n", ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff"}
+SCENE_BLOCKS = {"service_blueprint": "ordered_list_open", "decision_strategy": "table_open"}
 
 
 def read_proposal(source):
@@ -85,6 +86,37 @@ def heading_text(heading):
     )
 
 
+def apply_scene(tokens, chapters, metadata):
+    scene = metadata.get("html_scene")
+    section = metadata.get("html_section")
+    if scene is None and section is None:
+        return
+    if scene not in SCENE_BLOCKS or not section:
+        raise ValueError("请同时填写支持的 html_scene 与准确的 html_section 章标题")
+    matching = [index for index in chapters if heading_text(tokens[index + 1]) == section]
+    if len(matching) != 1:
+        raise ValueError("html_section 必须匹配唯一的二级章标题")
+    start = matching[0]
+    end = next((index for index in chapters if index > start), len(tokens))
+    section_tokens = tokens[start:end]
+    blocks = [
+        index for index, token in enumerate(section_tokens)
+        if token.level == 0 and token.type == SCENE_BLOCKS[scene]
+    ]
+    if len(blocks) != 1:
+        required = "有序列表" if scene == "service_blueprint" else "表格"
+        raise ValueError(f"指定章节须有且仅有一个顶层{required}")
+    block = blocks[0]
+    if scene == "decision_strategy":
+        table = section_tokens[block:]
+        close = next(index for index, token in enumerate(table) if token.type == "table_close")
+        table = table[:close]
+        headers = sum(token.type == "th_open" for token in table)
+        if headers != 3 or not any(token.type == "tbody_open" for token in table):
+            raise ValueError("决策策略表格须有三列及至少一条决策记录")
+    section_tokens[block].attrJoin("class", "scene-" + scene.replace("_", "-"))
+
+
 def render_proposal(source):
     metadata, body = read_proposal(source)
     markdown = create_parser()
@@ -100,8 +132,10 @@ def render_proposal(source):
         raise ValueError("封面 title 与正文一级标题不一致")
 
     contents = []
+    chapters = []
     for index, token in enumerate(tokens):
         if token.type == "heading_open" and token.tag == "h2" and token.level == 0:
+            chapters.append(index)
             chapter = f"chapter-{len(contents) + 1}"
             token.attrSet("id", chapter)
             label = escape(heading_text(tokens[index + 1]))
@@ -114,6 +148,7 @@ def render_proposal(source):
                 if url.scheme not in ("http", "https") or not url.hostname:
                     raise ValueError("正文链接须为可独立打开的 HTTP(S) 来源")
 
+    apply_scene(tokens, chapters, metadata)
     cover_details = "".join(
         f"<div><dt>{label}</dt><dd>{escape(metadata[key])}</dd></div>"
         for key, label in COVER_FIELDS.items()
@@ -121,7 +156,8 @@ def render_proposal(source):
     subtitle = metadata.get("subtitle", "")
     heading = markdown.renderer.renderInline(tokens[1].children, markdown.options, {})
     article = markdown.renderer.render(tokens[3:], markdown.options, {})
-    article = article.replace("<table>", '<div class="table-scroll"><table>').replace("</table>", "</table></div>")
+    article = re.sub(r"<table(?=[ >])", '<div class="table-scroll"><table', article)
+    article = article.replace("</table>", "</table></div>")
     navigation = ""
     if contents:
         navigation = '<nav class="contents" aria-label="目录"><h2>目录</h2><ol>' + "".join(contents) + "</ol></nav>"

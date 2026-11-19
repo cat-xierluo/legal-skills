@@ -94,6 +94,27 @@
     table { width: 100%; border-collapse: collapse; line-height: 1.55; }
     th, td { padding: .65rem .8rem; border-block-end: 1px solid var(--rule); text-align: start; vertical-align: top; }
     th { background: var(--wash); color: var(--accent); }
+    .scene-service-blueprint {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+      gap: .75rem;
+      padding: 0;
+      list-style-position: inside;
+    }
+    .scene-service-blueprint > li {
+      padding: .85rem 1rem;
+      border-block-start: 2px solid var(--accent);
+      background: var(--wash);
+    }
+    .scene-service-blueprint > li::marker { color: var(--accent); font-weight: 650; }
+    .scene-service-blueprint > li > :last-child { margin-bottom: 0; }
+    .scene-decision-strategy th { border-top: 2px solid var(--accent); }
+    .scene-decision-strategy th:nth-child(2), .scene-decision-strategy td:nth-child(2) {
+      border-inline: 1px solid var(--rule);
+      color: var(--accent);
+      font-weight: 650;
+    }
+    .scene-decision-strategy td:last-child { color: var(--muted); }
     img { max-width: 100%; height: auto; display: block; margin: .8rem auto; }
     pre { white-space: pre-wrap; }
     hr { border: 0; border-top: 1px solid var(--rule); }
@@ -102,6 +123,9 @@
       .cover-content, main:has(nav) { grid-template-columns: minmax(0, 1fr); }
       .contents { position: static; max-height: none; overflow: visible; }
       th, td { padding: .5rem; }
+    }
+    @media (max-width: 34rem) {
+      .scene-service-blueprint { grid-template-columns: minmax(0, 1fr); }
     }
     @page { size: A4; margin: 17mm; }
     @media print {
@@ -118,6 +142,8 @@
       article h2, article h3, article h4, article h5, article h6 { break-after: avoid; }
       p, li { orphans: 2; widows: 2; }
       .table-scroll { overflow: visible; }
+      .scene-service-blueprint { display: block; }
+      .scene-service-blueprint > li { margin-block-end: .45rem; break-inside: avoid; }
       thead { display: table-header-group; }
       tr, img { break-inside: avoid; }
       img { max-height: 210mm; object-fit: contain; }

@@ -219,7 +219,7 @@ disable-model-invocation: true
 
 先保存 Markdown 源稿，文件名格式为文档类型+案件/项目名称。诉讼服务方案、非诉服务方案和法律服务建议书如需向客户交付，默认再生成设计版 Word；用户只要 Markdown 时仅交付源稿。其他文档类型按用户指定格式处理。
 
-用户选用设计版 HTML 时，按[设计版 HTML 使用说明](references/editorial-html.md)渲染同一份审定源稿，复核目录、正文、附录和打印效果后交付。
+用户选用设计版 HTML 时，按[设计版 HTML 使用说明](references/editorial-html.md)选用连续阅读、服务蓝图或决策策略版式。基于同一份审定源稿渲染，复核目录、正文、附录和打印效果后交付。
 
 Word 源稿须在顶部提供 `law_firm`、`client`、`lawyer`、`date`，首个 `#` 为封面标题；也可在命令行补充这些字段。正文可用章/节标题、段落、简单列表、表格、引文和加粗。**不要在 Word 源稿中重复插入 team-config 的 HTML 团队页**。先核实内容和团队选择，再渲染；排版器不负责补全事实、法条或报价。运行方式、JSON 内容契约、模板 token 快速通道及跨引擎验收见 [Word 管线说明](word/README.md)。
 
