@@ -536,7 +536,10 @@ def normalize_photo_pdf(
     swaps_axes = clockwise in (90, 270)
     oriented_size = corrected_size[::-1] if swaps_axes else corrected_size
     final_size, resolved_page_size = resolve_page_size(oriented_size, page_size, dpi)
-    content_size = _contained_size(oriented_size, final_size)
+    if quad_meta["quad_detected"] and resolved_page_size in ("a4", "auto_a4"):
+        content_size = final_size
+    else:
+        content_size = _contained_size(oriented_size, final_size)
     render_size = content_size[::-1] if swaps_axes else content_size
     composed = _resize_matrix(refined_preview_size, render_size) @ table_matrix
     raster = _warp_image(photo, composed @ preview_matrix, render_size)
@@ -620,7 +623,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--page-size",
         choices=["auto", "a4", "letter", "original"],
         default=DEFAULT_PAGE_SIZE,
-        help="默认 A4，按照片方向等比居中；auto 按纸面比例选尺寸；original 保留纸面比例",
+        help="默认 A4，可靠纸面铺满页框。auto 按纸面比例选尺寸，original 保留纸面比例",
     )
     parser.add_argument(
         "--rotate",

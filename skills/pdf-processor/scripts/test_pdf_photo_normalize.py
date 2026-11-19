@@ -177,7 +177,42 @@ class PhotoNormalizeTest(unittest.TestCase):
         self.assertEqual(narrow_size, (2480, 3508))
         self.assertEqual(narrow_policy, "auto_a4")
 
-    def test_default_pdf_canvas_is_exact_a4_with_undistorted_photo(self):
+    def test_detected_paper_fills_a4_and_keeps_corner_ink(self):
+        photo = Image.new("RGB", (860, 1040), "steelblue")
+        draw = ImageDraw.Draw(photo)
+        draw.rectangle((110, 100, 749, 939), fill="white")
+        for left, top in ((130, 120), (704, 120), (130, 894), (704, 894)):
+            draw.rectangle((left, top, left + 25, top + 25), fill="black")
+
+        dpi = 90
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "photo.png"
+            photo.save(source)
+            for rotation, options, dimensions_mm in (
+                ("0", {}, (210, 297)),
+                ("90", {"page_size": "auto"}, (297, 210)),
+            ):
+                with self.subTest(rotation=rotation):
+                    target = Path(tempdir) / f"output-{rotation}.pdf"
+                    report = photo_normalize.normalize_photo_pdf(
+                        source, target, dpi=dpi, rotation=rotation, **options,
+                    )
+                    self.assertTrue(report["quad"]["quad_detected"])
+                    self.assertEqual(report["content_size"], report["output_size"])
+                    with fitz.open(target) as document:
+                        self.assertAlmostEqual(document[0].rect.width * 25.4 / 72, dimensions_mm[0], places=3)
+                        self.assertAlmostEqual(document[0].rect.height * 25.4 / 72, dimensions_mm[1], places=3)
+                        raster = document[0].get_pixmap(dpi=dpi, colorspace=fitz.csGRAY)
+                        pixels = np.frombuffer(raster.samples, dtype=np.uint8).reshape(
+                            raster.height, raster.width,
+                        )
+                    corner_height = round(raster.height * 0.05)
+                    corner_width = round(raster.width * 0.05)
+                    for rows in (slice(corner_height), slice(-corner_height, None)):
+                        for columns in (slice(corner_width), slice(-corner_width, None)):
+                            self.assertGreater(np.count_nonzero(pixels[rows, columns] < 90), 30)
+
+    def test_default_pdf_canvas_is_exact_a4_without_detected_paper(self):
         with tempfile.TemporaryDirectory() as tempdir:
             source = Path(tempdir) / "wide.png"
             target = Path(tempdir) / "output.pdf"
