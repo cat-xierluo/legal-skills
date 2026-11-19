@@ -67,6 +67,51 @@ def make_overlapping_document_photo() -> Image.Image:
     return image
 
 
+def make_overlapping_document_photo_with_secondary_stamp() -> Image.Image:
+    image = make_overlapping_document_photo()
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((95, 220, 255, 380), outline=(190, 25, 25), width=14)
+    return image
+
+
+def make_document_photo_with_bottom_text() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "steelblue")
+    draw = ImageDraw.Draw(image)
+    for top in range(150, 720, 45):
+        draw.rectangle((410, top, 880, top + 18), fill="black")
+    draw.rectangle((410, 780, 880, 790), fill="black")
+    return image
+
+
+def make_document_photo_with_ground_band() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "steelblue")
+    draw = ImageDraw.Draw(image)
+    for top in range(150, 620, 45):
+        draw.rectangle((410, top, 880, top + 18), fill="black")
+    draw.rectangle((0, 770, 1200, 800), fill="black")
+    return image
+
+
+def make_document_photo_with_wide_bottom_text() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "steelblue")
+    draw = ImageDraw.Draw(image)
+    for top in range(150, 620, 45):
+        draw.rectangle((240, top, 970, top + 18), fill="black")
+    draw.rectangle((240, 780, 970, 793), fill="black")
+    return image
+
+
+def make_document_photo_with_stamp_near_overlapping_page() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "steelblue")
+    draw = ImageDraw.Draw(image)
+    for top in range(150, 620, 50):
+        draw.rectangle((150, top, 800, top + 20), fill="black")
+    for top in (120, 170):
+        draw.rectangle((900, top, 1100, top + 20), fill="black")
+    draw.ellipse((820, 580, 980, 740), outline=(185, 35, 35), width=14)
+    return image
+
+
 def make_partial_document_photo_with_stamp() -> Image.Image:
     image = make_partial_document_photo()
     draw = ImageDraw.Draw(image)
@@ -78,6 +123,13 @@ def make_partial_document_photo_with_distant_stamp() -> Image.Image:
     image = make_partial_document_photo()
     draw = ImageDraw.Draw(image)
     draw.ellipse((80, 80, 250, 250), outline=(185, 30, 30), width=13)
+    return image
+
+
+def make_partial_document_photo_with_faded_stamp() -> Image.Image:
+    image = make_partial_document_photo()
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((80, 80, 250, 250), outline=(162, 72, 72), width=14)
     return image
 
 
@@ -123,6 +175,50 @@ class PhotoNormalizeTest(unittest.TestCase):
         self.assertGreaterEqual(left, 550)
         self.assertLessEqual(right, 1000)
 
+    def test_content_subject_excludes_stamp_on_overlapping_page(self):
+        subject = photo_normalize.detect_content_subject(
+            make_overlapping_document_photo_with_secondary_stamp()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertEqual(subject["artifact_component_count"], 0)
+        self.assertGreaterEqual(subject["bbox"][0], 550)
+
+    def test_content_subject_keeps_text_at_the_frame_bottom(self):
+        subject = photo_normalize.detect_content_subject(
+            make_document_photo_with_bottom_text()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertEqual(subject["component_count"], 14)
+        self.assertGreaterEqual(subject["bbox"][3], 780)
+
+    def test_content_subject_drops_wide_ground_band(self):
+        subject = photo_normalize.detect_content_subject(
+            make_document_photo_with_ground_band()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertGreaterEqual(subject["bbox"][3], 760)
+        self.assertLessEqual(subject["bbox"][3], 790)
+
+    def test_content_subject_keeps_dense_wide_text_at_the_frame_bottom(self):
+        subject = photo_normalize.detect_content_subject(
+            make_document_photo_with_wide_bottom_text()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertGreaterEqual(subject["bbox"][3], 793)
+
+    def test_content_subject_keeps_primary_stamp_near_overlapping_page(self):
+        subject = photo_normalize.detect_content_subject(
+            make_document_photo_with_stamp_near_overlapping_page()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertGreaterEqual(subject["artifact_component_count"], 1)
+        self.assertGreaterEqual(subject["bbox"][2], 970)
+
     def test_content_subject_requires_multiple_lines(self):
         image = Image.new("RGB", (640, 860), (145, 115, 85))
         draw = ImageDraw.Draw(image)
@@ -144,6 +240,15 @@ class PhotoNormalizeTest(unittest.TestCase):
     def test_content_subject_keeps_distant_colored_stamp(self):
         subject = photo_normalize.detect_content_subject(
             make_partial_document_photo_with_distant_stamp()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertGreaterEqual(subject["artifact_component_count"], 1)
+        self.assertLessEqual(subject["bbox"][0], 80)
+
+    def test_content_subject_keeps_faded_stamp_that_creates_secondary_components(self):
+        subject = photo_normalize.detect_content_subject(
+            make_partial_document_photo_with_faded_stamp()
         )
 
         self.assertIsNotNone(subject)
@@ -172,7 +277,7 @@ class PhotoNormalizeTest(unittest.TestCase):
             content_width, content_height = metadata["content_size"]
             self.assertLessEqual(content_width, metadata["output_size"][0])
             self.assertLessEqual(content_height, metadata["output_size"][1])
-            self.assertAlmostEqual(content_width / content_height, 554 / 405, delta=0.03)
+            self.assertAlmostEqual(content_width / content_height, 555 / 382, delta=0.01)
             saved_metadata = json.loads(report_target.read_text(encoding="utf-8"))
             self.assertEqual(saved_metadata["quad"]["source"], "content_subject")
             with fitz.open(target) as document:

@@ -174,6 +174,16 @@ def _text_line_components(image: Image.Image) -> list[dict[str, int]]:
             and 2 <= component_height <= height * 0.08
             and area >= 30
         ):
+            if _is_ground_block(
+                left,
+                top,
+                component_width,
+                component_height,
+                area,
+                width,
+                height,
+            ):
+                continue
             components.append({
                 "index": index,
                 "left": left,
@@ -183,6 +193,52 @@ def _text_line_components(image: Image.Image) -> list[dict[str, int]]:
                 "area": area,
             })
     return components
+
+
+def _is_ground_block(
+    left: int,
+    top: int,
+    component_width: int,
+    component_height: int,
+    area: int,
+    width: int,
+    height: int,
+) -> bool:
+    """Spot the wide dark desk slab that reaches the bottom of the frame."""
+    if top + component_height < height * 0.97:
+        return False
+    if component_width < width * 0.6:
+        return False
+    if component_height > height * 0.08:
+        return False
+    density = area / max(component_width * component_height, 1)
+    return 0.25 <= density <= 0.55
+
+
+def _paper_bottom_edge(
+    gray: np.ndarray,
+    column_left: int,
+    column_right: int,
+    start_row: int,
+    paper_level: float,
+) -> int | None:
+    """Find where the bright paper surface ends and the darker desk begins."""
+    height = gray.shape[0]
+    column = gray[:, max(0, column_left):max(column_left + 1, column_right)]
+    if column.size == 0:
+        return None
+    threshold = paper_level * 0.45
+    previous = paper_level
+    for row in range(min(start_row, height - 1), height):
+        current = float(np.median(column[row]))
+        if current < threshold and previous >= threshold:
+            if all(
+                float(np.median(column[index])) < threshold
+                for index in range(row, height)
+            ):
+                return row
+        previous = current
+    return None
 
 
 def _cluster_text_lines(
@@ -220,23 +276,67 @@ def _cluster_text_lines(
     return [item for item in components if item["index"] in selected]
 
 
-def _nearby_artifact_components(
-    image: Image.Image, primary: list[dict[str, int]]
+def _overlapping_page_components(
+    primary: list[dict[str, int]],
+    secondary: list[dict[str, int]],
+    width: int,
+    height: int,
 ) -> list[dict[str, int]]:
-    """Keep meaningful ink, seals, or signatures adjacent to the primary text block."""
-    image_array = np.asarray(image)
-    gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
-    ink = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 9
+    """Return a reliable text cluster from a horizontally adjacent page."""
+    if not secondary:
+        return []
+    primary_left = min(item["left"] for item in primary)
+    primary_right = max(item["left"] + item["width"] for item in primary)
+    line_like = [
+        item for item in secondary
+        if item["height"] <= height * 0.05
+        and item["width"] / max(item["height"], 1) >= 1.5
+    ]
+    left_page = [
+        item for item in line_like
+        if item["left"] + item["width"] <= primary_left + width * 0.04
+    ]
+    right_page = [
+        item for item in line_like
+        if item["left"] >= primary_right - width * 0.04
+    ]
+    if len(left_page) >= 2:
+        return left_page
+    if len(right_page) >= 2:
+        return right_page
+    return []
+
+
+def _distance_to_nearest_box(
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+    boxes: list[tuple[int, int, int, int]],
+) -> float:
+    return min(
+        (
+            max(0, box[0] - right, left - box[2]) ** 2
+            + max(0, box[1] - bottom, top - box[3]) ** 2
+        ) ** 0.5
+        for box in boxes
     )
+
+
+def _nearby_artifact_components(
+    image: Image.Image,
+    primary: list[dict[str, int]],
+    secondary: list[dict[str, int]],
+) -> list[dict[str, int]]:
+    """Keep colored seals that belong to the page holding the primary text block."""
+    image_array = np.asarray(image)
     hue, saturation, value = cv2.split(cv2.cvtColor(image_array, cv2.COLOR_RGB2HSV))
     red_seal = (
-        ((hue <= 10) | (hue >= 170)) & (saturation >= 45) & (value >= 70)
+        ((hue <= 10) | (hue >= 170)) & (saturation >= 90) & (value >= 70)
     )
     blue_seal = (
-        (hue >= 95) & (hue <= 130) & (saturation >= 80) & (value >= 70)
+        (hue >= 95) & (hue <= 130) & (saturation >= 90) & (value >= 70)
     )
-    ink_mask = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((2, 2), dtype=np.uint8))
     red_mask = cv2.morphologyEx(
         red_seal.astype(np.uint8) * 255,
         cv2.MORPH_OPEN,
@@ -267,9 +367,11 @@ def _nearby_artifact_components(
     colored_nearby_x = max(nearby_x, round(width * 0.24))
     minimum_area = max(70, round(width * height * 0.00012))
     maximum_area = round(width * height * 0.03)
+    overlapping_page = _overlapping_page_components(
+        primary, secondary, width, height
+    )
     artifacts = []
     for mask, artifact_nearby_x in (
-        (ink_mask, nearby_x),
         (red_mask, colored_nearby_x),
         (blue_mask, colored_nearby_x),
     ):
@@ -303,6 +405,24 @@ def _nearby_artifact_components(
             gap_x = max(0, text_left - right, left - text_right)
             gap_y = max(0, text_top - bottom, top - text_bottom)
             if gap_x <= artifact_nearby_x and gap_y <= nearby_y:
+                if overlapping_page:
+                    primary_distance = _distance_to_nearest_box(
+                        left, top, right, bottom, text_boxes
+                    )
+                    secondary_boxes = [
+                        (
+                            item["left"],
+                            item["top"],
+                            item["left"] + item["width"],
+                            item["top"] + item["height"],
+                        )
+                        for item in overlapping_page
+                    ]
+                    secondary_distance = _distance_to_nearest_box(
+                        left, top, right, bottom, secondary_boxes
+                    )
+                    if primary_distance >= secondary_distance * 0.5:
+                        continue
                 artifacts.append({
                     "left": left,
                     "top": top,
@@ -339,11 +459,31 @@ def detect_content_subject(image: Image.Image) -> dict | None:
     coverage = primary_area / total_area
     if coverage < 0.55:
         return None
-    artifacts = _nearby_artifact_components(resized, primary)
+    primary_ids = {item["index"] for item in primary}
+    secondary = [
+        item for item in components if item["index"] not in primary_ids
+    ]
+    artifacts = _nearby_artifact_components(resized, primary, secondary)
+    expansion_artifacts = [
+        item for item in artifacts
+        if 0.25 <= item["width"] / max(item["height"], 1) <= 4.0
+        and item["width"] >= 10
+        and item["height"] >= 10
+    ]
 
     width, height = resized.size
     margin_x = round(width * 0.035)
-    margin_y = round(height * 0.045)
+    top_margin = round(height * 0.045)
+    bottom_margin = round(height * 0.015)
+    primary_bounds = [
+        {
+            "left": item["left"],
+            "top": item["top"],
+            "right": item["left"] + item["width"],
+            "bottom": item["top"] + item["height"],
+        }
+        for item in primary
+    ]
     bounds_components = [
         {
             "left": item["left"],
@@ -351,18 +491,39 @@ def detect_content_subject(image: Image.Image) -> dict | None:
             "right": item["left"] + item["width"],
             "bottom": item["top"] + item["height"],
         }
-        for item in [*primary, *artifacts]
+        for item in [*primary, *expansion_artifacts]
     ]
     left = max(0, min(item["left"] for item in bounds_components) - margin_x)
-    top = max(0, min(item["top"] for item in bounds_components) - margin_y)
+    top = max(0, min(item["top"] for item in bounds_components) - top_margin)
     right = min(
         width,
         max(item["right"] for item in bounds_components) + margin_x,
     )
-    bottom = min(
-        height,
-        max(item["bottom"] for item in bounds_components) + margin_y,
+    text_bottom = max(item["bottom"] for item in primary_bounds)
+    content_bottom = max(item["bottom"] for item in bounds_components)
+    gray = cv2.cvtColor(np.asarray(resized), cv2.COLOR_RGB2GRAY)
+    paper_level = float(
+        np.percentile(
+            gray[
+                max(0, min(item["top"] for item in bounds_components)):
+                min(height, text_bottom + 1)
+            ],
+            75,
+        )
     )
+    paper_edge = None
+    if content_bottom >= height * 0.9:
+        paper_edge = _paper_bottom_edge(
+            gray,
+            left,
+            right,
+            max(0, min(item["top"] for item in primary_bounds)),
+            paper_level,
+        )
+    bottom = content_bottom + bottom_margin
+    if paper_edge is not None and paper_edge < height:
+        bottom = min(bottom, paper_edge + bottom_margin)
+    bottom = min(height, bottom)
     subject_width = right - left
     subject_height = bottom - top
     area_ratio = subject_width * subject_height / (width * height)
