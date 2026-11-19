@@ -24,7 +24,7 @@
 | :--- | :--- | :--- |
 | [legal-material-organizer](../../skills/legal-material-organizer/) | 清点混合材料包，生成材料 manifest、处理任务和整理计划；源码 v0.16.1 待发布 | 尚无公开下载 |
 | [legal-ocr](../../skills/legal-ocr/) | 统一路由 PDF、图片、Office 和网页内容识别 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-ocr-1.6.0.zip) |
-| [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF；源码 v2.14.0 待发布 | [旧版 v2.13.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-processor-2.13.0.zip) |
+| [pdf-processor](../../skills/pdf-processor/) | 拍照件规整、预处理、OCR 双层化、合并、页码和压缩 PDF；源码 v2.15.0 待发布 | [旧版 v2.13.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-processor-2.13.0.zip) |
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名 | [已发布 v0.6.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-organizer-0.6.1.zip) |
 | [video-screenshot](../../skills/video-screenshot/) | 从录屏或视频中筛选关键帧和证据线索 | [已发布 v1.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/video-screenshot-1.2.0.zip) |
 | [local-asr](../../skills/local-asr/) | 本地语音识别转写音视频，保留时间戳与说话人 | [已发布 v2.3.5](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/local-asr-2.3.5.zip) |

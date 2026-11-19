@@ -36,12 +36,12 @@
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-11-19 | 新上传 | [legal-material-organizer](skills/legal-material-organizer/) | v0.16.1（源码） | 混合案件材料清点、编号、处理分流和整理计划入口加入「法律材料与证据处理」套件。聊天附件下载已绑定经校验的 IP，源码待发布。 |
 | 2026-11-19 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.0（源码） | 新增单项争点备忘录，聚焦决定性事实、已核法源、相反论证与结论的使用边界。 |
+| 2026-11-19 | 更新 | [pdf-processor](skills/pdf-processor/) | v2.15.0（源码） | 新增拍照件规整，可校正纸面透视和表框，按纸张规格生成 PDF。源码待发布。 |
 | 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 「法律 AI 上下文初始化」新增三层规则清单，列出规则来源、维护人和保存位置；附同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
 | 2026-11-01 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.0（源码） | 补网关故障隔离、MiniMax 排障及宿主内存审计边界；只读巡检与有界连续采样，提供本地稳定性缓解与上游复现入口。 |
-| 2026-10-30 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.3（源码） | 加固受管写入与隐私校验，回执绑定最终哈希；会话模型探测改为 JSON 解析并支持显式会话文件；人工新会话结果降为 DECLARED，不再宣称自动行为验证。 |
 
 </details>
 
@@ -439,11 +439,11 @@
 <tr>
 <td><a href="skills/pdf-processor/"><strong>pdf-processor</strong></a></td>
 <td>工具·PDF处理</td>
-<td style="word-break:break-word">PDF 处理工具，支持扫描件预处理、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩。统一入口自动选择最短可用流程，配合 pdf-organizer 完成从预处理到文书整理的完整工作流</td>
+<td style="word-break:break-word">PDF 处理工具，支持拍照件规整、扫描件预处理、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.13.0</td>
+<td style="text-align:center">v2.15.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-processor-2.13.0.zip">已发布 v2.13.0</a></td>
-<td>所属套件：<a href="expert-suites/legal-material-evidence/">法律材料与证据处理</a></td>
+<td>源码 v2.15.0 待发布。所属套件：<a href="expert-suites/legal-material-evidence/">法律材料与证据处理</a></td>
 </tr>
 <tr>
 <td><a href="skills/img2pdf/"><strong>img2pdf</strong></a></td>
