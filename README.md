@@ -99,7 +99,7 @@
 | [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.2.1 | [已发布 v0.2.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-development-quality-0.2.1.zip) |
 | [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 10 | v0.1.4 | [已发布 v0.1.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-release-distribution-0.1.4.zip) |
 
-“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但旧包仍可下载。上述 8 个套件已随 `v2026.10.29` 发布，表内入口对应实际 Release 资产。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
+“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但仅旧包可下载。「法律材料与证据处理」当前源码为 v0.2.0、尚无对应 ZIP，表内入口仅指向 v0.1.1 旧包。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
 
 ## 🛠️ 技能列表
 
