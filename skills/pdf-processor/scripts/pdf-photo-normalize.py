@@ -152,6 +152,247 @@ def detect_document_quad(image: Image.Image) -> np.ndarray | None:
     return best_points / scale
 
 
+def _text_line_components(image: Image.Image) -> list[dict[str, int]]:
+    image_array = np.asarray(image)
+    gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+    ink = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 9
+    )
+    line_mask = cv2.morphologyEx(
+        ink,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (19, 3)),
+    )
+    line_mask = cv2.morphologyEx(line_mask, cv2.MORPH_OPEN, np.ones((2, 2), dtype=np.uint8))
+    component_count, _, stats, _ = cv2.connectedComponentsWithStats(line_mask)
+    width, height = image.size
+    components = []
+    for index in range(1, component_count):
+        left, top, component_width, component_height, area = map(int, stats[index])
+        if (
+            component_width >= width * 0.035
+            and 2 <= component_height <= height * 0.08
+            and area >= 30
+        ):
+            components.append({
+                "index": index,
+                "left": left,
+                "top": top,
+                "width": component_width,
+                "height": component_height,
+                "area": area,
+            })
+    return components
+
+
+def _cluster_text_lines(
+    components: list[dict[str, int]], seed: dict[str, int], image_height: int
+) -> list[dict[str, int]]:
+    selected = {seed["index"]}
+    changed = True
+    while changed:
+        changed = False
+        selected_components = [item for item in components if item["index"] in selected]
+        bounds = (
+            min(item["left"] for item in selected_components),
+            min(item["top"] for item in selected_components),
+            max(item["left"] + item["width"] for item in selected_components),
+            max(item["top"] + item["height"] for item in selected_components),
+        )
+        for item in components:
+            if item["index"] in selected:
+                continue
+            overlap = (
+                min(bounds[2], item["left"] + item["width"])
+                - max(bounds[0], item["left"])
+            )
+            center_inside = bounds[0] <= item["left"] + item["width"] / 2 <= bounds[2]
+            vertical_gap = max(
+                0,
+                bounds[1] - item["top"] - item["height"],
+                item["top"] - bounds[3],
+            )
+            if (
+                overlap >= seed["width"] * 0.18 or center_inside
+            ) and vertical_gap <= image_height * 0.22:
+                selected.add(item["index"])
+            changed = changed or item["index"] in selected
+    return [item for item in components if item["index"] in selected]
+
+
+def _nearby_artifact_components(
+    image: Image.Image, primary: list[dict[str, int]]
+) -> list[dict[str, int]]:
+    """Keep meaningful ink, seals, or signatures adjacent to the primary text block."""
+    image_array = np.asarray(image)
+    gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+    ink = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 9
+    )
+    hue, saturation, value = cv2.split(cv2.cvtColor(image_array, cv2.COLOR_RGB2HSV))
+    red_seal = (
+        ((hue <= 10) | (hue >= 170)) & (saturation >= 45) & (value >= 70)
+    )
+    blue_seal = (
+        (hue >= 95) & (hue <= 130) & (saturation >= 80) & (value >= 70)
+    )
+    ink_mask = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((2, 2), dtype=np.uint8))
+    red_mask = cv2.morphologyEx(
+        red_seal.astype(np.uint8) * 255,
+        cv2.MORPH_OPEN,
+        np.ones((2, 2), dtype=np.uint8),
+    )
+    blue_mask = cv2.morphologyEx(
+        blue_seal.astype(np.uint8) * 255,
+        cv2.MORPH_OPEN,
+        np.ones((2, 2), dtype=np.uint8),
+    )
+
+    width, height = image.size
+    text_left = min(item["left"] for item in primary)
+    text_top = min(item["top"] for item in primary)
+    text_right = max(item["left"] + item["width"] for item in primary)
+    text_bottom = max(item["top"] + item["height"] for item in primary)
+    text_boxes = [
+        (
+            item["left"],
+            item["top"],
+            item["left"] + item["width"],
+            item["top"] + item["height"],
+        )
+        for item in primary
+    ]
+    nearby_x = max(8, round(width * 0.12))
+    nearby_y = max(8, round(height * 0.16))
+    colored_nearby_x = max(nearby_x, round(width * 0.24))
+    minimum_area = max(70, round(width * height * 0.00012))
+    maximum_area = round(width * height * 0.03)
+    artifacts = []
+    for mask, artifact_nearby_x in (
+        (ink_mask, nearby_x),
+        (red_mask, colored_nearby_x),
+        (blue_mask, colored_nearby_x),
+    ):
+        component_count, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+        for index in range(1, component_count):
+            left, top, component_width, component_height, area = map(int, stats[index])
+            right, bottom = left + component_width, top + component_height
+            if (
+                area < minimum_area
+                or area > maximum_area
+                or component_width > width * 0.68
+                or component_height > height * 0.60
+                or component_width > width * 0.38
+                or component_height > height * 0.38
+                or left <= 2
+                or top <= 2
+                or right >= width - 3
+                or bottom >= height - 3
+            ):
+                continue
+            component_area = component_width * component_height
+            duplicate = any(
+                (
+                    max(0, min(right, box[2]) - max(left, box[0]))
+                    * max(0, min(bottom, box[3]) - max(top, box[1]))
+                ) >= component_area * 0.72
+                for box in text_boxes
+            )
+            if duplicate:
+                continue
+            gap_x = max(0, text_left - right, left - text_right)
+            gap_y = max(0, text_top - bottom, top - text_bottom)
+            if gap_x <= artifact_nearby_x and gap_y <= nearby_y:
+                artifacts.append({
+                    "left": left,
+                    "top": top,
+                    "width": component_width,
+                    "height": component_height,
+                    "area": area,
+                })
+    return artifacts
+
+
+def detect_content_subject(image: Image.Image) -> dict | None:
+    """Find a reliable visible text block when the full paper edge is absent."""
+    max_detection_size = 1200
+    scale = min(1.0, max_detection_size / max(image.size))
+    detection_size = (
+        max(1, round(image.width * scale)),
+        max(1, round(image.height * scale)),
+    )
+    resized = image.resize(detection_size, Image.Resampling.BILINEAR)
+    components = _text_line_components(resized)
+    if len(components) < 5:
+        return None
+
+    clusters = [
+        _cluster_text_lines(components, seed, resized.height)
+        for seed in components
+    ]
+    primary = max(
+        clusters,
+        key=lambda cluster: (sum(item["area"] for item in cluster), len(cluster)),
+    )
+    total_area = sum(item["area"] for item in components)
+    primary_area = sum(item["area"] for item in primary)
+    coverage = primary_area / total_area
+    if coverage < 0.55:
+        return None
+    artifacts = _nearby_artifact_components(resized, primary)
+
+    width, height = resized.size
+    margin_x = round(width * 0.035)
+    margin_y = round(height * 0.045)
+    bounds_components = [
+        {
+            "left": item["left"],
+            "top": item["top"],
+            "right": item["left"] + item["width"],
+            "bottom": item["top"] + item["height"],
+        }
+        for item in [*primary, *artifacts]
+    ]
+    left = max(0, min(item["left"] for item in bounds_components) - margin_x)
+    top = max(0, min(item["top"] for item in bounds_components) - margin_y)
+    right = min(
+        width,
+        max(item["right"] for item in bounds_components) + margin_x,
+    )
+    bottom = min(
+        height,
+        max(item["bottom"] for item in bounds_components) + margin_y,
+    )
+    subject_width = right - left
+    subject_height = bottom - top
+    area_ratio = subject_width * subject_height / (width * height)
+    aspect_ratio = subject_width / subject_height
+    if (
+        subject_width < width * 0.22
+        or subject_height < height * 0.18
+        or not 0.35 <= aspect_ratio <= 2.8
+        or not 0.15 <= area_ratio <= 0.92
+    ):
+        return None
+
+    quad = np.float32([
+        [left, top],
+        [right - 1, top],
+        [right - 1, bottom - 1],
+        [left, bottom - 1],
+    ]) / scale
+    return {
+        "quad": quad,
+        "component_count": len(primary),
+        "total_component_count": len(components),
+        "artifact_component_count": len(artifacts),
+        "ink_coverage": round(float(coverage), 4),
+        "area_coverage": round(float(area_ratio), 4),
+        "bbox": [left, top, right, bottom],
+        "secondary_component_count": len(components) - len(primary),
+    }
+
+
 def _quad_dimensions(ordered_points: np.ndarray) -> tuple[int, int]:
     top_width = np.linalg.norm(ordered_points[1] - ordered_points[0])
     bottom_width = np.linalg.norm(ordered_points[2] - ordered_points[3])
@@ -513,7 +754,21 @@ def normalize_photo_pdf(
 
     photo = load_photo(source_path)
     quad = detect_document_quad(photo)
+    quad_source = "paper_edges" if quad is not None else "full_image"
+    content_subject = None
+    if quad is None:
+        content_subject = detect_content_subject(photo)
+        if content_subject is not None:
+            quad = content_subject["quad"]
+            quad_source = "content_subject"
     paper_matrix, paper_size, quad_meta = _paper_projection(photo.size, quad)
+    quad_meta["source"] = quad_source
+    if content_subject is not None:
+        quad_meta["content_subject"] = {
+            key: value for key, value in content_subject.items() if key != "quad"
+        }
+    else:
+        quad_meta["content_subject"] = {"status": "not_detected"}
     preview_size = _contained_size(paper_size, (1600, 1600)) if max(paper_size) > 1600 else paper_size
     preview_matrix = _resize_matrix(paper_size, preview_size) @ paper_matrix
     preview = Image.fromarray(_warp_image(photo, preview_matrix, preview_size))
@@ -536,7 +791,7 @@ def normalize_photo_pdf(
     swaps_axes = clockwise in (90, 270)
     oriented_size = corrected_size[::-1] if swaps_axes else corrected_size
     final_size, resolved_page_size = resolve_page_size(oriented_size, page_size, dpi)
-    if quad_meta["quad_detected"] and resolved_page_size in ("a4", "auto_a4"):
+    if quad_source == "paper_edges" and resolved_page_size in ("a4", "auto_a4"):
         content_size = final_size
     else:
         content_size = _contained_size(oriented_size, final_size)
@@ -574,7 +829,7 @@ def normalize_photo_pdf(
                 debug_array,
                 [np.round(quad).astype(np.int32)],
                 True,
-                (255, 0, 0),
+                (255, 0, 0) if quad_source == "paper_edges" else (0, 160, 0),
                 max(1, round(max(photo.size) / 600)),
             )
         outputs.append((debug_path, partial(Image.fromarray(debug_array).save, quality=95)))
@@ -677,7 +932,15 @@ def main() -> int:
         parser.error(str(exc))
     print("拍照件规整完成")
     print(f"EXIF 转正尺寸: {report['exif_transposed_size'][0]}×{report['exif_transposed_size'][1]}")
-    print(f"纸面四边检测: {'成功' if report['quad']['quad_detected'] else '失败，保留整幅图像'}")
+    print(
+        "纸面四边检测: "
+        f"{'成功' if report['quad']['quad_detected'] else '失败'}"
+        + (
+            "；内容主体 fallback: 成功"
+            if report["quad"]["source"] == "content_subject"
+            else "，保留整幅图像"
+        )
+    )
     print(f"粗方向旋转: {report['rotation_clockwise']}°（{report['rotation_reason']}）")
     print(f"表框校正: {report['table_alignment']['status']}")
     print(

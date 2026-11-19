@@ -47,7 +47,7 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
 ## 拍照件规整参数
 
 ```bash
-# 默认流程包含纸边透视、表框精校、去阴影和 A4 排版
+# 默认流程包含纸边透视、无纸边内容主体识别、表框精校、去阴影和 A4 排版
 python3 scripts/pdf-photo-normalize.py \
   --input photo.jpg --output photo.pdf \
   --report /tmp/photo-report.json --debug-image /tmp/photo-debug.jpg
@@ -63,6 +63,11 @@ python3 scripts/pdf-photo-normalize.py \
 # 明确指定方向，跳过 Tesseract OSD
 python3 scripts/pdf-photo-normalize.py \
   --input photo.jpg --output photo.pdf --rotate 90
+
+# 多张照片逐页规整后合并；目录内按自然文件名排序
+python3 scripts/pdf-photo-batch.py \
+  --input /path/to/photo-dir --output merged.pdf \
+  --report /tmp/photo-batch-report.json
 ```
 
 | 参数 | 默认 | 说明 |
@@ -76,9 +81,11 @@ python3 scripts/pdf-photo-normalize.py \
 | `--report` | 无 | 输出 JSON 报告，记录纸面四边、方向、表框精校状态和校正前的角度、亮度离散指标、页面和内容尺寸 |
 | `--debug-image` | 无 | 在原图上标出检测到的纸面四边 |
 
-表框精校适用于纸边可定位且有连贯横竖边和多个单元格的平面表格。估计变形较大、表框残缺或纸面弯曲明显时，检查报告中的 `table_alignment.status`，并以实际渲染复核。自动裁边需要至少三条候选边能将纸面与较暗的外部区域区分开。纸边证据不足或候选框外有成片深色痕迹时等比保留整图，可结合 `--debug-image` 核查。
+表框精校适用于纸面或主体区域可定位且有连贯横竖边和多个单元格的平面表格。估计变形较大、表框残缺或纸面弯曲明显时，检查报告中的 `table_alignment.status`，并以实际渲染复核。自动裁纸边需要至少三条候选边能将纸面与较暗的外部区域区分开。纸边证据不足或候选框外有成片深色痕迹时，进入内容主体 fallback。
 
-入口一次处理一张单帧照片。多页 TIFF 或其他多帧图像须先拆为单页再处理。PDF、报告和调试图均需指定独立且尚不存在的文件路径，已有文件请另选文件名重试。
+内容主体 fallback 使用本地自适应墨迹和形态学文本行检测，按横向重叠和纵向邻近聚簇，选择墨迹面积最大的主文书簇，并纳入邻近的印章、签名等非文本痕迹。至少需要 5 个文本行、主体墨迹覆盖率不低于 55%、主体面积在 15%–92% 且比例合理。重叠页中未被选择的文本行记为 `secondary_component_count`，纳入的非文本痕迹记为 `artifact_component_count`。证据不足或纳入痕迹后候选框过宽时不裁剪，不把半页主体补成完整 A4。报告 `quad.source` 为 `content_subject`，调试图使用绿色框；完整纸边仍为红色框。
+
+单张入口一次处理一张单帧照片。多页 TIFF 或其他多帧图像须先拆为单页再处理。批量入口可传多个文件或目录，目录内按自然文件名排序；每张生成一页，全部成功后才写出合并 PDF。PDF 和报告均须指向尚不存在的新文件，已有文件请另选文件名重试。
 
 ## OCR 参数
 

@@ -49,6 +49,38 @@ def make_document_photo(
     return image
 
 
+def make_partial_document_photo() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "steelblue")
+    draw = ImageDraw.Draw(image)
+    for top in range(150, 510, 45):
+        draw.rectangle((410, top, 880, top + 18), fill="black")
+    return image
+
+
+def make_overlapping_document_photo() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "steelblue")
+    draw = ImageDraw.Draw(image)
+    for top in range(120, 530, 50):
+        draw.rectangle((620, top, 940, top + 20), fill="black")
+    for top in (120, 170):
+        draw.rectangle((80, top, 270, top + 20), fill="black")
+    return image
+
+
+def make_partial_document_photo_with_stamp() -> Image.Image:
+    image = make_partial_document_photo()
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((925, 540, 1075, 690), outline=(175, 30, 30), width=14)
+    return image
+
+
+def make_partial_document_photo_with_distant_stamp() -> Image.Image:
+    image = make_partial_document_photo()
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((80, 80, 250, 250), outline=(185, 30, 30), width=13)
+    return image
+
+
 class PhotoNormalizeTest(unittest.TestCase):
     def test_load_photo_bakes_exif_orientation(self):
         image = make_document_photo()
@@ -68,6 +100,134 @@ class PhotoNormalizeTest(unittest.TestCase):
         self.assertIsNotNone(quad)
         self.assertEqual(quad.shape, (4, 2))
         self.assertTrue(photo_normalize._quad_is_convex(photo_normalize._order_quad(quad)))
+
+    def test_detects_content_subject_without_full_paper_edges(self):
+        subject = photo_normalize.detect_content_subject(make_partial_document_photo())
+
+        self.assertIsNotNone(subject)
+        self.assertEqual(subject["component_count"], 8)
+        self.assertEqual(subject["total_component_count"], 8)
+        self.assertGreater(subject["ink_coverage"], 0.99)
+        left, top, right, bottom = subject["bbox"]
+        self.assertGreaterEqual(left, 350)
+        self.assertGreaterEqual(top, 100)
+        self.assertLessEqual(right, 940)
+        self.assertLessEqual(bottom, 560)
+
+    def test_content_subject_prefers_dominant_page_in_overlapping_photo(self):
+        subject = photo_normalize.detect_content_subject(make_overlapping_document_photo())
+
+        self.assertIsNotNone(subject)
+        self.assertEqual(subject["secondary_component_count"], 2)
+        left, _, right, _ = subject["bbox"]
+        self.assertGreaterEqual(left, 550)
+        self.assertLessEqual(right, 1000)
+
+    def test_content_subject_requires_multiple_lines(self):
+        image = Image.new("RGB", (640, 860), (145, 115, 85))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((174, 124, 336, 133), fill="black")
+
+        self.assertIsNone(photo_normalize.detect_content_subject(image))
+
+    def test_content_subject_keeps_adjacent_stamp_outside_text_bounds(self):
+        subject = photo_normalize.detect_content_subject(
+            make_partial_document_photo_with_stamp()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertGreaterEqual(subject["artifact_component_count"], 1)
+        _, _, right, bottom = subject["bbox"]
+        self.assertGreaterEqual(right, 1040)
+        self.assertGreaterEqual(bottom, 670)
+
+    def test_content_subject_keeps_distant_colored_stamp(self):
+        subject = photo_normalize.detect_content_subject(
+            make_partial_document_photo_with_distant_stamp()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertGreaterEqual(subject["artifact_component_count"], 1)
+        self.assertLessEqual(subject["bbox"][0], 80)
+
+    def test_photo_pipeline_uses_content_subject_after_paper_edge_failure(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "partial.png"
+            target = Path(tempdir) / "partial.pdf"
+            report_target = Path(tempdir) / "partial.json"
+            make_partial_document_photo().save(source)
+
+            with patch.object(photo_normalize, "detect_document_quad", return_value=None):
+                metadata = photo_normalize.normalize_photo_pdf(
+                    source,
+                    target,
+                    rotation="0",
+                    dpi=110,
+                    report_file=report_target,
+                )
+
+            self.assertEqual(metadata["quad"]["source"], "content_subject")
+            self.assertEqual(metadata["quad"]["content_subject"]["component_count"], 8)
+            self.assertEqual(metadata["page_size"], "a4")
+            content_width, content_height = metadata["content_size"]
+            self.assertLessEqual(content_width, metadata["output_size"][0])
+            self.assertLessEqual(content_height, metadata["output_size"][1])
+            self.assertAlmostEqual(content_width / content_height, 554 / 405, delta=0.03)
+            saved_metadata = json.loads(report_target.read_text(encoding="utf-8"))
+            self.assertEqual(saved_metadata["quad"]["source"], "content_subject")
+            with fitz.open(target) as document:
+                self.assertEqual(len(document), 1)
+                self.assertAlmostEqual(document[0].rect.width * 25.4 / 72, 297, places=3)
+                self.assertAlmostEqual(document[0].rect.height * 25.4 / 72, 210, places=3)
+
+    def test_photo_pipeline_preserves_stamp_found_by_content_subject(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "partial-with-stamp.png"
+            target = Path(tempdir) / "partial-with-stamp.pdf"
+            make_partial_document_photo_with_stamp().save(source)
+
+            with patch.object(photo_normalize, "detect_document_quad", return_value=None):
+                metadata = photo_normalize.normalize_photo_pdf(
+                    source, target, rotation="0", dpi=110
+                )
+
+            self.assertEqual(metadata["quad"]["source"], "content_subject")
+            self.assertGreaterEqual(
+                metadata["quad"]["content_subject"]["artifact_component_count"], 1
+            )
+            with fitz.open(target) as document:
+                rendered = document[0].get_pixmap(dpi=110, colorspace=fitz.csRGB)
+                pixels = np.frombuffer(rendered.samples, dtype=np.uint8).reshape(
+                    rendered.height, rendered.width, 3
+                )
+            stamp_pixels = (
+                pixels[:, :, 0].astype(np.int16) - pixels[:, :, 1].astype(np.int16)
+            ) > 40
+            self.assertGreater(int(stamp_pixels.sum()), 100)
+
+    def test_photo_pipeline_preserves_distant_stamp_found_by_content_subject(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "distant-stamp.png"
+            target = Path(tempdir) / "distant-stamp.pdf"
+            make_partial_document_photo_with_distant_stamp().save(source)
+
+            with patch.object(photo_normalize, "detect_document_quad", return_value=None):
+                metadata = photo_normalize.normalize_photo_pdf(
+                    source, target, rotation="0", dpi=110
+                )
+
+            self.assertGreaterEqual(
+                metadata["quad"]["content_subject"]["artifact_component_count"], 1
+            )
+            with fitz.open(target) as document:
+                rendered = document[0].get_pixmap(dpi=110, colorspace=fitz.csRGB)
+                pixels = np.frombuffer(rendered.samples, dtype=np.uint8).reshape(
+                    rendered.height, rendered.width, 3
+                )
+            stamp_pixels = (
+                pixels[:, :, 0].astype(np.int16) - pixels[:, :, 1].astype(np.int16)
+            ) > 40
+            self.assertGreater(int(stamp_pixels.sum()), 100)
 
     def test_perspective_normalize_outputs_rectangle(self):
         image = make_document_photo()
