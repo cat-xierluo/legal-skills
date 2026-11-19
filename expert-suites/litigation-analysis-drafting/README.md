@@ -25,7 +25,7 @@
 | [court-sms](../../skills/court-sms/) | 解析法院短信、获取法院文书并回填案件材料 | [已发布 v1.6.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/court-sms-1.6.2.zip) |
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-ocr-1.6.0.zip) |
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页码和证据索引，拆分、合并并规范材料 | [已发布 v0.6.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-organizer-0.6.1.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、起诉状证据初评、庭审复盘和上诉再审判断，形成风险与诉讼策略 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、起诉状证据初评、庭审复盘、上诉再审研判与单项争点备忘录；源码 v1.3.0 待发布 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip) |
 | [judgment-analysis](../../skills/judgment-analysis/) | 深析单份判决的事实认定、裁判理由、主文和文内疑点 | [已发布 v2.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/judgment-analysis-2.0.0.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索命题并核验法规、正反类案和文内法律依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/yuandian-law-search-1.10.1.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵和庭审路线图 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-visualization-0.8.2.zip) |
