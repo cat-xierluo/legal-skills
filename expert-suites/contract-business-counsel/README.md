@@ -26,7 +26,7 @@
 | [opc-legal-counsel](../../skills/opc-legal-counsel/) | OPC 与小微企业经营问题分诊、联动风险和行动优先级 | [已发布 v1.0.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/opc-legal-counsel-1.0.2.zip) |
 | [legal-case-analysis](../../skills/legal-case-analysis/) | 对已出现的履约争议梳理事实、证据与争点 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 核验现行法、监管规则与正反类案，回填检索依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/yuandian-law-search-1.10.1.zip) |
-| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 将已核验的分析整理为咨询、沟通或服务方案 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-proposal-generator-0.4.1.zip) |
+| [legal-proposal-generator](../../skills/legal-proposal-generator/) | 将已核验的分析整理为咨询、沟通或服务方案，可选设计版 HTML；源码 v0.5.0 待发布 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-proposal-generator-0.4.1.zip) |
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描合同及附件转成可读文本，保留原件供核对 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-ocr-1.6.0.zip) |
 
 ## 建议使用方式
