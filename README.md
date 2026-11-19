@@ -35,13 +35,13 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-11-19 | 新上传 | [legal-material-organizer](skills/legal-material-organizer/) | v0.16.0（源码） | 混合案件材料清点、编号、处理分流和整理计划入口加入「法律材料与证据处理」套件；提供匿名示例，尚无公开下载。 |
+| 2026-11-19 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.0（源码） | 新增单项争点备忘录，聚焦决定性事实、已核法源、相反论证与结论的使用边界。 |
 | 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 「法律 AI 上下文初始化」新增三层规则清单，列出规则来源、维护人和保存位置；附同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 | 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
 | 2026-11-01 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.0（源码） | 补网关故障隔离、MiniMax 排障及宿主内存审计边界；只读巡检与有界连续采样，提供本地稳定性缓解与上游复现入口。 |
 | 2026-10-30 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.3（源码） | 加固受管写入与隐私校验，回执绑定最终哈希；会话模型探测改为 JSON 解析并支持显式会话文件；人工新会话结果降为 DECLARED，不再宣称自动行为验证。 |
-| 2026-10-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.8 | 修复根 README HTML 技能表内专家套件备注链接不生效：回写时转换为 HTML 链接，并补幂等回归。 |
 
 </details>
 
@@ -256,11 +256,11 @@
 <tr>
 <td><a href="skills/legal-case-analysis/"><strong>legal-case-analysis</strong></a></td>
 <td>通用·分析</td>
-<td style="word-break:break-word">综合案件研判：整合案件、咨询、合同、证据与庭审材料，组织法律检索并形成风险和策略判断；复用判决分析成果，按需交付底稿或报告</td>
+<td style="word-break:break-word">综合案件研判与单项争点分析。整合事实、证据与法源，评估风险及策略，按需交付底稿、报告或单项争点备忘录</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.1.2</td>
+<td style="text-align:center">v1.3.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip">已发布 v1.1.2</a></td>
-<td>所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td></tr>
+<td>源码 v1.3.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td></tr>
 <tr>
 <td><a href="skills/express-tracking/"><strong>express-tracking</strong></a></td>
 <td>通用·案件管理</td>
