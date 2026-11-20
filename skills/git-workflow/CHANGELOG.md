@@ -1,5 +1,18 @@
 # 变更日志
 
+## [1.27.0] - 2026-11-20
+
+### 新增
+
+- 新增 `references/cleanup-recovery-and-gc.md`：固化分支/Worktree 清理后的四段收口——保留恢复留底、只读 GC baseline、绑定授权执行受限 GC、后验并单独释放 recovery；明确 recovery 不先于 GC 兜底释放、全局 reflog expire 不顺手执行、活跃稀疏 Worktree index 不得用重写方式消警告。
+- 新增缺失对象只读定位与同 OID 重建规则、fsck 致命/活跃 index 陈旧元数据/对象库垃圾三分法，以及 `original_freed` / `recovery_added` / `git_freed` / `net_freed` 空间账本。
+- 新增 `scripts/repo_gc_gate.py`：提供 `audit`、`gc`、`verify` 和 multi-repo recovery `release`，绑定 baseline/approval 摘要、refs/HEAD/Worktree 登记和 fsck 警告，GC 后复核对象遍历与身份，释放前复核恢复包 checksum、操作集合和目标 ref。
+- 新增 `scripts/test_repo_gc_gate.py` 隔离回归，覆盖 approval 摘要绑定、baseline 漂移拒绝、GC 身份保持和 recovery release 门禁。
+
+### 验证
+
+- 隔离 Git 仓库中新增 GC/recovery 回归通过；v1.26 多仓清理回归与既有清理审计回归通过；安全扫描无 critical/high。
+
 ## [1.26.0] - 2026-11-19
 
 ### 新增
