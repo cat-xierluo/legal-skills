@@ -1,5 +1,17 @@
 # 变更日志
 
+## [1.26.0] - 2026-11-19
+
+### 新增
+
+- 新增 `references/multi-repo-branch-cleanup.md`：把多仓库一次性分支收口固化为授权盘点、证据分级、冻结清单、仓外恢复、approval 绑定、精确本地删除和后验汇报；明确内容等价、同 tip 别名、无权威远端和现存 Worktree 不能混入确定安全组。
+- 新增 `scripts/multi_repo_branch_cleanup.py`：读取 schema v1 多仓候选清单，复核基线/tip/reflog/生命周期/Worktree/开放 PR，保存 reflog 与不可达 commit pack，执行 expected-tip `git update-ref -d` 并输出可验证回执。默认不 fetch、不删远端、不删 Worktree。
+- 新增 `scripts/test_multi_repo_branch_cleanup.py` 隔离回归，覆盖 approval 摘要绑定和准备后 tip 漂移保留。
+
+### 验证
+
+- 隔离 Git 仓库中新增回归通过；真实 2026-11-19 多仓清理经验用于合同设计，未在 Skill 回归中访问真实仓库或远端。
+
 ## [1.25.0] - 2026-11-01
 
 ### 新增
