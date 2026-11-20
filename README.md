@@ -736,15 +736,6 @@
 <td>所属套件：<a href="expert-suites/skill-development-quality/">Skill 开发与质量保障</a></td>
 </tr>
 <tr>
-<td><a href="skills/night-autopilot/"><strong>night-autopilot</strong></a></td>
-<td>工具·Agent协作</td>
-<td style="word-break:break-word">在已授权的定时触发下整理任务、派发或完成有界工作、监测与验收，并记录交接；保留法律材料的律师终审门</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.2.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/night-autopilot-0.2.1.zip">已发布 v0.2.1</a></td>
-<td>SKILL.md 声明 MIT；当前源码与 v0.2.1 包缺少独立 LICENSE.txt，完整许可文本待补；Claude Code 与 Codex 宿主映射待实测</td>
-</tr>
-<tr>
 <td><a href="skills/multi-agent-orca/"><strong>multi-agent-orca</strong></a></td>
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal、Run/Task/Dispatch、额度与生命周期门禁；按需接入独立 ZCode CLI、MiniMax Code、CodeBuddy、Qoder CN 与千问办公，日常池保持 Claude Code/Codex</td>
