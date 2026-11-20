@@ -67,6 +67,16 @@ Git 默认检出提交中的全部跟踪文件，不复制真正未跟踪的 ign
 
 不要以某一个宿主目录作为仓库工作树全集。先从明确的仓库或已有树取得 Git common-dir 和 `git worktree list --porcelain -z`，覆盖 `.worktrees/`、`.claude/worktrees/`、Codex worktrees/visualizations、Orca 目录与临时目录中的实际登记；按 common-dir 去重。主工作区和已稀疏树单独保留，缺目录/坏登记另记，不自动 prune 或修复。未登记文件夹与其他机器需要独立的宿主/目录盘点，不能由 Git 登记空白推断不存在。
 
+### 统一排查口径：先 registration，再 branch
+
+统一清理排查不得从分支名、某个宿主目录或目录名推断全集。文件夹、worktree 登记和 branch 是三种身份：一个目录可以承载 detached HEAD，一个外层 worktree 内还可以另有已注册的嵌套 worktree；删除目录、注销登记和删除 branch 也分别是三个授权对象。
+
+1. 以已确认仓库或其任一已确认工作树为入口，读取 `git worktree list --porcelain -z`。该登记表是本仓已注册全量树的第一层权威来源，能覆盖仓外路径、`~/.codex/worktrees`、临时目录和 detached HEAD；嵌套 worktree 只要已注册，也会作为独立条目出现，不得因路径在外层树内而并入外层判断。
+2. 对每个登记条目记录路径、完整 HEAD、branch 或 `DETACHED`、common-dir、dirty/untracked/ignored、占用与体积。detached 没有分支名不是异常本身，但归属和任务材料必须单独核；不能给它虚构分支，也不能因其 HEAD 是主线上祖先就直接判可删。
+3. 分支审计另行以 refs 为全集运行。两者求交后仍要单列：仅剩 worktree 的 detached 现场、仅剩 branch 的未检出引用、外层/嵌套树和坏登记。`branch-audit.sh` 不代替 `sparse-worktree-audit.py`，反之亦然。
+4. 若要做全盘未登记目录盘点，只能另行按候选目录中的 `.git` 文件/目录和 `git rev-parse --git-common-dir` 归类，不写入、不 prune、不把目录名当 Git 身份。登记表为空不证明磁盘无仓库；脚本输出“registered=0”只说明该入口无注册树。
+5. partial clone 中 `git diff` 可能因 promisor 对象缺失而失败或输出不完整。不能把空 diff、无法读取对象或网络失败当作内容等价；这种情况保留 `NOT_VERIFIED_MISSING_OBJECTS`，先在有对象的引用或远端补证。
+
 ### 只读审计入口
 
 使用 Python 3 标准库和 Git；`du` 用于目录占用，选用 `--with-cwd` 时以 `lsof` 观察本机 cwd。工具缺失或读取失败标为未验证，不自动安装；cwd 无命中不证明无 writer。宿主 owner、Session/终端和原任务范围仍须另核。

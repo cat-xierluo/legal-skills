@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。用于分支与 worktree 管理、主目录 main 防切换保护、Skill 稀疏检出、PR 创建/审查/合并，以及提交身份和隐私检查；也支持 CI 额度治理、敏感文件历史撤回与仓库瘦身。不要用于批量生成提交信息、项目任务分配或本地 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.27.0"
+  version: "1.27.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -26,7 +26,7 @@ metadata:
 | Monorepo 窄采用、cherry-pick 与冲突 | [改动集成](references/change-integration.md) |
 | 误 amend / stash / 删分支 / reset 的事故恢复 | [事故恢复](references/accident-recovery.md)；先定位证据，再按授权恢复 |
 | Skill 连续迭代、候选观察、长期功能线或里程碑 | [长期集成分支](references/long-lived-integration-branch.md) |
-| 分支/工作树清理、批量验收或取代关闭旧 PR | [生命周期与清理](references/branch-lifecycle-and-cleanup.md)；只读盘点用 `branch-audit.sh` / `worktree-audit.sh` |
+| 分支/工作树清理、批量验收或取代关闭旧 PR | [生命周期与清理](references/branch-lifecycle-and-cleanup.md)；统一排查先按 worktree registration 全量盘点，只读盘点用 `branch-audit.sh` / `worktree-audit.sh` |
 | 多仓库一次性分支批量收口 | [多仓分支批量清理](references/multi-repo-branch-cleanup.md)；候选清单、恢复包和精确删除用 `multi_repo_branch_cleanup.py` |
 | 分支/Worktree 清理后的留底释放、对象 GC、空间账本与缺失对象修复 | [清理后的恢复留底与 GC 门禁](references/cleanup-recovery-and-gc.md)；baseline、GC、后验和 recovery release 用 `repo_gc_gate.py` |
 | 短任务/里程碑/子分支命名，Commit / Issue / PR 标题与关闭语义 | [命名与提交格式](references/issue-pr-format.md) |

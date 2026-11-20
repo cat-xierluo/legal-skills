@@ -33,6 +33,18 @@ class AuditTests(unittest.TestCase):
     def test_registration_covers_distinct_external_folders(self):
         rows = self.rows(); self.assertEqual({r['path'] for r in rows}, {str(self.repo), str(self.first), str(self.second)})
         self.assertEqual(sum(r['primary'] for r in rows), 1)
+
+    def test_registration_covers_nested_and_detached_worktrees(self):
+        nested = self.first / 'generated' / 'nested-worker'
+        detached = self.root / 'outside' / 'detached-worker'
+        self.git('worktree', 'add', '-b', 'nested', str(nested), repo=self.first)
+        self.git('worktree', 'add', '--detach', str(detached))
+        rows = {row['path']: row for row in self.rows()}
+        self.assertIn(str(nested), rows); self.assertIn(str(detached), rows)
+        self.assertEqual(rows[str(nested)]['registered_branch'], 'refs/heads/nested')
+        self.assertEqual(rows[str(detached)]['registered_branch'], 'DETACHED')
+        self.assertEqual(rows[str(detached)]['state'], 'valid')
+        self.assertNotIn(str(self.first / 'generated'), rows)
     def test_common_dir_aliases_are_deduplicated(self):
         alias = self.root / 'alias'; alias.symlink_to(self.repo, target_is_directory=True)
         self.assertEqual(len(audit.audit([self.repo, self.first, alias])['repositories']), 1)

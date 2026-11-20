@@ -76,6 +76,8 @@ gh pr list --state all --limit 100 \
 git -C <worktree> status --short
 ```
 
+统一排查先以已确认仓库或工作树读取 `git worktree list --porcelain -z`，再运行分支审计；不要把 `git branch`、单一宿主目录或外层目录当作全集。仓外路径、detached HEAD、外层树内已注册的嵌套 worktree、仅剩 ref 的未检出分支要分别列账，判读口径见[稀疏工作树§统一排查口径](sparse-worktree.md#统一排查口径先-registration再-branch)。
+
 日常巡检可先跑只读盘点脚本生成三档候选表（脚本不 fetch/prune/删除；gh 缺失、失败或查询截断时保守 KEEP，PR 未核完整不输出可删除候选；patch-id 不证明当前 tip 已交付）：
 
 ```bash
