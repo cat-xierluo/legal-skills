@@ -68,7 +68,9 @@ def make_rotated_text_document_photo() -> Image.Image:
     return image.rotate(-3, resample=Image.Resampling.BICUBIC, fillcolor="white")
 
 
-def make_conflicting_text_and_table_photo() -> Image.Image:
+def make_conflicting_text_and_table_photo(
+    text_angle: float = 1, table_angle: float = 3,
+) -> Image.Image:
     image = Image.new("RGB", (1200, 800), "white")
     text_layer = Image.new("RGB", image.size, "white")
     text_draw = ImageDraw.Draw(text_layer)
@@ -76,12 +78,12 @@ def make_conflicting_text_and_table_photo() -> Image.Image:
         for left in range(100, 1031, 62):
             text_draw.rectangle((left, top, left + 38, top + 11), fill="black")
     image.paste(
-        text_layer.rotate(1, resample=Image.Resampling.BICUBIC, fillcolor="white"),
+        text_layer.rotate(text_angle, resample=Image.Resampling.BICUBIC, fillcolor="white"),
         (0, 0),
     )
 
     draw = ImageDraw.Draw(image)
-    slope = float(np.tan(np.radians(3)))
+    slope = float(np.tan(np.radians(table_angle)))
     left_x, right_x = 250, 950
     for row in (450, 550, 650):
         draw.line(
@@ -387,7 +389,7 @@ class PhotoNormalizeTest(unittest.TestCase):
 
         self.assertIsNotNone(photo_normalize._structural_table_frame(page))
         self.assertEqual(table_report["source"], "line_cluster")
-        self.assertEqual(table_report["status"], "rejected_text_regression")
+        self.assertEqual(table_report["status"], "rejected_text_residual")
         self.assertGreater(
             abs(table_report["text_angle_candidate_deg"]),
             abs(table_report["text_angle_before_deg"]),
@@ -396,6 +398,41 @@ class PhotoNormalizeTest(unittest.TestCase):
         self.assertFalse(np.array_equal(matrix, np.eye(3)))
         self.assertGreater(size[0], page.width)
         self.assertGreater(size[1], page.height)
+
+    def test_text_projection_rejects_opposite_band_angles(self):
+        for bands in ([3, -3, 3], [-3, 3, -3], [-0.7, 0.4, 1.7]):
+            with self.subTest(bands=bands):
+                matrix, size, report = photo_normalize._text_rotation_projection(
+                    (1200, 800), bands[1], bands
+                )
+
+                self.assertEqual(report["status"], "inconsistent_text_angles")
+                np.testing.assert_array_equal(matrix, np.eye(3))
+                self.assertEqual(size, (1200, 800))
+
+        matrix, size, report = photo_normalize._text_rotation_projection(
+            (1200, 800), 3, [2.8, 3, 3.2]
+        )
+        self.assertEqual(report["status"], "applied")
+        self.assertFalse(np.array_equal(matrix, np.eye(3)))
+
+        matrix, size, report = photo_normalize._text_rotation_projection(
+            (1200, 800), 3.1, [3, 3.1, 4.4]
+        )
+        self.assertEqual(report["status"], "applied")
+        self.assertFalse(np.array_equal(matrix, np.eye(3)))
+
+    def test_text_projection_rejects_line_cluster_with_text_residual(self):
+        page = make_conflicting_text_and_table_photo(text_angle=3, table_angle=2)
+
+        matrix, size, table_report, text_report = photo_normalize._refine_page_geometry(page, 0)
+
+        self.assertIsNotNone(photo_normalize._structural_table_frame(page))
+        self.assertEqual(table_report["source"], "line_cluster")
+        self.assertEqual(table_report["status"], "rejected_text_residual")
+        self.assertGreater(abs(table_report["text_angle_candidate_deg"]), 0.3)
+        self.assertEqual(text_report["status"], "applied")
+        self.assertFalse(np.array_equal(matrix, np.eye(3)))
 
     def test_content_subject_keeps_dense_wide_text_at_the_frame_bottom(self):
         subject = photo_normalize.detect_content_subject(
