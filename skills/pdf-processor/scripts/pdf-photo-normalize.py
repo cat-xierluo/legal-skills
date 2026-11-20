@@ -34,6 +34,8 @@ PAGE_SIZES_MM = {
 DEFAULT_PAGE_SIZE = "a4"
 DEFAULT_CONTRAST_STRENGTH = 0.7
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
+TEXT_TILT_TOLERANCE_DEG = 0.3
+BAND_ANGLE_TOLERANCE_DEG = 1.2
 MAX_RESIDUAL_TILT_DEG = 5.0
 
 
@@ -1093,11 +1095,17 @@ def _text_rotation_projection(
         detected_angle_deg=round(angle, 2),
         band_angles_deg=[round(band, 2) if band is not None else None for band in band_angles],
     )
-    if abs(selected_angle) <= 0.3:
+    if abs(selected_angle) <= TEXT_TILT_TOLERANCE_DEG:
         report["status"] = "within_tolerance"
     elif abs(selected_angle) > MAX_RESIDUAL_TILT_DEG:
         report["status"] = "outside_safe_limit"
-    elif sum(abs(band - selected_angle) <= 1.2 for band in available_bands) < 2:
+    elif (
+        any(band * selected_angle <= 0 for band in available_bands)
+        or sum(
+            abs(band - selected_angle) <= BAND_ANGLE_TOLERANCE_DEG
+            for band in available_bands
+        ) < 2
+    ):
         report["status"] = "inconsistent_text_angles"
     else:
         center = ((size[0] - 1) / 2, (size[1] - 1) / 2)
@@ -1121,14 +1129,10 @@ def _refine_page_geometry(
     if table_applied:
         if angle is not None:
             table_preview = Image.fromarray(_warp_image(preview, matrix, size))
-            after_angle, after_bands = _text_skew_angles(_rotate_clockwise(table_preview, clockwise))
-            worse_bands = sum(
-                before is not None and after is not None and abs(after) > abs(before) + 0.45
-                for before, after in zip(band_angles, after_bands)
-            )
-            if after_angle is not None and abs(after_angle) > abs(angle) + 0.6 and worse_bands >= 2:
+            after_angle, _ = _text_skew_angles(_rotate_clockwise(table_preview, clockwise))
+            if after_angle is not None and abs(after_angle) > TEXT_TILT_TOLERANCE_DEG:
                 table_report.update(
-                    status="rejected_text_regression",
+                    status="rejected_text_residual",
                     text_angle_before_deg=round(angle, 2),
                     text_angle_candidate_deg=round(after_angle, 2),
                 )
