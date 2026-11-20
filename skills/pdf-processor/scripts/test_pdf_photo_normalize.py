@@ -106,6 +106,28 @@ def make_conflicting_text_and_table_photo(
     return image
 
 
+def make_two_column_text_photo(
+    row_offset: int = 15, rotate: float = 0,
+) -> Image.Image:
+    """Two text blocks whose rows sit at different heights on the page."""
+    image = Image.new("RGB", (1200, 900), "white")
+    draw = ImageDraw.Draw(image)
+
+    def glyph(left: int, top: int) -> None:
+        draw.rectangle((left, top, left + 4, top + 14), fill="black")
+        draw.rectangle((left, top, left + 16, top + 4), fill="black")
+
+    for row in range(18):
+        top = 120 + row * 40
+        for left in range(90, 531, 62):
+            glyph(left, top)
+        for left in range(650, 1091, 62):
+            glyph(left, top + row_offset)
+    if rotate:
+        image = image.rotate(rotate, resample=Image.Resampling.BICUBIC, fillcolor="white")
+    return image
+
+
 def make_overlapping_document_photo() -> Image.Image:
     image = Image.new("RGB", (1200, 800), "steelblue")
     draw = ImageDraw.Draw(image)
@@ -433,6 +455,41 @@ class PhotoNormalizeTest(unittest.TestCase):
         self.assertGreater(abs(table_report["text_angle_candidate_deg"]), 0.3)
         self.assertEqual(text_report["status"], "applied")
         self.assertFalse(np.array_equal(matrix, np.eye(3)))
+
+    def test_text_projection_keeps_offset_two_column_page_upright(self):
+        for row_offset in (-15, 8, 15, 30):
+            with self.subTest(row_offset=row_offset):
+                page = make_two_column_text_photo(row_offset=row_offset)
+
+                matrix, size, table_report, text_report = photo_normalize._refine_page_geometry(page, 0)
+
+                self.assertEqual(table_report["status"], "no_reliable_frame")
+                self.assertEqual(text_report["status"], "within_tolerance")
+                np.testing.assert_array_equal(matrix, np.eye(3))
+                self.assertEqual(size, page.size)
+
+    def test_text_projection_still_corrects_a_tilted_two_column_page(self):
+        for rotate in (-3.0, -1.25, 1.25, 3.0):
+            with self.subTest(rotate=rotate):
+                page = make_two_column_text_photo(row_offset=15, rotate=rotate)
+
+                matrix, size, table_report, text_report = photo_normalize._refine_page_geometry(page, 0)
+
+                self.assertEqual(text_report["status"], "applied")
+                self.assertAlmostEqual(text_report["angle_deg"], -rotate, delta=0.3)
+                self.assertFalse(np.array_equal(matrix, np.eye(3)))
+                self.assertGreater(size[0], page.width)
+                self.assertGreater(size[1], page.height)
+
+    def test_text_rotation_skips_columns_with_conflicting_angles(self):
+        matrix, size, report = photo_normalize._text_rotation_projection(
+            (1200, 900), 1.6, [1.6, 1.6, 1.6], column_angles=(-2, 2),
+        )
+
+        self.assertEqual(report["status"], "inconsistent_text_angles")
+        self.assertEqual(report["column_angles_deg"], [-2, 2])
+        np.testing.assert_array_equal(matrix, np.eye(3))
+        self.assertEqual(size, (1200, 900))
 
     def test_content_subject_keeps_dense_wide_text_at_the_frame_bottom(self):
         subject = photo_normalize.detect_content_subject(
