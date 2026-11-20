@@ -92,6 +92,19 @@ def make_document_photo_with_ground_band() -> Image.Image:
     return image
 
 
+def make_partial_document_with_blank_table() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "steelblue")
+    draw = ImageDraw.Draw(image)
+    for top in range(150, 430, 45):
+        draw.rectangle((410, top, 880, top + 18), fill="black")
+    draw.rectangle((360, 500, 940, 735), outline="black", width=3)
+    for top in (555, 610, 665):
+        draw.line((360, top, 940, top), fill="black", width=3)
+    for left in (500, 640, 780):
+        draw.line((left, 500, left, 735), fill="black", width=3)
+    return image
+
+
 def make_document_photo_with_wide_bottom_text() -> Image.Image:
     image = Image.new("RGB", (1200, 800), "steelblue")
     draw = ImageDraw.Draw(image)
@@ -201,6 +214,88 @@ class PhotoNormalizeTest(unittest.TestCase):
         self.assertIsNotNone(subject)
         self.assertGreaterEqual(subject["bbox"][3], 760)
         self.assertLessEqual(subject["bbox"][3], 790)
+
+    def test_content_subject_keeps_blank_table_below_text(self):
+        subject = photo_normalize.detect_content_subject(
+            make_partial_document_with_blank_table()
+        )
+
+        self.assertIsNotNone(subject)
+        self.assertGreaterEqual(subject["structural_table_component_count"], 1)
+        self.assertGreaterEqual(subject["bbox"][3], 735)
+
+    def test_line_cluster_corrects_tilted_blank_table(self):
+        page = make_partial_document_with_blank_table()
+        corners = photo_normalize._image_corners(page.size)
+        camera = photo_normalize.cv2.getPerspectiveTransform(
+            corners,
+            np.float32([[12, 8], [1190, 18], [1185, 792], [8, 784]]),
+        )
+        captured = Image.fromarray(photo_normalize._warp_image(page, camera, page.size))
+
+        frame = photo_normalize._structural_table_frame(captured)
+        matrix, size, report = photo_normalize._table_projection(captured)
+
+        self.assertIsNotNone(frame)
+        self.assertEqual(report["source"], "line_cluster")
+        self.assertEqual(report["status"], "applied")
+        self.assertFalse(np.array_equal(matrix, np.eye(3)))
+        self.assertGreater(size[0], 0)
+        self.assertGreater(size[1], 0)
+
+    def test_merged_horizontal_coverage_does_not_count_repeated_hough_segments(self):
+        segments = [
+            (400, 100, 200, 500, 200, 0),
+            (400, 101, 201, 499, 201, 0),
+            (300, 495, 200, 795, 200, 0),
+        ]
+
+        coverage = photo_normalize._merged_horizontal_coverage(segments, 1200)
+
+        self.assertEqual(coverage, 695)
+        self.assertLess(coverage, sum(segment[0] for segment in segments))
+
+    def test_three_isolated_horizontal_rules_do_not_trigger_line_cluster(self):
+        page = Image.new("RGB", (1200, 800), "steelblue")
+        draw = ImageDraw.Draw(page)
+        for top in (150, 390, 630):
+            draw.line((180, top, 1020, top), fill="black", width=4)
+
+        self.assertIsNone(photo_normalize._structural_table_frame(page))
+
+    def test_mismatched_horizontal_rule_endpoints_do_not_trigger_line_cluster(self):
+        page = Image.new("RGB", (1200, 800), "steelblue")
+        draw = ImageDraw.Draw(page)
+        draw.line((80, 150, 900, 150), fill="black", width=4)
+        draw.line((420, 390, 1140, 390), fill="black", width=4)
+        draw.line((180, 630, 920, 630), fill="black", width=4)
+        draw.line((60, 150, 60, 630), fill="black", width=4)
+        draw.line((1150, 150, 1150, 630), fill="black", width=4)
+
+        self.assertIsNone(photo_normalize._structural_table_frame(page))
+
+    def test_dense_text_rules_do_not_trigger_line_cluster(self):
+        page = Image.new("RGB", (1200, 800), "steelblue")
+        draw = ImageDraw.Draw(page)
+        for top in range(150, 691, 45):
+            draw.rectangle((300, top, 900, top + 18), fill="black")
+        draw.line((300, 150, 300, 690), fill="black", width=4)
+        draw.line((900, 150, 900, 690), fill="black", width=4)
+
+        self.assertIsNone(photo_normalize._structural_table_frame(page))
+
+    def test_line_cluster_prefers_supported_table_over_earlier_page_rule(self):
+        page = Image.new("RGB", (1200, 800), "steelblue")
+        draw = ImageDraw.Draw(page)
+        draw.line((80, 80, 1120, 80), fill="black", width=4)
+        draw.rectangle((300, 450, 900, 750), outline="black", width=4)
+        for top in (550, 650):
+            draw.line((300, top, 900, top), fill="black", width=4)
+
+        frame = photo_normalize._structural_table_frame(page)
+
+        self.assertIsNotNone(frame)
+        self.assertGreater(frame[:, 1].min(), 350)
 
     def test_content_subject_keeps_dense_wide_text_at_the_frame_bottom(self):
         subject = photo_normalize.detect_content_subject(
