@@ -24,6 +24,8 @@ except ImportError as exc:
         extra_notes=[f"原始错误: {exc}"],
     )
 
+from pdf_preprocess_skew import SkewDetector
+
 
 PAGE_SIZES_MM = {
     "a4": (210, 297),
@@ -32,6 +34,7 @@ PAGE_SIZES_MM = {
 DEFAULT_PAGE_SIZE = "a4"
 DEFAULT_CONTRAST_STRENGTH = 0.7
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
+MAX_RESIDUAL_TILT_DEG = 5.0
 
 
 def load_photo(path: str | Path) -> Image.Image:
@@ -683,6 +686,15 @@ def _warp_image(image: Image.Image, transform: np.ndarray, size: tuple[int, int]
     )
 
 
+def _expand_projected_canvas(
+    matrix: np.ndarray, projected_corners: np.ndarray,
+) -> tuple[np.ndarray, tuple[int, int]]:
+    offset = np.floor(projected_corners.min(axis=0))
+    width, height = (np.ceil(projected_corners.max(axis=0)) - offset + 1).astype(int)
+    matrix[:2] -= offset[:, None] * matrix[2]
+    return matrix, (int(width), int(height))
+
+
 def _table_frame(preview: Image.Image) -> np.ndarray | None:
     """Find a large, connected frame whose four sides have continuous support."""
     width, height = preview.size
@@ -993,7 +1005,7 @@ def _table_projection(preview: Image.Image) -> tuple[np.ndarray, tuple[int, int]
         [round(float(angle), 3) for angle in angles],
     ))
     report["source"] = frame_source
-    if max_tilt <= 0.15 or max_tilt > 5.0:
+    if max_tilt <= 0.15 or max_tilt > MAX_RESIDUAL_TILT_DEG:
         report["status"] = "within_tolerance" if max_tilt <= 0.15 else "outside_safe_limit"
         return np.eye(3), preview.size, report
 
@@ -1014,11 +1026,117 @@ def _table_projection(preview: Image.Image) -> tuple[np.ndarray, tuple[int, int]
         report["status"] = "outside_safe_limit"
         return np.eye(3), preview.size, report
 
-    offset = np.floor(projected.min(axis=0))
-    width, height = (np.ceil(projected.max(axis=0)) - offset + 1).astype(int)
-    matrix[:2] -= offset[:, None] * matrix[2]
     report["status"] = "applied"
-    return matrix, (int(width), int(height)), report
+    matrix, size = _expand_projected_canvas(matrix, projected)
+    return matrix, size, report
+
+
+def _text_skew_angles(
+    preview: Image.Image,
+) -> tuple[float | None, list[float | None]]:
+    """Measure the angle of glyph-sized ink across the page and in three bands."""
+    gray_preview = preview.convert("L")
+    gray_preview.thumbnail((1100, 1100), Image.Resampling.BILINEAR)
+    width, height = gray_preview.size
+    if min(width, height) < 120:
+        return None, []
+
+    pad_x, pad_y = round(width * 0.06), round(height * 0.06)
+    gray = np.asarray(gray_preview)[pad_y:height - pad_y, pad_x:width - pad_x]
+    ink = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 9
+    )
+    _, labels, stats, centers = cv2.connectedComponentsWithStats(ink)
+    widths = stats[:, cv2.CC_STAT_WIDTH]
+    heights = stats[:, cv2.CC_STAT_HEIGHT]
+    areas = stats[:, cv2.CC_STAT_AREA]
+    short_edge = min(gray.shape)
+    glyphs = (
+        (widths >= 2)
+        & (widths <= gray.shape[1] * 0.065)
+        & (heights >= max(3, round(short_edge * 0.007)))
+        & (heights <= short_edge * 0.08)
+        & (heights >= widths * 0.25)
+        & (areas >= 7)
+        & (areas < widths * heights * 0.93)
+    )
+    glyphs[0] = False
+    if np.count_nonzero(glyphs) < 60:
+        return None, []
+
+    mask = np.where(glyphs[labels], 0, 255).astype(np.uint8)
+    detector = SkewDetector()
+    angle = detector.projection_profile_angle(Image.fromarray(mask))
+    band_angles = []
+    boundaries = np.rint(np.linspace(0, mask.shape[0], 4)).astype(int)
+    for top, bottom in zip(boundaries, boundaries[1:]):
+        band_glyphs = glyphs & (centers[:, 1] >= top) & (centers[:, 1] < bottom)
+        band_angle = (
+            detector.projection_profile_angle(Image.fromarray(mask[top:bottom]))
+            if np.count_nonzero(band_glyphs) >= 20 else None
+        )
+        band_angles.append(band_angle)
+    return angle, band_angles
+
+
+def _text_rotation_projection(
+    size: tuple[int, int], angle: float | None, band_angles: list[float | None],
+) -> tuple[np.ndarray, tuple[int, int], dict]:
+    report = {"status": "insufficient_text"}
+    if angle is None:
+        return np.eye(3), size, report
+
+    available_bands = [band for band in band_angles if band is not None]
+    selected_angle = float(np.median(available_bands)) if len(available_bands) >= 2 else angle
+    report.update(
+        angle_deg=round(selected_angle, 2),
+        detected_angle_deg=round(angle, 2),
+        band_angles_deg=[round(band, 2) if band is not None else None for band in band_angles],
+    )
+    if abs(selected_angle) <= 0.3:
+        report["status"] = "within_tolerance"
+    elif abs(selected_angle) > MAX_RESIDUAL_TILT_DEG:
+        report["status"] = "outside_safe_limit"
+    elif sum(abs(band - selected_angle) <= 1.2 for band in available_bands) < 2:
+        report["status"] = "inconsistent_text_angles"
+    else:
+        center = ((size[0] - 1) / 2, (size[1] - 1) / 2)
+        matrix = np.vstack((cv2.getRotationMatrix2D(center, selected_angle, 1.0), [0, 0, 1]))
+        projected = cv2.perspectiveTransform(_image_corners(size)[None], matrix)[0]
+        matrix, expanded_size = _expand_projected_canvas(matrix, projected)
+        report["status"] = "applied"
+        return matrix, expanded_size, report
+    return np.eye(3), size, report
+
+
+def _refine_page_geometry(
+    preview: Image.Image, clockwise: int,
+) -> tuple[np.ndarray, tuple[int, int], dict, dict]:
+    matrix, size, table_report = _table_projection(preview)
+    table_applied = table_report["status"] == "applied"
+    if table_applied and table_report["source"] == "connected_frame":
+        return matrix, size, table_report, {"status": "table_aligned"}
+
+    angle, band_angles = _text_skew_angles(_rotate_clockwise(preview, clockwise))
+    if table_applied:
+        if angle is not None:
+            table_preview = Image.fromarray(_warp_image(preview, matrix, size))
+            after_angle, after_bands = _text_skew_angles(_rotate_clockwise(table_preview, clockwise))
+            worse_bands = sum(
+                before is not None and after is not None and abs(after) > abs(before) + 0.45
+                for before, after in zip(band_angles, after_bands)
+            )
+            if after_angle is not None and abs(after_angle) > abs(angle) + 0.6 and worse_bands >= 2:
+                table_report.update(
+                    status="rejected_text_regression",
+                    text_angle_before_deg=round(angle, 2),
+                    text_angle_candidate_deg=round(after_angle, 2),
+                )
+        if table_report["status"] == "applied":
+            return matrix, size, table_report, {"status": "table_aligned"}
+
+    matrix, size, text_report = _text_rotation_projection(preview.size, angle, band_angles)
+    return matrix, size, table_report, text_report
 
 
 def normalize_illumination(
@@ -1251,10 +1369,13 @@ def normalize_photo_pdf(
         rotation_reason = "explicit"
 
     if quad_meta["quad_detected"]:
-        table_matrix, refined_preview_size, table_report = _table_projection(preview)
+        refinement_matrix, refined_preview_size, table_report, text_report = (
+            _refine_page_geometry(preview, clockwise)
+        )
     else:
-        table_matrix, refined_preview_size = np.eye(3), preview_size
+        refinement_matrix, refined_preview_size = np.eye(3), preview_size
         table_report = {"status": "no_paper_quad"}
+        text_report = {"status": "no_document_region"}
     corrected_size = tuple(
         round(refined * paper / preview_edge)
         for refined, paper, preview_edge in zip(refined_preview_size, paper_size, preview_size)
@@ -1267,7 +1388,7 @@ def normalize_photo_pdf(
     else:
         content_size = _contained_size(oriented_size, final_size)
     render_size = content_size[::-1] if swaps_axes else content_size
-    composed = _resize_matrix(refined_preview_size, render_size) @ table_matrix
+    composed = _resize_matrix(refined_preview_size, render_size) @ refinement_matrix
     raster = _warp_image(photo, composed @ preview_matrix, render_size)
     oriented = _rotate_clockwise(Image.fromarray(raster), clockwise)
 
@@ -1276,7 +1397,7 @@ def normalize_photo_pdf(
         strength=illumination_strength,
         contrast_strength=contrast_strength,
     )
-    if table_report["status"] == "applied":
+    if table_report["status"] == "applied" or text_report["status"] == "applied":
         clip_points = cv2.perspectiveTransform(_image_corners(preview_size)[None], composed)[0]
         clip_mask = np.zeros(raster.shape[:2], dtype=np.uint8)
         cv2.fillConvexPoly(clip_mask, np.rint(clip_points).astype(np.int32), 255)
@@ -1318,6 +1439,7 @@ def normalize_photo_pdf(
         "rotation_clockwise": clockwise,
         "rotation_reason": rotation_reason,
         "table_alignment": table_report,
+        "text_deskew": text_report,
         "illumination": {
             "strength": illumination_strength,
             "contrast_strength": contrast_strength,
@@ -1414,6 +1536,9 @@ def main() -> int:
     )
     print(f"粗方向旋转: {report['rotation_clockwise']}°（{report['rotation_reason']}）")
     print(f"表框校正: {report['table_alignment']['status']}")
+    text_report = report["text_deskew"]
+    text_angle = f"（检测 {text_report['angle_deg']}°）" if "angle_deg" in text_report else ""
+    print(f"正文纠斜: {text_report['status']}{text_angle}")
     print(
         "阴影块亮度离散: "
         f"{report['illumination']['before_shadow_score']:.2f} → "

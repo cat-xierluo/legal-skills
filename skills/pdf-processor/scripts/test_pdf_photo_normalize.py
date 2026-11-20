@@ -57,6 +57,53 @@ def make_partial_document_photo() -> Image.Image:
     return image
 
 
+def make_rotated_text_document_photo() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "white")
+    draw = ImageDraw.Draw(image)
+    draw.line((100, 105, 1100, 105), fill="black", width=3)
+    for top in range(150, 691, 54):
+        for left in range(110, 1031, 70):
+            draw.rectangle((left, top, left + 44, top + 12), fill="black")
+    draw.line((100, 735, 1100, 735), fill="black", width=3)
+    return image.rotate(-3, resample=Image.Resampling.BICUBIC, fillcolor="white")
+
+
+def make_conflicting_text_and_table_photo() -> Image.Image:
+    image = Image.new("RGB", (1200, 800), "white")
+    text_layer = Image.new("RGB", image.size, "white")
+    text_draw = ImageDraw.Draw(text_layer)
+    for top in range(120, 391, 44):
+        for left in range(100, 1031, 62):
+            text_draw.rectangle((left, top, left + 38, top + 11), fill="black")
+    image.paste(
+        text_layer.rotate(1, resample=Image.Resampling.BICUBIC, fillcolor="white"),
+        (0, 0),
+    )
+
+    draw = ImageDraw.Draw(image)
+    slope = float(np.tan(np.radians(3)))
+    left_x, right_x = 250, 950
+    for row in (450, 550, 650):
+        draw.line(
+            (left_x, row, right_x, row + slope * (right_x - left_x)),
+            fill="black",
+            width=3,
+        )
+    for center_x in (left_x, right_x):
+        for top, bottom in ((465, 545), (555, 635)):
+            draw.line(
+                (
+                    center_x + slope * (top - 550),
+                    top,
+                    center_x + slope * (bottom - 550),
+                    bottom,
+                ),
+                fill="black",
+                width=3,
+            )
+    return image
+
+
 def make_overlapping_document_photo() -> Image.Image:
     image = Image.new("RGB", (1200, 800), "steelblue")
     draw = ImageDraw.Draw(image)
@@ -296,6 +343,59 @@ class PhotoNormalizeTest(unittest.TestCase):
 
         self.assertIsNotNone(frame)
         self.assertGreater(frame[:, 1].min(), 350)
+
+    def test_text_projection_corrects_tilted_page_without_a_table(self):
+        page = make_rotated_text_document_photo()
+
+        matrix, size, table_report, text_report = photo_normalize._refine_page_geometry(page, 0)
+
+        self.assertEqual(table_report["status"], "no_reliable_frame")
+        self.assertEqual(text_report["status"], "applied")
+        self.assertGreater(abs(text_report["angle_deg"]), 1.5)
+        self.assertFalse(np.array_equal(matrix, np.eye(3)))
+        self.assertGreater(size[0], page.width)
+        self.assertGreater(size[1], page.height)
+
+    def test_text_projection_keeps_a_better_line_cluster_correction(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "blank-table.png"
+            target = Path(tempdir) / "blank-table.pdf"
+            page = make_partial_document_with_blank_table()
+            camera = photo_normalize.cv2.getPerspectiveTransform(
+                photo_normalize._image_corners(page.size),
+                np.float32([[12, 8], [1190, 18], [1185, 792], [8, 784]]),
+            )
+            captured = photo_normalize._warp_image(page, camera, page.size)
+            Image.fromarray(captured).save(source)
+
+            with patch.object(photo_normalize, "detect_document_quad", return_value=None):
+                metadata = photo_normalize.normalize_photo_pdf(
+                    source,
+                    target,
+                    rotation="0",
+                    page_size="original",
+                    dpi=110,
+                )
+
+            self.assertEqual(metadata["table_alignment"]["status"], "applied")
+            self.assertEqual(metadata["text_deskew"]["status"], "table_aligned")
+
+    def test_text_projection_rejects_line_cluster_that_worsens_text(self):
+        page = make_conflicting_text_and_table_photo()
+
+        matrix, size, table_report, text_report = photo_normalize._refine_page_geometry(page, 0)
+
+        self.assertIsNotNone(photo_normalize._structural_table_frame(page))
+        self.assertEqual(table_report["source"], "line_cluster")
+        self.assertEqual(table_report["status"], "rejected_text_regression")
+        self.assertGreater(
+            abs(table_report["text_angle_candidate_deg"]),
+            abs(table_report["text_angle_before_deg"]),
+        )
+        self.assertEqual(text_report["status"], "applied")
+        self.assertFalse(np.array_equal(matrix, np.eye(3)))
+        self.assertGreater(size[0], page.width)
+        self.assertGreater(size[1], page.height)
 
     def test_content_subject_keeps_dense_wide_text_at_the_frame_bottom(self):
         subject = photo_normalize.detect_content_subject(
