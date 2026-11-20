@@ -433,6 +433,70 @@ def _nearby_artifact_components(
     return artifacts
 
 
+def _structural_table_components(
+    image: Image.Image, primary: list[dict[str, int]]
+) -> list[dict[str, int]]:
+    """Find sparse line networks left by blank tables below or beside text."""
+    image_array = np.asarray(image)
+    gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+    ink = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 9
+    )
+    line_mask = cv2.morphologyEx(
+        ink,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (19, 3)),
+    )
+    line_mask = cv2.morphologyEx(line_mask, cv2.MORPH_OPEN, np.ones((2, 2), dtype=np.uint8))
+    component_count, labels, stats, _ = cv2.connectedComponentsWithStats(line_mask)
+
+    width, height = image.size
+    text_left = min(item["left"] for item in primary)
+    text_right = max(item["left"] + item["width"] for item in primary)
+    text_bottom = max(item["top"] + item["height"] for item in primary)
+    text_width = max(1, text_right - text_left)
+    components = []
+    for index in range(1, component_count):
+        left, top, component_width, component_height, area = map(int, stats[index])
+        right, bottom = left + component_width, top + component_height
+        horizontal_overlap = min(text_right, right) - max(text_left, left)
+        density = area / max(component_width * component_height, 1)
+        if (
+            component_width < text_width * 0.45
+            or component_height < height * 0.08
+            or component_width / max(component_height, 1) < 1.2
+            or horizontal_overlap < component_width * 0.35
+            or density > 0.35
+        ):
+            continue
+        extends_subject = (
+            bottom > text_bottom + height * 0.02
+            or right > text_right + width * 0.02
+            or left < text_left - width * 0.02
+        )
+        touches_frame_side = left <= 2 or top <= 2 or right >= width - 3
+        bbox_area_ratio = component_width * component_height / (width * height)
+        if not extends_subject or touches_frame_side or bbox_area_ratio > 0.3:
+            continue
+        component_mask = (labels == index).astype(np.uint8)
+        vertical_kernel = max(25, round(component_height * 0.3))
+        vertical_support = cv2.morphologyEx(
+            component_mask,
+            cv2.MORPH_OPEN,
+            cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel)),
+        )
+        if np.count_nonzero(vertical_support) < 50:
+            continue
+        components.append({
+            "left": left,
+            "top": top,
+            "width": component_width,
+            "height": component_height,
+            "area": area,
+        })
+    return components
+
+
 def detect_content_subject(image: Image.Image) -> dict | None:
     """Find a reliable visible text block when the full paper edge is absent."""
     max_detection_size = 1200
@@ -470,6 +534,7 @@ def detect_content_subject(image: Image.Image) -> dict | None:
         and item["width"] >= 10
         and item["height"] >= 10
     ]
+    structural_tables = _structural_table_components(resized, primary)
 
     width, height = resized.size
     margin_x = round(width * 0.035)
@@ -493,6 +558,16 @@ def detect_content_subject(image: Image.Image) -> dict | None:
         }
         for item in [*primary, *expansion_artifacts]
     ]
+    structural_bounds = [
+        {
+            "left": item["left"],
+            "top": item["top"],
+            "right": item["left"] + item["width"],
+            "bottom": item["top"] + item["height"],
+        }
+        for item in structural_tables
+    ]
+    bounds_components.extend(structural_bounds)
     left = max(0, min(item["left"] for item in bounds_components) - margin_x)
     top = max(0, min(item["top"] for item in bounds_components) - top_margin)
     right = min(
@@ -551,6 +626,7 @@ def detect_content_subject(image: Image.Image) -> dict | None:
         "area_coverage": round(float(area_ratio), 4),
         "bbox": [left, top, right, bottom],
         "secondary_component_count": len(components) - len(primary),
+        "structural_table_component_count": len(structural_tables),
     }
 
 
@@ -666,9 +742,242 @@ def _table_frame(preview: Image.Image) -> np.ndarray | None:
     return frame
 
 
+def _merged_horizontal_coverage(
+    segments: list[tuple[float, int, int, int, int, float]], width: int
+) -> int:
+    """Measure deduplicated horizontal coverage instead of Hough repeat count."""
+    intervals = sorted((min(item[1], item[3]), max(item[1], item[3])) for item in segments)
+    if not intervals:
+        return 0
+    merged: list[list[int]] = [list(intervals[0])]
+    gap_tolerance = max(6, round(width * 0.01))
+    for start, end in intervals[1:]:
+        if start <= merged[-1][1] + gap_tolerance:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return sum(end - start for start, end in merged)
+
+
+def _sparse_rule_group(
+    ink: np.ndarray,
+    group: list[tuple[float, int, int, int, int, float]],
+) -> bool:
+    """Reject clusters formed by the two edges of dense text bars."""
+    densities = []
+    half_window = 15
+    sampled_segments = sorted(group, key=lambda item: item[0], reverse=True)[:32]
+    for _, x1, y1, x2, y2, _ in sampled_segments:
+        start_x, end_x = min(x1, x2), max(x1, x2)
+        span = max(1, end_x - start_x)
+        for sample_x in (
+            start_x + round(span * 0.25),
+            start_x + round(span * 0.5),
+            start_x + round(span * 0.75),
+        ):
+            sample_y = y1 + (y2 - y1) * (sample_x - x1) / span
+            top = max(0, round(sample_y - half_window))
+            bottom = min(ink.shape[0], top + 2 * half_window + 1)
+            densities.append(float(ink[top:bottom, sample_x].mean() / 255))
+    return bool(densities) and float(np.median(densities)) <= 0.32
+
+
+def _structural_table_frame(preview: Image.Image) -> np.ndarray | None:
+    """Recover a blank-table quad from parallel clusters of long horizontal rules."""
+    width, height = preview.size
+    gray = cv2.cvtColor(np.asarray(preview), cv2.COLOR_RGB2GRAY)
+    ink = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 9
+    )
+    raw_lines = cv2.HoughLinesP(
+        ink,
+        1,
+        np.pi / 180,
+        60,
+        minLineLength=round(width * 0.12),
+        maxLineGap=15,
+    )
+    if raw_lines is None:
+        return None
+    raw_lines = np.asarray(raw_lines).reshape(-1, 4)
+
+    segments = []
+    vertical_segments = []
+    for x1, y1, x2, y2 in raw_lines:
+        dx, dy = int(x2) - int(x1), int(y2) - int(y1)
+        length = float(np.hypot(dx, dy))
+        angle = float(np.degrees(np.arctan2(dy, dx)))
+        if abs(angle) <= 6:
+            segments.append((length, int(x1), int(y1), int(x2), int(y2), angle))
+        elif 84 <= abs(angle) <= 96 and length >= max(20, height * 0.08):
+            vertical_segments.append((length, int(x1), int(y1), int(x2), int(y2), angle))
+    if len(segments) < 2:
+        return None
+
+    groups: list[list[tuple[float, int, int, int, int, float]]] = []
+    for segment in sorted(segments, key=lambda item: (item[2] + item[4]) / 2):
+        center = (segment[2] + segment[4]) / 2
+        for group in groups:
+            group_center = np.mean([(item[2] + item[4]) / 2 for item in group])
+            group_angle = np.mean([item[5] for item in group])
+            if (
+                abs(center - group_center) <= height * 0.03
+                and abs(segment[5] - group_angle) <= 3
+            ):
+                group.append(segment)
+                break
+        else:
+            groups.append([segment])
+
+    rows = []
+    for group in groups:
+        points = []
+        for _, x1, y1, x2, y2, _ in group:
+            points.extend(((x1, y1), (x2, y2)))
+        left = min(point[0] for point in points)
+        right = max(point[0] for point in points)
+        center_y = float(np.mean([point[1] for point in points]))
+        coverage = _merged_horizontal_coverage(group, width)
+        if (
+            right - left < width * 0.35
+            or coverage < width * 0.35
+            or not _sparse_rule_group(ink, group)
+        ):
+            continue
+        rows.append({
+            "left": left,
+            "right": right,
+            "center_y": center_y,
+            "length": float(coverage),
+            "group": group,
+        })
+    if len(rows) < 3:
+        return None
+
+    candidates = []
+    for upper in rows:
+        for lower in rows:
+            vertical_gap = lower["center_y"] - upper["center_y"]
+            horizontal_overlap = (
+                min(upper["right"], lower["right"])
+                - max(upper["left"], lower["left"])
+            )
+            if vertical_gap < height * 0.18 or horizontal_overlap < width * 0.25:
+                continue
+            score = (
+                min(upper["length"], lower["length"])
+                + horizontal_overlap
+                + vertical_gap
+            )
+            candidates.append((score, upper, lower))
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda item: (
+            item[0],
+        ),
+        reverse=True,
+    )
+    for _, upper, lower in candidates:
+        if (
+            abs(upper["left"] - lower["left"]) > width * 0.2
+            or abs(upper["right"] - lower["right"]) > width * 0.2
+        ):
+            continue
+        selected_top = min(upper["center_y"], lower["center_y"])
+        selected_bottom = max(upper["center_y"], lower["center_y"])
+        boundary_tolerance = height * 0.04
+
+        def aligned_spans(upper_x: int, lower_x: int) -> list[list[int]]:
+            spans = []
+            minimum_x = min(upper_x, lower_x) - round(width * 0.01)
+            maximum_x = max(upper_x, lower_x) + round(width * 0.01)
+            for segment in vertical_segments:
+                _, x1, y1, x2, y2, _ = segment
+                top, bottom = min(y1, y2), max(y1, y2)
+                center_x = (x1 + x2) / 2
+                if (
+                    center_x < minimum_x
+                    or center_x > maximum_x
+                ):
+                    continue
+                overlap_start = max(top, round(selected_top))
+                overlap_end = min(bottom, round(selected_bottom))
+                overlap = overlap_end - overlap_start
+                if overlap < max(8, min(segment[0] * 0.3, height * 0.04)):
+                    continue
+                spans.append([overlap_start, overlap_end])
+            return spans
+
+        def side_is_supported(spans: list[list[int]]) -> bool:
+            if not spans:
+                return False
+            spans.sort()
+            merged = [list(spans[0])]
+            for start, end in spans[1:]:
+                if start <= merged[-1][1] + height * 0.03:
+                    merged[-1][1] = max(merged[-1][1], end)
+                else:
+                    merged.append([start, end])
+            coverage = sum(end - start for start, end in merged)
+            return (
+                merged[0][0] <= selected_top + boundary_tolerance
+                and merged[-1][1] >= selected_bottom - boundary_tolerance
+                and coverage >= (selected_bottom - selected_top) * 0.75
+            )
+
+        supported_sides = set()
+        if side_is_supported(aligned_spans(upper["left"], lower["left"])):
+            supported_sides.add("left")
+        if side_is_supported(aligned_spans(upper["right"], lower["right"])):
+            supported_sides.add("right")
+        if supported_sides != {"left", "right"}:
+            continue
+
+        def fit_line(group):
+            points = []
+            for _, x1, y1, x2, y2, _ in group:
+                points.extend(((x1, y1), (x2, y2)))
+            return np.polyfit(
+                [point[0] for point in points],
+                [point[1] for point in points],
+                1,
+            )
+
+        upper_line = fit_line(upper["group"])
+        lower_line = fit_line(lower["group"])
+        left = min(upper["left"], lower["left"])
+        right = max(upper["right"], lower["right"])
+        top = np.polyval(upper_line, (left, right))
+        bottom = np.polyval(lower_line, (left, right))
+        frame = np.float32([
+            [left, top[0]],
+            [right, top[1]],
+            [right, bottom[1]],
+            [left, bottom[0]],
+        ])
+        if (
+            not np.isfinite(frame).all()
+            or np.any(frame[:, 0] < 0)
+            or np.any(frame[:, 0] >= width)
+            or np.any(frame[:, 1] < 0)
+            or np.any(frame[:, 1] >= height)
+        ):
+            continue
+        if not _quad_is_convex(frame):
+            continue
+        frame = _order_quad(frame)
+        return frame
+    return None
+
+
 def _table_projection(preview: Image.Image) -> tuple[np.ndarray, tuple[int, int], dict]:
     """Rectify a trusted frame while retaining the full paper extent."""
     frame = _table_frame(preview)
+    frame_source = "connected_frame"
+    if frame is None:
+        frame = _structural_table_frame(preview)
+        frame_source = "line_cluster"
     if frame is None:
         return np.eye(3), preview.size, {"status": "no_reliable_frame"}
 
@@ -683,6 +992,7 @@ def _table_projection(preview: Image.Image) -> tuple[np.ndarray, tuple[int, int]
         ("top_angle_deg", "bottom_angle_deg", "left_angle_deg", "right_angle_deg"),
         [round(float(angle), 3) for angle in angles],
     ))
+    report["source"] = frame_source
     if max_tilt <= 0.15 or max_tilt > 5.0:
         report["status"] = "within_tolerance" if max_tilt <= 0.15 else "outside_safe_limit"
         return np.eye(3), preview.size, report
