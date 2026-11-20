@@ -49,6 +49,8 @@ git rev-list --left-right --count main...origin/main   # 左=本地独有 右=�
 | C. 不可达对象 | fsck 与 refs/reflog 交叉核定 | 先核恢复点、其他 worktree/在途操作和完整备份；expire/gc 删除恢复依据，须独立精确回收授权，不能直接 prune=now |
 | D. 分叉双线 | ⑤双侧均有独有提交 | 在隔离候选按内容/来源对账，保留双方有效成果；不能按提交日期决定丢弃哪条线 |
 
+分支或 Worktree 刚完成精确清理时，不要把本页历史重写流程和 GC 混在一次授权里。先按[清理后的恢复留底与 GC 门禁](cleanup-recovery-and-gc.md)保留恢复包、审计 baseline、执行受限 GC 并后验，再单独释放 recovery；本页历史重写仅在确认膨胀来自可达历史大对象后进入。
+
 ## 3. .gitignore 治理（配置同步仓白名单制）
 
 原则（私有仓与公开仓一致——膨胀与隐私无关，别因为是私有仓就放松）：

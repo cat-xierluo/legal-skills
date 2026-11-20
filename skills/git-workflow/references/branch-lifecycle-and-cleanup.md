@@ -247,7 +247,7 @@ git worktree list               # 确认临时 worktree 已清
 
 ### 3.6 多仓批量分支收口
 
-同一波 Agent 调度沉淀多个仓库的一次性分支时，先按本节逐仓完成候选判定，再进入[多仓分支批量清理](multi-repo-branch-cleanup.md)。多仓入口只统一冻结清单、恢复包、approval 绑定、精确 `update-ref -d` 和后验，不放宽开放 PR、生命周期、Worktree、活跃期或远端查询门禁。
+同一波 Agent 调度沉淀多个仓库的一次性分支时，先按本节逐仓完成候选判定，再进入[多仓分支批量清理](multi-repo-branch-cleanup.md)。多仓入口只统一冻结清单、恢复包、approval 绑定、精确 `update-ref -d` 和后验，不放宽开放 PR、生命周期、Worktree、活跃期或远端查询门禁。清理后的 GC 与恢复目录释放另按[清理后的恢复留底与 GC 门禁](cleanup-recovery-and-gc.md)执行。
 
 ## 4. 长期功能线关闭
 

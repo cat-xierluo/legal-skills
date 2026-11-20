@@ -86,4 +86,4 @@ git update-ref --no-deref -d refs/heads/<branch> <expected-tip>
 
 执行后运行 `verify`，核对回执、恢复 checksum、目标 ref 不存在、操作集合等于 prepared 集合。向用户报告删除数/仓库分布、跳过与原因、恢复目录、未触碰范围（远端分支、现存 Worktree、dirty/untracked 材料）以及 GitHub 查询失败等未验证边界。
 
-恢复目录应保留在仓外并设置 `0700`。清理成功不触发 GC；对象是否回收按仓库膨胀合同另行评估和授权。
+恢复目录应保留在仓外并设置 `0700`。清理成功不触发 GC；留底保留、对象 GC、后验、空间账本和恢复释放按[清理后的恢复留底与 GC 门禁](cleanup-recovery-and-gc.md)另行评估和授权。
