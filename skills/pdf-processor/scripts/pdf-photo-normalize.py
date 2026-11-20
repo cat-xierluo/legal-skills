@@ -37,6 +37,7 @@ SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp
 TEXT_TILT_TOLERANCE_DEG = 0.3
 BAND_ANGLE_TOLERANCE_DEG = 1.2
 MAX_RESIDUAL_TILT_DEG = 5.0
+COLUMN_ANGLE_TOLERANCE_DEG = 0.6
 
 
 def load_photo(path: str | Path) -> Image.Image:
@@ -1033,15 +1034,49 @@ def _table_projection(preview: Image.Image) -> tuple[np.ndarray, tuple[int, int]
     return matrix, size, report
 
 
+def _text_column_angles(
+    mask: np.ndarray, centers: np.ndarray, angle: float, detector: SkewDetector,
+) -> tuple[float, float] | None:
+    """Look for a persistent gutter and measure the two text columns separately."""
+    height, width = mask.shape
+    matrix = cv2.getRotationMatrix2D(((width - 1) / 2, (height - 1) / 2), angle, 1.0)
+    aligned = cv2.warpAffine(
+        mask, matrix, (width, height), flags=cv2.INTER_NEAREST, borderValue=255,
+    )
+    ink_per_column = np.count_nonzero(aligned == 0, axis=0)
+    inner_start, inner_stop = width // 4, 3 * width // 4
+    low_ink = ink_per_column[inner_start:inner_stop] <= max(1, ink_per_column.max() * 0.04)
+    edges = np.flatnonzero(np.diff(low_ink, prepend=False, append=False)) + inner_start
+    left, right = max(
+        zip(edges[::2], edges[1::2]), key=lambda gap: gap[1] - gap[0], default=(0, 0),
+    )
+    if right - left < max(6, round(width * 0.02)):
+        return None
+
+    positions = cv2.transform(centers[None], matrix)[0]
+    boundaries = np.linspace(0, height, 4)
+    populated_bands = 0
+    for top, bottom in zip(boundaries, boundaries[1:]):
+        band_x = positions[(positions[:, 1] >= top) & (positions[:, 1] < bottom), 0]
+        if np.count_nonzero(band_x < left) >= 20 and np.count_nonzero(band_x >= right) >= 20:
+            populated_bands += 1
+    if populated_bands < 2:
+        return None
+
+    left_angle = detector.projection_profile_angle(Image.fromarray(aligned[:, :left]))
+    right_angle = detector.projection_profile_angle(Image.fromarray(aligned[:, right:]))
+    return angle + left_angle, angle + right_angle
+
+
 def _text_skew_angles(
-    preview: Image.Image,
-) -> tuple[float | None, list[float | None]]:
-    """Measure the angle of glyph-sized ink across the page and in three bands."""
+    preview: Image.Image, *, check_columns: bool = True,
+) -> tuple[float | None, list[float | None], tuple[float, float] | None]:
+    """Measure glyph-sized ink across the page, in three bands and on either side of a gutter."""
     gray_preview = preview.convert("L")
     gray_preview.thumbnail((1100, 1100), Image.Resampling.BILINEAR)
     width, height = gray_preview.size
     if min(width, height) < 120:
-        return None, []
+        return None, [], None
 
     pad_x, pad_y = round(width * 0.06), round(height * 0.06)
     gray = np.asarray(gray_preview)[pad_y:height - pad_y, pad_x:width - pad_x]
@@ -1064,7 +1099,7 @@ def _text_skew_angles(
     )
     glyphs[0] = False
     if np.count_nonzero(glyphs) < 60:
-        return None, []
+        return None, [], None
 
     mask = np.where(glyphs[labels], 0, 255).astype(np.uint8)
     detector = SkewDetector()
@@ -1078,32 +1113,42 @@ def _text_skew_angles(
             if np.count_nonzero(band_glyphs) >= 20 else None
         )
         band_angles.append(band_angle)
-    return angle, band_angles
+    column_angles = (
+        _text_column_angles(mask, centers[glyphs], angle, detector) if check_columns else None
+    )
+    return angle, band_angles, column_angles
 
 
 def _text_rotation_projection(
     size: tuple[int, int], angle: float | None, band_angles: list[float | None],
+    *, column_angles: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, tuple[int, int], dict]:
     report = {"status": "insufficient_text"}
     if angle is None:
         return np.eye(3), size, report
 
     available_bands = [band for band in band_angles if band is not None]
-    selected_angle = float(np.median(available_bands)) if len(available_bands) >= 2 else angle
+    measurements = column_angles if column_angles is not None else available_bands
+    selected_angle = float(np.median(measurements)) if len(measurements) >= 2 else angle
+    magnitude = abs(round(selected_angle, 2))
     report.update(
         angle_deg=round(selected_angle, 2),
         detected_angle_deg=round(angle, 2),
         band_angles_deg=[round(band, 2) if band is not None else None for band in band_angles],
     )
-    if abs(selected_angle) <= TEXT_TILT_TOLERANCE_DEG:
+    if column_angles is not None:
+        report["column_angles_deg"] = [round(value, 2) for value in column_angles]
+    if column_angles is not None and round(abs(column_angles[0] - column_angles[1]), 2) > COLUMN_ANGLE_TOLERANCE_DEG:
+        report["status"] = "inconsistent_text_angles"
+    elif magnitude <= TEXT_TILT_TOLERANCE_DEG:
         report["status"] = "within_tolerance"
-    elif abs(selected_angle) > MAX_RESIDUAL_TILT_DEG:
+    elif magnitude > MAX_RESIDUAL_TILT_DEG:
         report["status"] = "outside_safe_limit"
     elif (
-        any(band * selected_angle <= 0 for band in available_bands)
+        any(value * selected_angle <= 0 for value in measurements)
         or sum(
-            abs(band - selected_angle) <= BAND_ANGLE_TOLERANCE_DEG
-            for band in available_bands
+            abs(value - selected_angle) <= BAND_ANGLE_TOLERANCE_DEG
+            for value in measurements
         ) < 2
     ):
         report["status"] = "inconsistent_text_angles"
@@ -1125,11 +1170,13 @@ def _refine_page_geometry(
     if table_applied and table_report["source"] == "connected_frame":
         return matrix, size, table_report, {"status": "table_aligned"}
 
-    angle, band_angles = _text_skew_angles(_rotate_clockwise(preview, clockwise))
+    angle, band_angles, column_angles = _text_skew_angles(_rotate_clockwise(preview, clockwise))
     if table_applied:
         if angle is not None:
             table_preview = Image.fromarray(_warp_image(preview, matrix, size))
-            after_angle, _ = _text_skew_angles(_rotate_clockwise(table_preview, clockwise))
+            after_angle, _, _ = _text_skew_angles(
+                _rotate_clockwise(table_preview, clockwise), check_columns=False,
+            )
             if after_angle is not None and abs(after_angle) > TEXT_TILT_TOLERANCE_DEG:
                 table_report.update(
                     status="rejected_text_residual",
@@ -1139,7 +1186,9 @@ def _refine_page_geometry(
         if table_report["status"] == "applied":
             return matrix, size, table_report, {"status": "table_aligned"}
 
-    matrix, size, text_report = _text_rotation_projection(preview.size, angle, band_angles)
+    matrix, size, text_report = _text_rotation_projection(
+        preview.size, angle, band_angles, column_angles=column_angles,
+    )
     return matrix, size, table_report, text_report
 
 
