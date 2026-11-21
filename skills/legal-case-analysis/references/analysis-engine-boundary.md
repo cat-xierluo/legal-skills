@@ -1,6 +1,6 @@
 # 法律分析引擎定位与协作边界
 
-本文件用于区分 `legal-case-analysis` 与其他法律文档类 Skill，包括 `judgment-analysis`、法律检索与 `legal-proposal-generator`。
+本文件用于区分 `legal-case-analysis` 与其他法律 Skill，包括 `legal-material-organizer`、`judgment-analysis`、法律检索与 `legal-proposal-generator`。
 
 ## 一、核心定位
 
@@ -14,9 +14,23 @@
 - 生成法律检索任务并吸收检索结果。
 - 形成风险判断、证据缺口、策略方向和行动建议。
 
+它不负责新材料接收和物理整理。下载、解包、OCR、ASR、归类、重命名、路径映射和增量入库由 `legal-material-organizer` 负责；本 Skill 不主动调用 organizer，只消费用户交付的整理结果。
+
 它不要求每次都生成正式报告。分析结果可以是简短答复、分析底稿、要件表、检索清单、风险清单或完整法律分析报告。
 
-## 二、与 legal-proposal-generator 的边界
+## 二、与 legal-material-organizer 的边界
+
+| 场景 | 优先使用 |
+|------|----------|
+| 收到单个可读文件、混合目录、压缩包、聊天导出件、链接或音视频 | `legal-material-organizer` |
+| 需要下载外链、OCR、ASR、重命名、归档或回写路径映射 | `legal-material-organizer` |
+| 需要判断客观证据、客户陈述、对方材料和争议材料 | 已入库后使用本 Skill |
+| 需要评价证明力强弱、事实贡献和证据风险 | 已入库后使用本 Skill |
+| 分析中收到补充材料 | 先由 organizer 入库，再回到本 Skill 增量更新事实与证据台账 |
+
+本 Skill 可以在新材料尚待入库时继续分析既有可读材料，但必须在交付中列出未融合材料；不得把这部分缺失隐去。
+
+## 三、与 legal-proposal-generator 的边界
 
 `legal-proposal-generator` 解决的问题是：如何把已有材料和分析包装成特定法律服务文档。
 
@@ -29,7 +43,7 @@
 | 生成客户沟通报告、结案汇报、内部沟通报告 | `legal-proposal-generator` |
 | 已有分析结论，需要改写成对外服务文档 | 先 `legal-case-analysis`，再 `legal-proposal-generator` |
 
-## 三、推荐协作流程
+## 四、推荐协作流程
 
 ### 1. 先分析再成文
 
@@ -52,7 +66,7 @@
 - 需要引用具体法条、司法解释或类案。
 - 客户方案中包含重要法律判断但缺少检索依据。
 
-## 四、输出给其他 Skill 的分析底稿
+## 五、输出给其他 Skill 的分析底稿
 
 当分析结果要交给其他 Skill 使用时，优先输出以下结构：
 
@@ -73,7 +87,7 @@
 这类底稿不追求正式报告表达，重点是让后续文档生成有可靠分析依据。
 
 
-## 五、与判决单文件节点及检索的边界
+## 六、与判决单文件节点及检索的边界
 
 `judgment-analysis` 负责读懂单份判决；本 Skill 负责围绕案件目标综合材料、检索法律并形成判断。判决分析不要求补齐卷宗；本 Skill 也不因只有一份材料就拒绝启动，但不能隐去关键缺口。
 

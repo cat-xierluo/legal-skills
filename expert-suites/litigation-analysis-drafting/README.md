@@ -1,12 +1,13 @@
 # 诉讼分析及文书撰写专家套件
 
 > [已发布 v0.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-litigation-analysis-drafting-0.2.0.zip)
+> 整套源码 v0.2.1 待发布
 
-面向具体诉讼案件的一体化工作流：接收和整理材料，形成事实、证据、争点与策略判断，再生成起诉、答辩、方案和客户交付文书。分析和写作是同一案件中的连续工作，不在两个套件之间切换。
+面向具体诉讼案件的一体化工作流：先由跨套件组合的 `legal-material-organizer` 完成新材料入库，再形成事实、证据、争点与策略判断，最后生成起诉、答辩、方案和客户交付文书。分析和写作是同一案件中的连续工作，不在两个套件之间重复整理材料。
 
 ## 适用场景
 
-- 从新案接收、材料整理和事实证据分析，推进到法律检索、风险判断和诉讼策略；
+- 从新案建档、材料入库和事实证据分析，推进到法律检索、风险判断和诉讼策略；
 - 对起诉状、答辩材料提出证据初评，或把已形成的判断转成方案和客户可读材料；
 - 对一份判决做法理深析，并结合卷宗、证据和检索材料判断上诉或再审路径；
 - 在同一案件里反复修订事实、争点、请求和文书，需要保持同一组证据编号和法律依据。
@@ -21,11 +22,11 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [new-case](../../skills/new-case/) | 建立标准案件目录、信息底板和期限结构 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/new-case-1.5.0.zip) |
+| [new-case](../../skills/new-case/) | 建立标准案件目录骨架、管理文件和期限结构；源码 v1.6.0 待发布 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/new-case-1.5.0.zip) |
 | [court-sms](../../skills/court-sms/) | 解析法院短信、获取法院文书并回填案件材料 | [已发布 v1.6.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/court-sms-1.6.2.zip) |
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-ocr-1.6.0.zip) |
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页码和证据索引，拆分、合并并规范材料 | [已发布 v0.6.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/pdf-organizer-0.6.1.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、起诉状证据初评、庭审复盘、上诉再审研判与单项争点备忘录；源码 v1.3.0 待发布 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 消费已整理可读材料，输出事实证据标签、证明力评分、争点、风险和单项争点备忘录；源码 v1.3.1 待发布 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip) |
 | [judgment-analysis](../../skills/judgment-analysis/) | 深析单份判决的事实认定、裁判理由、主文和文内疑点 | [已发布 v2.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/judgment-analysis-2.0.0.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索命题并核验法规、正反类案和文内法律依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/yuandian-law-search-1.10.1.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵和庭审路线图 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-visualization-0.8.2.zip) |
@@ -39,16 +40,16 @@
 
 | 阶段 | 主要入口 | 形成的结果 |
 | :--- | :--- | :--- |
-| 案件与材料底座 | `new-case`、`court-sms`、`legal-ocr`、`pdf-organizer` | 案件目录、法院文书、可检索材料和证据索引 |
-| 案件专项分析 | `legal-case-analysis`、`judgment-analysis`、`yuandian-law-search` | 事实、证据、争点、法律依据、风险和策略选项 |
+| 案件与材料底座 | `new-case` + 跨套件 `legal-material-organizer`；按处理任务组合 `court-sms`、`legal-ocr`、`pdf-organizer` | 案件结构、入库路径映射、法院文书、可检索材料和证据索引 |
+| 案件专项分析 | `legal-case-analysis`、`judgment-analysis`、`yuandian-law-search` | 事实、证据语义标签、证明力评分、争点、法律依据、风险和策略选项 |
 | 文书撰写与交付 | `elements-complaint-generator`、`legal-proposal-generator`、`md2word` | 起诉答辩、诉讼方案、客户材料和正式 Word |
 | 表达与复盘 | `legal-visualization`、`legal-case-analysis` | 时间线、关系图、庭审复盘和补强清单 |
 
-分析和文书撰写会循环迭代：发现证据缺口时回到材料与分析，形成新的判断后再修订对应文书。所有版本围绕同一案件目录和同一组证据编号延续。
+分析和文书撰写会循环迭代：发现证据缺口或收到补充材料时，先由 organizer 入库并回写路径，再增量更新分析。所有版本围绕同一案件目录和同一组证据编号延续。
 
 ## 与法律材料与证据处理套件的边界
 
-「法律材料与证据处理」面向任意业务场景，解决扫描、OCR、音视频转录、PDF 处理和法院来文归档。本套件面向诉讼案件，只保留完成诉讼分析和文书所必需的材料处理成员；需要音视频转录、证据截图或批量 PDF 预处理时，可组合使用前者。
+「法律材料与证据处理」中的 `legal-material-organizer` 是所有新材料的第一入口，解决下载、解包、预处理、归类、命名和路径映射。本套件面向诉讼分析和文书，只保留完成诉讼目标所必需的专项处理成员；需要音视频转录、证据截图或批量 PDF 预处理时，由 organizer 导出任务后组合使用前者。
 
 ## 历史套件
 
@@ -69,4 +70,4 @@
 
 ## 版本与许可证
 
-当前套件版本为 `0.2.0`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.2.1`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
