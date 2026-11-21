@@ -66,6 +66,15 @@
       "recovery": "重新运行构建或测试。"
     },
     {
+      "id": "keep-business-deliverable",
+      "match": "/(Clawd|输出文件|交付|deliverables?|final-delivery|案件材料|原始工程)(/|$)",
+      "class": "business-deliverable",
+      "reclaimable": false,
+      "risk": "n/a",
+      "reason": "成片、原始工程与交付目录，属于交付物与长期存档，不按可清理内容处理。",
+      "recovery": "不适用"
+    },
+    {
       "id": "reclaim-tool-runtime",
       "match": "/preinstalled-tools(/|$)|/runtime(/|$)|/versions(/|$)",
       "class": "tool-runtime",
