@@ -14,6 +14,8 @@ class BoundaryContractTest(unittest.TestCase):
         self.assertIn("新材料接收与案件结构适配", text)
         self.assertIn("先入库，再分析", text)
         self.assertIn("不强制调用、创建或交接 new-case", text)
+        self.assertIn("用户确认后的目标案件分类目录与既有路径引用", text)
+        self.assertIn("不改写时间线、法律判断、任务状态或 `case.yaml`", text)
 
     def test_existing_case_structure_takes_precedence(self):
         text = NAMING_RULES.read_text(encoding="utf-8")

@@ -722,9 +722,9 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、长期集成分支、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理、身份绑定 safe-push、提交身份自检/污染审计、worktree 前 3 查判读、主目录快照与常见事故恢复</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.25.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/git-workflow-1.25.0.zip">已发布 v1.25.0</a></td>
-<td>ZIP 仍为 v1.24.2；新增主目录仓外快照、摘要账本与采用门禁衔接；所属套件：<a href="expert-suites/skill-development-quality/">Skill 开发与质量保障</a>、<a href="expert-suites/skill-release-distribution/">Skill 发布与分发</a></td>
+<td style="text-align:center">v1.27.1</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/git-workflow-1.25.0.zip">旧版 v1.25.0</a></td>
+<td>源码 v1.27.1 待发布；新增主目录仓外快照、摘要账本与采用门禁衔接；所属套件：<a href="expert-suites/skill-development-quality/">Skill 开发与质量保障</a>、<a href="expert-suites/skill-release-distribution/">Skill 发布与分发</a></td>
 </tr>
 <tr>
 <td><a href="skills/cross-agent-coordination/"><strong>cross-agent-coordination</strong></a></td>

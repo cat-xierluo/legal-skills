@@ -114,7 +114,7 @@ metadata:
 
 ### 权限与安全边界
 
-- 只读取用户明确指定的源材料，写入路径仅限源目录 Markdown 投影、显式指定的 `archive-dir` 与 `work-dir`。
+- 只读取用户明确指定的源材料和目标案件根目录；写入路径仅限源目录 Markdown 投影、用户确认后的目标案件分类目录与既有路径引用、显式指定的 `archive-dir` 与 `work-dir`。
 - 可选外部解压器仅以参数数组调用 `7z` 或 `unar`，不通过 shell 拼接命令。
 - 清理操作仅限本次运行控制的 `work/extracted_containers/`，不删除源材料或用户其他目录。
 - 任何由本 Skill 编排的外链下载必须先获得用户确认，仅接受公网 HTTP/HTTPS 或受限 `data:image`；主机名须经 DNS 解析且全部指向公网地址，连接固定到已校验 IP（TLS SNI 与 Host 仍用原主机名），每一跳重定向目标同样复核且不得离开已确认主机及其子域，并设置单资源大小上限、目标路径边界、失败与人工复核留痕。
@@ -245,8 +245,11 @@ python3 scripts/material_processing_handoff.py record \
 - `renaming_map.json`
 - `材料清单.md`
 - 受路径变化影响的材料说明
+- 既有管理文件中仅受路径变化影响的材料清单或路径栏位（如 `trademark-info.md`、`patent-info.md`、`consultation-info.md`）
 
 重新扫描实际目录，核对文件总数、相对路径集合和缺失记录；不要只采信计划文件中的 `applied: true`。
+
+管理文件回写只修正展示路径和文件引用，不改写时间线、法律判断、任务状态或 `case.yaml`；需要进入案件状态库的路径变更另行输出映射，由 `case-progress` 的写入引擎处理。
 
 ## chat-html 专项路径
 
