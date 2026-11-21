@@ -21,3 +21,9 @@
 - 基于 Fathom 的快照差分与逐层归因思路，提供独立的磁盘空间研判 Skill；支持有预算的元数据采集和只读历史查询。
 - 区分模型、Agent 会话、Git 工作树、依赖缓存与可视化材料的保留价值；明确保护工程、独有素材、成品和必要证据。
 - 提供同口径比较、缺失不补零、权限/预算降级、私有新文件输出与合成正反例检查；不提供自动清理功能。
+# 1.2.0
+
+- 新增 `scripts/cleanup_classifier.py`：把扫描报告转成「哪里膨胀」（growth_ranking）与「哪里堆着可清理的东西」（occupancy_ranking）两张清单，并汇总 `reclaimable_occupancy_gib` 与 `keep_occupancy_gib`。
+- 新增 `references/cleanup_policy.json`：可扩展的路径分类规则，按顺序命中，区分可再生缓存、可重装依赖、编译产物等可清类别与聊天数据、会话历史、系统交换空间等保留类别。
+- 新增 `references/cleanup-reporting.md`：固定增量与存量两套口径、父路径去重、APFS clone 判定与输出要求。
+

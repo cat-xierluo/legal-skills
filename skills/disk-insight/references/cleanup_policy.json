@@ -1,0 +1,127 @@
+{
+  "schema": "disk-insight/cleanup-policy/1",
+  "note": "路径规则决定如何判定一个实测路径。按顺序命中，第一条匹配生效：具体规则在通用规则之前。class 决定归类，reclaimable 决定能否直接列为清理候选。",
+  "rules": [
+    {
+      "id": "keep-messaging-data",
+      "match": "WeChat|xinWeChat",
+      "class": "messaging-data",
+      "reclaimable": false,
+      "risk": "n/a",
+      "reason": "聊天容器是长期存量，主库文件会被重写，不能按体积或扩展名判为垃圾。",
+      "recovery": "不适用"
+    },
+    {
+      "id": "keep-session-history",
+      "match": "/\\.codex/(sessions|archived_sessions|thread_history)/|\\.codex/[^/]*\\.sqlite|\\.claude/projects/",
+      "class": "session-history",
+      "reclaimable": false,
+      "risk": "n/a",
+      "reason": "Agent 会话历史库，长期增长但不是单次骤降主因，删除即丢失历史。",
+      "recovery": "不适用"
+    },
+    {
+      "id": "keep-system-swap",
+      "match": "^/System/Volumes/VM(/|$)",
+      "class": "system-swap",
+      "reclaimable": false,
+      "risk": "high",
+      "reason": "系统按需扩张的交换文件，手工删除会造成内存压力与不稳定。",
+      "recovery": "不适用"
+    },
+    {
+      "id": "keep-external-volume",
+      "match": "^/Volumes(/|$)",
+      "class": "external-storage",
+      "reclaimable": false,
+      "risk": "n/a",
+      "reason": "外置卷上的内容不占启动盘，清理它不解决启动盘空间问题。",
+      "recovery": "不适用"
+    },
+    {
+      "id": "reclaim-app-update-cache",
+      "match": "/update\\.zip$|/pending/.*\\.zip$|-updater/|/Updates?/[^/]*\\.zip$|\\.app\\.tar\\.gz$|code_sign_clone",
+      "class": "app-update-cache",
+      "reclaimable": true,
+      "risk": "low",
+      "reason": "应用更新下载包、已安装暂存与签名克隆，更新完成后可再生。",
+      "recovery": "下次更新时由应用重新下载。"
+    },
+    {
+      "id": "reclaim-reinstallable-dependency",
+      "match": "/node_modules(/|$)|/\\.venv(/|$)|/venv(/|$)|/site-packages(/|$)|/\\.pnpm(/|$)",
+      "class": "reinstallable-dependency",
+      "reclaimable": true,
+      "risk": "low",
+      "reason": "可按锁文件重新安装的依赖目录。",
+      "recovery": "重新安装依赖。"
+    },
+    {
+      "id": "reclaim-build-output",
+      "match": "/(dist|build|out|target|\\.next|\\.turbo|\\.vite|coverage|__pycache__|\\.pytest_cache)(/|$)",
+      "class": "build-output",
+      "reclaimable": true,
+      "risk": "low",
+      "reason": "编译与测试产物，可由构建流程重新生成。",
+      "recovery": "重新运行构建或测试。"
+    },
+    {
+      "id": "reclaim-tool-runtime",
+      "match": "/preinstalled-tools(/|$)|/runtime(/|$)|/versions(/|$)",
+      "class": "tool-runtime",
+      "reclaimable": true,
+      "risk": "low",
+      "reason": "工具运行时与旧版本目录，安装或升级时可重新生成。",
+      "recovery": "重新安装或升级对应工具。"
+    },
+    {
+      "id": "reclaim-cache-root",
+      "match": "^/Users/[^/]+/(\\.cache|Library/Caches)(/|$)|/Library/Caches(/|$)|/Caches(/|$)",
+      "class": "cache-root",
+      "reclaimable": true,
+      "risk": "low",
+      "reason": "标准缓存目录下的内容由应用按需重建。",
+      "recovery": "应用下次运行时自动重建。"
+    },
+    {
+      "id": "reclaim-trash",
+      "match": "/\\.Trash(/|$)",
+      "class": "trash",
+      "reclaimable": true,
+      "risk": "medium",
+      "reason": "废纸篓内的已删除项目，清空后不可恢复。",
+      "recovery": "不可恢复；确认无需要保留的项目后再清空。"
+    },
+    {
+      "id": "conditional-git-backup",
+      "match": "-worktrees(/|$)|/backups?(/|$)|\\.bak(/|$)|-local-backup-|/-backup-|\\.snapshot$",
+      "class": "git-backup",
+      "reclaimable": false,
+      "risk": "medium",
+      "reason": "Git 备份、工作树或快照现场，删除前需逐对象证明与远端等价。",
+      "recovery": "需先用 git 核对可恢复性。"
+    },
+    {
+      "id": "conditional-review-media",
+      "match": "/review(s|-stage)?(/|$)|/pm-review(/|$)|/compare-stage(/|$)",
+      "class": "review-media",
+      "reclaimable": false,
+      "risk": "medium",
+      "reason": "评审与比稿渲染现场，常混入验收 JSON；需区分可再生媒体与证据材料。",
+      "recovery": "由同目录脚本重建，但证据须单独保留。"
+    },
+    {
+      "id": "unknown",
+      "match": ".*",
+      "class": "unclassified",
+      "reclaimable": false,
+      "risk": "unknown",
+      "reason": "未归类路径，需人工判断后再决定是否清理。",
+      "recovery": "不适用"
+    }
+  ],
+  "reporting": {
+    "min_gib": 0.2,
+    "max_listed": 15
+  }
+}
