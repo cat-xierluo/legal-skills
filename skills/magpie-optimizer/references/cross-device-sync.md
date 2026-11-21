@@ -46,13 +46,13 @@
 1. **冻结 writer**：指定一台权威机器；其他机器在收敛前不做配置修改。
 2. **本机留证**：每台机器先做各自可恢复的密封备份，并记录版本、启用的数据域和预期差异。
 3. **统一版本**：所有机器使用可互通的 Magpie 版本；版本差异以安装版帮助和回读为准。
-4. **权威端初始化**：在权威机器启用一个后端，先小范围 preview，再同步。命令示例：
+4. **权威端初始化**：在权威机器先用最小数据域启用后端；`on` 会立即完成一次初始同步。后续扩大数据域时先修改配置，再 preview，最后 `now`。命令示例：
 
    ```sh
-   magpie webdav preview
    magpie webdav on https://dav.example/magpie-parent/ \
-     user=<user> keys=<yes|no> agents=<yes|no> library=<yes|no>
+     user=<user> keys=no agents=no library=no
    magpie webdav set memory=<yes|no> usage=<yes|no> sign-ins=<yes|no>
+   magpie webdav preview
    magpie webdav auto <minutes>
    magpie webdav now
    ```
@@ -91,7 +91,7 @@
 | Skill 提示过大/missing | Skill 目录中的归档、缓存、生成物和二进制 | 把运行产物移出 Skill、改用远端 source，或整 Skill `off-here`；不要假设 `.gitignore` 会生效 |
 | 首次同步差异异常 | 权威机是否唯一 writer、follower 是否误开双向 | 停止写入，使用 CLI 的 undo/备份；不手工拼回 config 目录 |
 | 远端空/疑似损坏 | 是否新端点、权限误判、历史对象或恢复命令 | 先保留现场和远端对象；只有在确认替换目标并留备份后才 restore/upload |
-| passphrase 无效 | 是否误用服务端密码、大小法/输入法、密钥管理器版本 | 无法恢复旧文件；从权威机重新建立新密封版本 |
+| passphrase 无效 | 是否误用服务端密码、大小写/输入法、密钥管理器版本 | 无法恢复旧文件；从权威机重新建立新密封版本 |
 
 ## 7. 维护约定
 
