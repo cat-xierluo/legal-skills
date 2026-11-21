@@ -91,7 +91,7 @@ meta:
         - "YYYY/MM/DD {客户简称} {业务类型}"   # 日期格式错误
         - "{YYMMDD}-{Pinyin}-Trademark"        # 含非中文字符
     ux_rules:
-      - "整理新案件时，先按 backup/原文件名推断业务子类型，再用 mv 改名"
+      - "结构合同偏好按 backup/原文件名推断业务子类型；实际改名由 legal-material-organizer 规划和执行"
       - "已结案的简单检索（仅 1-2 个检索报告文件）可保留业务子类型后缀以保持命名一致"
       - "多子项目案件（如某客户同时含 注册/变更/复审/无效 多个子项目）→ 根目录用主项目业务子类型（如`商标变更`），子项目用各自业务子类型"
 
@@ -145,7 +145,7 @@ templates:
       - id: "06"
         icon: "📜"
         name: "商标注册证"
-        description: "商标注册证 PDF（独立一级目录，DEC-2026-06-11）。**文件名加 YYMMDD 日期前缀**，日期读 mtime/birth time。已带日期前缀的跳过。"
+        description: "商标注册证 PDF（独立一级目录，DEC-2026-06-11）。目录合同可声明偏好 YYMMDD 日期前缀；日期读取、冲突避让和重命名由 legal-material-organizer 规划执行。"
         core_files: ["商标注册证"]
       - id: "07"
         icon: "💰"
@@ -231,7 +231,7 @@ templates:
       - id: "07"
         icon: "📜"
         name: "商标注册证"
-        description: "商标注册证 PDF（独立一级目录，DEC-2026-06-11）。**文件名加 YYMMDD 日期前缀**，日期读 mtime/birth time。已带日期前缀的跳过。"
+        description: "商标注册证 PDF（独立一级目录，DEC-2026-06-11）。目录合同可声明偏好 YYMMDD 日期前缀；日期读取、冲突避让和重命名由 legal-material-organizer 规划执行。"
         core_files: ["商标注册证"]
       - id: "08"
         icon: "💰"

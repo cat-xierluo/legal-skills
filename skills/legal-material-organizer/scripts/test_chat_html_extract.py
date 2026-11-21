@@ -213,6 +213,55 @@ class DownloadErrorClassificationTest(unittest.TestCase):
         self.assertEqual(result.status, "access_denied")
         self.assertEqual(result.attempts, 1)
 
+    def test_cross_domain_redirect_is_rejected(self) -> None:
+        class RedirectResponse:
+            status = 302
+            headers = {"Location": "https://evil.example/payload.pdf"}
+
+            def getheader(self, name: str, default=None):
+                return self.headers.get(name, default)
+
+            def read(self, amount=-1):
+                return b""
+
+        class RedirectConnection:
+            def request(self, method, target, headers=None):
+                pass
+
+            def getresponse(self):
+                return RedirectResponse()
+
+            def close(self):
+                pass
+
+        with patch(
+            "chat_html_extract.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))],
+        ):
+            with patch(
+                "chat_html_extract._open_pinned_connection",
+                return_value=RedirectConnection(),
+            ):
+                with self.assertRaisesRegex(chat_html_extract.UnsafeHostError, "confirmed host"):
+                    chat_html_extract._request_url("https://files.cubox.pro/document.pdf")
+
+    def test_redirect_host_matrix(self) -> None:
+        same_host = chat_html_extract._is_same_host_redirect(
+            "https://files.cubox.pro/a.pdf",
+            "https://files.cubox.pro/b.pdf",
+        )
+        subdomain = chat_html_extract._is_same_host_redirect(
+            "https://files.cubox.pro/a.pdf",
+            "https://cdn.files.cubox.pro/b.pdf",
+        )
+        sibling = chat_html_extract._is_same_host_redirect(
+            "https://files.cubox.pro/a.pdf",
+            "https://download.cubox.pro/b.pdf",
+        )
+        self.assertTrue(same_host)
+        self.assertTrue(subdomain)
+        self.assertFalse(sibling)
+
     def test_oversized_response_is_rejected_without_retry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch(

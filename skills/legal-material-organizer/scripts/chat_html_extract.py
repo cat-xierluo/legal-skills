@@ -264,6 +264,12 @@ def _is_download_url(url: str) -> bool:
     return any(_host_matches(host, domain) for domain in DOWNLOAD_DOMAIN_WHITELIST)
 
 
+def _is_same_host_redirect(original_url: str, redirect_url: str) -> bool:
+    original_host = (urllib.parse.urlsplit(original_url).hostname or "").rstrip(".").lower()
+    redirect_host = (urllib.parse.urlsplit(redirect_url).hostname or "").rstrip(".").lower()
+    return bool(original_host) and _host_matches(redirect_host, original_host)
+
+
 def _is_image_url(url: str) -> bool:
     lower = url.lower()
     if lower.startswith("data:image/"):
@@ -477,7 +483,7 @@ def _prepare_request_target(url: str) -> tuple[str, list[str], str, int, str]:
 
 def _request_headers(host: str) -> dict[str, str]:
     return {
-        "User-Agent": "legal-material-organizer/0.16.1",
+        "User-Agent": "legal-material-organizer/0.17.0",
         "Host": host,
         "Accept": "*/*",
         "Connection": "close",
@@ -541,9 +547,12 @@ def _request_url(url: str, timeout: int = 30, max_bytes: int = MAX_DOWNLOAD_BYTE
                 location = response.getheader("Location")
                 if not location:
                     raise PermanentDownloadError("redirect without location")
-                current_url = urllib.parse.urljoin(current_url, location)
-                if not _is_public_http_url(current_url):
+                redirect_url = urllib.parse.urljoin(current_url, location)
+                if not _is_public_http_url(redirect_url):
                     raise UnsafeHostError("redirect target rejected")
+                if not _is_same_host_redirect(url, redirect_url):
+                    raise UnsafeHostError("redirect leaves confirmed host boundary")
+                current_url = redirect_url
                 continue
             if response.status >= 400:
                 raise urllib.error.HTTPError(current_url, response.status, "http error", response.headers, None)

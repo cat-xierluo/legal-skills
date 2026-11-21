@@ -1,6 +1,7 @@
 # 合同审查与小微企业顾问专家套件
 
 > [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-contract-business-counsel-0.1.0.zip)
+> 整套源码 v0.1.1 待发布
 
 面向合同起草、审查及 OPC / 小微企业日常经营分诊。按任务选择合同入口或经营入口，不要求每次调用全部成员。
 
@@ -24,7 +25,7 @@
 | :--- | :--- | :--- |
 | [contract-copilot](../../skills/contract-copilot/) | 合同起草、风险审查、DOCX 批注修订与审查意见书 | [已发布 v1.6.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/contract-copilot-1.6.3.zip) |
 | [opc-legal-counsel](../../skills/opc-legal-counsel/) | OPC 与小微企业经营问题分诊、联动风险和行动优先级 | [已发布 v1.0.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/opc-legal-counsel-1.0.2.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 梳理履约争议的事实、证据与争点，按需形成单项争点备忘录；源码 v1.3.0 待发布 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 梳理已整理可读材料中的履约争议、证据立场、证明力与争点，按需形成单项争点备忘录；源码 v1.3.1 待发布 | [已发布 v1.1.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 核验现行法、监管规则与正反类案，回填检索依据 | [已发布 v1.10.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/yuandian-law-search-1.10.1.zip) |
 | [legal-proposal-generator](../../skills/legal-proposal-generator/) | 将已核验的分析整理为咨询、沟通或服务方案，可选设计版 HTML；源码 v0.5.0 待发布 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-proposal-generator-0.4.1.zip) |
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描合同及附件转成可读文本，保留原件供核对 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-ocr-1.6.0.zip) |
@@ -49,4 +50,4 @@
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.0`，尚未完成真实业务端到端验证。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。含 CC BY-NC 成员，不得把整套宣传为全部 MIT 或可自由商用。
+当前套件版本为 `0.1.1`，尚未完成真实业务端到端验证。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。含 CC BY-NC 成员，不得把整套宣传为全部 MIT 或可自由商用。
