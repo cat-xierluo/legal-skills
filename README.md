@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-21 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.1（源码） | 新增跨设备同步方案：划分数据域，比较 WebDAV/S3/GitHub/一次性备份，明确登录态、凭据与恢复边界。源码待发布。 |
 | 2026-11-21 | 更新 | [legal-material-organizer](skills/legal-material-organizer/) | v0.17.0（源码） | 单个可读文件与混合材料统一先入库；整理时读取并优先沿用当前案件目录结构，不强制交接 new-case。 |
 | 2026-11-21 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.1（源码） | 只消费已整理可读材料，新增证据立场、证明力、事实贡献和风险信号的法律语义标签。 |
 | 2026-11-21 | 更新 | [new-case](skills/new-case/) | v1.6.0（源码） | 职责收窄为案件目录骨架与管理文件初始化，材料入库统一交给 legal-material-organizer。 |
 | 2026-11-20 | 更新 | [pdf-processor](skills/pdf-processor/) | v2.17.2（源码） | 拍照件有明确栏间空隙时分别测量两栏倾角，修复错行双栏误旋正。源码待发布。 |
+| 2026-11-20 | 更新 | [git-workflow](skills/git-workflow/) | v1.27.1（源码） | 固化跨目录 Worktree 统一排查口径，区分仓外、嵌套、detached 与未登记目录；partial clone 缺对象时不把空 diff 当等价。源码待发布。 |
 | 2026-11-19 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.5.0（源码） | 审定方案可选设计版 HTML，内置服务蓝图、决策策略和 A4 打印样式。 |
-| 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 「法律 AI 上下文初始化」新增三层规则清单，列出规则来源、维护人和保存位置；附同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
-| 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
 
 </details>
 
@@ -602,11 +602,11 @@
 <tr>
 <td><a href="skills/magpie-optimizer/"><strong>magpie-optimizer</strong></a></td>
 <td>工具·AI效能</td>
-<td style="word-break:break-word">基于 Magpie 配置并优化 AI 工作效能：完整命令参考、供应商与订阅接入、额度窗口读数、路由治理、Token 消耗与限流诊断，并关联任务产物和验收比较效果；本机配置与运行证据留在私有层</td>
+<td style="word-break:break-word">基于 Magpie 配置并优化 AI 工作效能：完整命令参考、供应商与订阅接入、额度窗口读数、路由治理、跨设备同步方案、Token 消耗与限流诊断，并关联任务产物和验收比较效果；本机配置与运行证据留在私有层</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.8.0</td>
+<td style="text-align:center">v1.8.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/magpie-optimizer-1.7.0.zip">已发布 v1.7.0</a></td>
-<td>源码 v1.8.0 待发布；配置与证据留私有层，巡检只读，生产变更按授权执行</td>
+<td>源码 v1.8.1 待发布；配置与证据留私有层，巡检只读，生产变更按授权执行</td>
 </tr>
 <tr>
 <td><a href="skills/lecture-review/"><strong>lecture-review</strong></a></td>
