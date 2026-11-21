@@ -39,6 +39,15 @@
       "recovery": "不适用"
     },
     {
+      "id": "keep-apfs-clone",
+      "match": "code_sign_clone|\\.appclone$|clone\\.app$",
+      "class": "apfs-clone",
+      "reclaimable": false,
+      "risk": "medium",
+      "reason": "APFS clone 与源应用共享物理 extent，目录体积远大于真实占用；删除通常不释放空间，还可能破坏应用自更新。",
+      "recovery": "不适用；真实占用以 df 前后差值为准。"
+    },
+    {
       "id": "reclaim-app-update-cache",
       "match": "/update\\.zip$|/pending/.*\\.zip$|-updater/|/Updates?/[^/]*\\.zip$|\\.app\\.tar\\.gz$|code_sign_clone",
       "class": "app-update-cache",
