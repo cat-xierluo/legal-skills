@@ -3,7 +3,7 @@ name: disk-insight
 description: 分析 macOS 磁盘占用和近期增长，重点识别大模型、Agent 会话、工作树、依赖缓存及可视化产物；默认自动发现并只读复用本地 Fathom 历史，同时输出 APFS 容量变化，无历史时独立定向采集。用于“空间不够”“最近什么膨胀了”“哪些 AI 产物该保留或调整”。不执行自动清理。
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -46,6 +46,16 @@ metadata:
 
 4. **解释用途与保留价值**：读 [Agent 产物判断](references/agent-artifacts.md)。根据目录结构、任务来源和实际消费入口判断，不按后缀、年龄或父目录名直接判垃圾。对大项逐层下钻；深层与父级占用不能相加。工作树身份/活跃度仍不明时保留，Git 操作按可用的 `git-workflow` 合同另办。
 5. **形成可行动建议**：按紧迫性排序，区分“可再生缓存”“有条件可移走”“必要成果与源材料”“归属不明待查”。给出路径、测量时点/历史区间、占用、增长证据、判断依据、保留项、调整方法和验证条件。未核可回收量写“待实测”，不把目录体积承诺为释放空间。
+
+6. **产出清理研判**：需要回答“哪里膨胀”“哪里能清”时，读 [清理研判口径](references/cleanup-reporting.md)，用 `scripts/cleanup_classifier.py` 把已有扫描结果转成两张清单。分类规则在 `references/cleanup_policy.json`，按顺序命中，可按本机情况增补。
+
+   ```bash
+   python3 "SKILL_DIR/scripts/cleanup_classifier.py" --report "/私有输出目录/report.json" --output "/私有输出目录/cleanup.json"
+   ```
+
+   输入需是含 `measurements`（每项带 `snapshot` 路径）与 `comparisons` 的报告 JSON。输出同时给 `growth_ranking`（本轮可比增量）与 `occupancy_ranking`（当前存量分类），并汇总 `reclaimable_occupancy_gib` 与 `keep_occupancy_gib`。
+
+   关键口径：增量只说明“哪里在膨胀”，存量才说明“哪里堆着可清理的东西”；只看增量会漏掉早就堆积、本轮没有变化的可清理内容。APFS clone 与共享 extent 会让目录体积远大于真实物理占用，判断真实占用以 `df` 前后差值为准。
 
 ## 输出验收
 
