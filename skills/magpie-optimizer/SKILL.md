@@ -3,7 +3,7 @@ name: magpie-optimizer
 description: 用 Magpie 配置并优化 AI 工作效能：接入供应商、订阅与插件，配置模型路由组与意图规则，管理网关、可见性、共享 MCP 与搜索；盘点额度与套餐，诊断 Token 消耗与限流，把每次调整关联真实任务验收效果。
 license: MIT
 metadata:
-  version: "1.8.0"
+  version: "1.8.1"
   author: 杨卫薪律师（微信ywxlaw）
   homepage: https://github.com/cat-xierluo/legal-skills
 ---
@@ -19,6 +19,7 @@ metadata:
 | 第一次配置 Magpie，不知道从哪下手 | 读[入门主路径](references/onboarding.md) |
 | 扫描本机 Agent 与供应商、账号和额度现状 | 读[环境体检](references/preflight.md)与[脱敏盘点](references/inventory.md) |
 | 接入新账号、导入供应商或安装插件 | 读[供应商与账号接入](references/provider-integration.md)与[插件与客户端接入](references/plugin-guide.md) |
+| 把 Magpie 配置同步到多台电脑，或排查 WebDAV/S3/GitHub 同步 | 读[跨设备同步](references/cross-device-sync.md)，先固定权威设备、数据域、信任边界与回滚，再启用内置同步 |
 | 为什么消耗快，哪里值得优化 | 先采集、核覆盖，再诊断；必要时按会话深入 |
 | 从网关检查 Skill、主/子 Agent 的输入与调用开销 | 读[输入开销与职责交接](references/agent-efficiency.md)，提供分项证据和效果复核；Agent/Skill/编排规则交对应维护方 |
 | 怎样利用套餐和临期积分 | 诊断结合现有任务，读取[资源策略](references/token-strategy.md)，输出当前/稍后/待输入建议 |
