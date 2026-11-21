@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-11-19 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.5.0（源码） | 审定方案可选设计版 HTML，内置服务蓝图、决策策略和 A4 打印样式。 |
-| 2026-11-19 | 新上传 | [legal-material-organizer](skills/legal-material-organizer/) | v0.16.1（源码） | 混合案件材料清点、编号、处理分流和整理计划入口加入「法律材料与证据处理」套件。聊天附件下载已绑定经校验的 IP，源码待发布。 |
-| 2026-11-19 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.0（源码） | 新增单项争点备忘录，聚焦决定性事实、已核法源、相反论证与结论的使用边界。 |
+| 2026-11-21 | 更新 | [legal-material-organizer](skills/legal-material-organizer/) | v0.17.0（源码） | 单个可读文件与混合材料统一先入库；整理时读取并优先沿用当前案件目录结构，不强制交接 new-case。 |
+| 2026-11-21 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.1（源码） | 只消费已整理可读材料，新增证据立场、证明力、事实贡献和风险信号的法律语义标签。 |
+| 2026-11-21 | 更新 | [new-case](skills/new-case/) | v1.6.0（源码） | 职责收窄为案件目录骨架与管理文件初始化，材料入库统一交给 legal-material-organizer。 |
 | 2026-11-20 | 更新 | [pdf-processor](skills/pdf-processor/) | v2.17.2（源码） | 拍照件有明确栏间空隙时分别测量两栏倾角，修复错行双栏误旋正。源码待发布。 |
+| 2026-11-19 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.5.0（源码） | 审定方案可选设计版 HTML，内置服务蓝图、决策策略和 A4 打印样式。 |
 | 2026-11-16 | 更新 | [legal-harness-init](skills/legal-harness-init/) | v0.5.4（源码） | 「法律 AI 上下文初始化」新增三层规则清单，列出规则来源、维护人和保存位置；附同一律师的[劳动争议与合同审查双业务示例](skills/legal-harness-init/references/17-examples/dual-business-walkthrough.md)。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 | 2026-11-11 | 更新 | [svg-article-illustrator](skills/svg-article-illustrator/) | v1.2.4 | 按段落选择真实页面节选、原创 UI、终端、文件预览或非界面表达；下载包仍为 v1.2.0。 |
-| 2026-11-01 | 更新 | [git-workflow](skills/git-workflow/) | v1.25.0（源码） | 新增主目录仓外可恢复快照与摘要账本，具名采用门禁绑定新鲜快照并拒绝内容/索引漂移；明确审查隔离不是强制安全边界，runtime/OS 保护未接入时 NOT_VERIFIED。 |
 
 </details>
 
@@ -90,16 +90,16 @@
 
 | 专家套件 | 适用场景 | 成员数 | 源码版本 | 整套下载 |
 | :--- | :--- | ---: | :---: | :---: |
-| [法律材料与证据处理](expert-suites/legal-material-evidence/) | 混合材料清点、文档识别、扫描件、PDF、音视频、法院来文的数字化和归档 | 10 | v0.2.0 | [旧包 v0.1.1；新源码尚无下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-material-evidence-0.1.1.zip) |
-| [诉讼分析及文书撰写](expert-suites/litigation-analysis-drafting/) | 诉讼案件材料、事实证据分析、法律检索、起诉答辩与方案文书撰写 | 11 | v0.2.0 | [已发布 v0.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-litigation-analysis-drafting-0.2.0.zip) |
-| [合同审查与小微企业顾问](expert-suites/contract-business-counsel/) | 合同起草审查、OPC / 小微企业经营分诊和顾问交付 | 6 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-contract-business-counsel-0.1.0.zip) |
+| [法律材料与证据处理](expert-suites/legal-material-evidence/) | 新材料入库、文档识别、扫描件、PDF、音视频、法院来文的数字化和归档 | 10 | v0.2.1 | [旧包 v0.1.1；新源码尚无下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-material-evidence-0.1.1.zip) |
+| [诉讼分析及文书撰写](expert-suites/litigation-analysis-drafting/) | 案件建档、材料入库、事实证据分析、法律检索、起诉答辩与方案文书撰写 | 11 | v0.2.1 | [旧包 v0.2.0；新源码尚无下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-litigation-analysis-drafting-0.2.0.zip) |
+| [合同审查与小微企业顾问](expert-suites/contract-business-counsel/) | 合同起草审查、OPC / 小微企业经营分诊和顾问交付 | 6 | v0.1.1 | [旧包 v0.1.0；新源码尚无下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-contract-business-counsel-0.1.0.zip) |
 | [知识产权实务](expert-suites/intellectual-property-practice/) | 专利下载及初步分析、商标申请辅助；双入口分流 | 5 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-intellectual-property-practice-0.1.0.zip) |
 | [法律研究与客户洞察](expert-suites/legal-research-client-insight/) | 客户增量简报、月季行业研究、来源核验与文本规范 | 5 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-research-client-insight-0.1.0.zip) |
 | [法律 Skill 对齐与评测](expert-suites/legal-skill-design-evaluation/) | 法律经验 Brief、通用质量门及法律领域产出评测 | 3 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-skill-design-evaluation-0.1.0.zip) |
 | [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.2.1 | [已发布 v0.2.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-development-quality-0.2.1.zip) |
 | [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 10 | v0.1.4 | [已发布 v0.1.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-release-distribution-0.1.4.zip) |
 
-“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但仅旧包可下载。「法律材料与证据处理」当前源码为 v0.2.0、尚无对应 ZIP，表内入口仅指向 v0.1.1 旧包。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
+“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但仅旧包可下载。「法律材料与证据处理」「诉讼分析及文书撰写」和「合同审查与小微企业顾问」当前源码分别为 v0.2.1、v0.2.1、v0.1.1，均尚无对应 ZIP。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
 
 ## 🛠️ 技能列表
 
@@ -136,11 +136,11 @@
 <tr>
 <td><a href="skills/legal-material-organizer/"><strong>legal-material-organizer</strong></a></td>
 <td>工具·材料整理</td>
-<td style="word-break:break-word">清点目录、压缩包和聊天导出件，生成材料清单、manifest、处理任务和整理计划；工具中落地分流 OCR、ASR、视觉理解等能力，不直接形成案情结论</td>
+<td style="word-break:break-word">作为单个文件、目录、压缩包、聊天导出件和外链等新材料的第一入口，完成下载、预处理分流、归类命名和路径回写；不直接形成案情结论</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.16.1</td>
+<td style="text-align:center">v0.17.0</td>
 <td style="text-align:center">尚无公开下载</td>
-<td>所属套件：<a href="expert-suites/legal-material-evidence/">法律材料与证据处理</a>。源码 v0.16.1 待发布</td>
+<td>所属套件：<a href="expert-suites/legal-material-evidence/">法律材料与证据处理</a>。源码 v0.17.0 待发布</td>
 </tr>
 <tr>
 <td><a href="skills/legal-ocr/"><strong>legal-ocr</strong></a></td>
@@ -223,11 +223,11 @@
 <tr>
 <td><a href="skills/new-case/"><strong>new-case</strong></a></td>
 <td>通用·案件管理</td>
-<td style="word-break:break-word">将诉讼、咨询、商标和专利材料整理成标准化目录结构；可从用户描述或已有案件目录学习个人文档规范，以本地覆盖配置持久保存</td>
+<td style="word-break:break-word">创建诉讼、咨询、商标和专利档案目录骨架与管理文件；可学习个人目录规范，材料入库交给 legal-material-organizer</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.5.0</td>
+<td style="text-align:center">v1.6.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/new-case-1.5.0.zip">已发布 v1.5.0</a></td>
-<td>所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a></td></tr>
+<td>源码 v1.6.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a></td></tr>
 <tr>
 <td><a href="skills/judgment-analysis/"><strong>judgment-analysis</strong></a></td>
 <td>通用·诉讼</td>
@@ -256,11 +256,11 @@
 <tr>
 <td><a href="skills/legal-case-analysis/"><strong>legal-case-analysis</strong></a></td>
 <td>通用·分析</td>
-<td style="word-break:break-word">综合案件研判与单项争点分析。整合事实、证据与法源，评估风险及策略，按需交付底稿、报告或单项争点备忘录</td>
+<td style="word-break:break-word">综合案件研判与单项争点分析。消费已整理可读材料，输出证据立场、证明力评分、事实贡献、风险与策略，按需交付底稿或单项争点备忘录</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.3.0</td>
+<td style="text-align:center">v1.3.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-case-analysis-1.1.2.zip">已发布 v1.1.2</a></td>
-<td>源码 v1.3.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td></tr>
+<td>源码 v1.3.1 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td></tr>
 <tr>
 <td><a href="skills/express-tracking/"><strong>express-tracking</strong></a></td>
 <td>通用·案件管理</td>

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "skill": {
     "name": "legal-material-organizer",
-    "version": "0.16.1"
+    "version": "0.17.0"
   },
   "producer": {
     "id": "material-manifest-producer",
