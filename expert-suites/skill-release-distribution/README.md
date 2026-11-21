@@ -1,6 +1,7 @@
 # Skill 发布与分发专家套件
 
 > [已发布 v0.1.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-release-distribution-0.1.4.zip)
+> 整套源码 v0.1.5 待发布
 
 用于整理提交、管理版本与 GitHub Release、同步多渠道、发布独立子树，并在分发前完成质量和验证门禁。
 
@@ -21,7 +22,7 @@
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
 | [git-batch-commit](../../skills/git-batch-commit/) | 把混合改动拆成聚焦且可追溯的提交 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/git-batch-commit-1.5.0.zip) |
-| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [已发布 v1.25.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/git-workflow-1.25.0.zip) |
+| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理；源码 v1.27.1 待发布 | [旧版 v1.25.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/git-workflow-1.25.0.zip) |
 | [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证 | [已发布 v1.6.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/release-workflow-1.6.8.zip) |
 | [skill-publish-sync](../../skills/skill-publish-sync/) | 同步 Skill 到多个发布平台 | [已发布 v1.7.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/skill-publish-sync-1.7.2.zip) |
 | [subtree-publish](../../skills/subtree-publish/) | 把 monorepo 子目录增量推送到独立仓库 | [已发布 v1.7.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/subtree-publish-1.7.1.zip) |
@@ -49,4 +50,4 @@ Tag、Release、第三方平台上传和独立仓库推送都会改变外部状�
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.3`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.1.5`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。

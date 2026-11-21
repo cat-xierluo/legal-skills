@@ -97,9 +97,9 @@
 | [法律研究与客户洞察](expert-suites/legal-research-client-insight/) | 客户增量简报、月季行业研究、来源核验与文本规范 | 5 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-research-client-insight-0.1.0.zip) |
 | [法律 Skill 对齐与评测](expert-suites/legal-skill-design-evaluation/) | 法律经验 Brief、通用质量门及法律领域产出评测 | 3 | v0.1.0 | [已发布 v0.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-legal-skill-design-evaluation-0.1.0.zip) |
 | [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.2.2 | [旧包 v0.2.1；新源码尚无下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-development-quality-0.2.1.zip) |
-| [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 10 | v0.1.4 | [已发布 v0.1.4](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-release-distribution-0.1.4.zip) |
+| [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 10 | v0.1.5 | [旧包 v0.1.4；新源码尚无下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/suite-skill-release-distribution-0.1.4.zip) |
 
-“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但仅旧包可下载。「法律材料与证据处理」「诉讼分析及文书撰写」「合同审查与小微企业顾问」和「Skill 开发与质量保障」当前源码分别为 v0.2.1、v0.2.1、v0.1.1、v0.2.2，均尚无对应 ZIP。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
+“版本”为当前源码版本，“整套下载”为实际已发布 ZIP 版本；二者不同时，表示源码已更新但仅旧包可下载。「法律材料与证据处理」「诉讼分析及文书撰写」「合同审查与小微企业顾问」「Skill 开发与质量保障」和「Skill 发布与分发」当前源码分别为 v0.2.1、v0.2.1、v0.1.1、v0.2.2、v0.1.5，均尚无对应 ZIP。套件安装前请阅读各自 README 的能力范围及依赖；重叠成员需核对版本，避免旧包覆盖新版。
 
 ## 🛠️ 技能列表
 
