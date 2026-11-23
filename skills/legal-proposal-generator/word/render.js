@@ -25,7 +25,10 @@ function args(argv) {
   if (!/\.docx$/i.test(out.output)) throw new Error('输出文件须为 .docx');
   out.cover = (out.cover || 'C').toUpperCase();
   if (!'CDEF'.includes(out.cover) || out.cover.length !== 1) throw new Error('封面风格只支持 C/D/E/F');
-  if (out.full && !out.lawyers) throw new Error('完整版须使用 --lawyers 明确选择承办律师');
+  if (out.full) {
+    out.selectedLawyers = (out.lawyers || '').split(',').map(name => name.trim()).filter(Boolean);
+    if (!out.selectedLawyers.length) throw new Error('完整版须使用 --lawyers 明确选择承办律师');
+  }
   if (out['back-matter']) {
     if (!out.full) throw new Error('--back-matter 仅在 --full 模式下可用');
     const supported = ['team', 'judgments', 'firm', 'honors'];
@@ -210,8 +213,7 @@ async function main() {
   let backPages = [];
   if (option.full) {
     const config = path.resolve(option['team-config'] || path.join(__dirname, '..', 'config', 'team-config.md'));
-    const names = option.lawyers.split(',').map(name => name.trim());
-    backPages = backMatterPages(loadProfile(config, names, option.backMatter));
+    backPages = backMatterPages(loadProfile(config, option.selectedLawyers, option.backMatter));
   }
   const cover = B.buildCover(option.cover, data.cover, __dirname);
   const doc = new Document({styles: B.docStyles(), numbering: B.makeNumbering(rendered.lists), sections: [
