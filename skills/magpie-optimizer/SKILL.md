@@ -3,7 +3,7 @@ name: magpie-optimizer
 description: 用 Magpie 配置并优化 AI 工作效能：接入供应商、订阅与插件，配置模型路由组与意图规则，管理网关、可见性、共享 MCP 与搜索；盘点额度与套餐，诊断 Token 消耗与限流，把每次调整关联真实任务验收效果。
 license: MIT
 metadata:
-  version: "1.8.1"
+  version: "1.8.2"
   author: 杨卫薪律师（微信ywxlaw）
   homepage: https://github.com/cat-xierluo/legal-skills
 ---
@@ -22,6 +22,7 @@ metadata:
 | 把 Magpie 配置同步到多台电脑，或排查 WebDAV/S3/GitHub 同步 | 读[跨设备同步](references/cross-device-sync.md)，先固定权威设备、数据域、信任边界与回滚，再启用内置同步 |
 | 为什么消耗快，哪里值得优化 | 先采集、核覆盖，再诊断；必要时按会话深入 |
 | 从网关检查 Skill、主/子 Agent 的输入与调用开销 | 读[输入开销与职责交接](references/agent-efficiency.md)，提供分项证据和效果复核；Agent/Skill/编排规则交对应维护方 |
+| Codex 反复压缩、实际窗口突然缩小或短命令后迅速占满 | 按[目录与工具定义排查](references/routing-governance.md#codex-反复压缩时先核目录与工具定义)对齐宿主回合、Magpie 目录拉取和请求分项 |
 | 怎样利用套餐和临期积分 | 诊断结合现有任务，读取[资源策略](references/token-strategy.md)，输出当前/稍后/待输入建议 |
 | 新建路由或改已有组 | 先按[智能路由设计](references/adaptive-routing-design.md)生成草案；再读[配置合同](references/cli-contract.md)和[操作入口](references/operations.md)，展示计划，按已有授权执行 |
 | 查某个 magpie 子命令的写法，或接入供应商、订阅、插件 | 读[CLI 命令参考](references/cli-command-reference.md)；涉及写入时按[CLI 与变更边界](references/cli-contract.md)先只读回读并展示计划 |
