@@ -2,7 +2,7 @@
 name: legal-proposal-generator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: 0.5.0
+version: 0.6.0
 license: CC-BY-NC
 description: 根据案件材料或沟通记录生成诉讼方案、非诉方案、建议书、咨询报告、结案汇报等法律服务文档。对外方案可生成可编辑的设计版 Word，或按审定源稿生成带目录和打印样式的 HTML。用户需要法律服务文档或设计版方案时使用。
 disable-model-invocation: true
@@ -20,20 +20,20 @@ disable-model-invocation: true
 
 - 只做信息提取、归纳、结构化与专业表述转化
 - 不新增事实，不虚构法条或裁判观点
-- 仅基于提供的材料进行分析和建议
+- 以现有材料和已有研判为基础，核对所用法律依据的有效性与适用性
 
 ## 文档类型
 
 ### 诉讼服务方案
 
-**适用场景**：客户已明确委托诉讼，需要展示完整的服务思路和工作计划
+**适用场景**：客户需要了解争议解决路径或正式诉讼的服务安排，涵盖咨询和已委托阶段
 
 **核心特点**：
 
 - 突出法律分析和策略
 - 明确服务阶段和内容
 - 段落式完整叙述
-- 包含服务团队介绍，引用 [config/team-config.md](config/team-config.md)
+- 按需介绍服务团队
 
 **模板文件**：[templates/litigation-proposal.md](templates/litigation-proposal.md)
 
@@ -61,7 +61,7 @@ disable-model-invocation: true
 
 - 强调项目背景和需求分析
 - 分阶段服务规划
-- 团队配置展示（引用 [config/team-config.md](config/team-config.md)）
+- 团队配置展示（见[团队配置样例](config/team-config.example.md)）
 
 **模板文件**：[templates/non-litigation-proposal.md](templates/non-litigation-proposal.md)
 
@@ -76,7 +76,7 @@ disable-model-invocation: true
 - 说服性较强
 - 展示专业能力和方案价值
 - 分阶段展示服务内容
-- 包含服务团队与保障章节，引用 [config/team-config.md](config/team-config.md)
+- 包含服务团队与保障章节，见[团队配置样例](config/team-config.example.md)
 
 **模板文件**：[templates/service-proposal.md](templates/service-proposal.md)
 
@@ -141,6 +141,14 @@ disable-model-invocation: true
 
 已有审定源稿且只需要排版时，直接进入步骤 4。
 
+### 精简方案
+
+收到「把这份方案压成简版」「简略一些」等指令时，直接精简。已有方案时，以用户指明的版本为底稿，沿用原文档类型，默认压缩正文。用户指定需详写的部分、改动范围或篇幅时，按其要求执行。生成简版初稿时也用下列取舍。
+
+- **保留判断**。每个关键争点保留足以理解判断的事实、适用依据和初步结论，以及会改变结论的风险与待核条件。沿用原稿的确定程度、重要期限、金额估算及其前提、服务范围、报价与收费触发条件。
+- **压缩表达**。提炼关键时间节点，合并重复的事实和分析，删减套话、长篇法条引文、与决策无关的细节和逐项工作清单。可把同一争点的依据与判断合成一段，服务安排概括为一段。
+- **核对并交付**。用源稿的事实、依据和判断完成改写，核对关键数字、条件和结论是否准确保留。需要交付文件时，默认保留原稿，另存简版。
+
 ### 步骤 1: 分析输入并确定文档类型
 
 文档类型的选择应综合考虑**案件性质**（诉讼 vs 非诉）、**客户阶段**和**文档目的**。
@@ -178,9 +186,11 @@ disable-model-invocation: true
 
 根据文档类型选择 [templates/](templates/) 中的对应模板。
 
+诉讼服务方案按委托阶段选择写法。已经受托或用户明确要求完整方案时，采用[完整方案](templates/litigation-proposal.md#完整方案)的结构。客户尚未委托并在评估处理路径时，采用[咨询阶段](templates/litigation-proposal.md#咨询阶段)的结构。
+
 ### 步骤 2.5: 读取团队配置
 
-对于**诉讼服务方案、非诉服务方案、法律服务建议书**三类对外方案文档，读取 [config/team-config.md](config/team-config.md) 获取主办律师介绍、律所简介和合作伙伴信息，填入模板的团队相关章节。
+诉讼服务方案、非诉服务方案、法律服务建议书需要团队资料时，读取本地 `config/team-config.md`。首次使用可参考随附的[团队配置样例](config/team-config.example.md)准备本地配置。
 
 - 用户会指定主办律师（如"主办律师是律师 A 和律师 B"）。Markdown 方案需要展示团队章节时，从 team-config 的 HTML 表格中提取对应律师内容；**走设计版 Word 完整版时，不把 HTML 表格插入源稿**，由 Word 渲染器按选定姓名直接读取团队配置并生成可编辑卡片。
 - **图片路径必须转为绝对路径**：team-config.md 中的图片引用（如 `images/avatar-xxx.png`）是相对于 skill config 目录的相对路径，在输出文档中无法解析。生成文档时，须将所有 `images/` 开头的图片 src 替换为本 skill 的绝对路径前缀，即 `SKILL_DIR/config/images/`（其中 SKILL_DIR 为本 skill 所在目录的绝对路径）。例如 `images/avatar-example.png` 应替换为 `/path/to/your/skills/legal-proposal-generator/config/images/avatar-example.png`
@@ -200,6 +210,7 @@ disable-model-invocation: true
 - **避免预承诺可量化交付物（自缚手脚防护）**：方案中**不要把后续"可能但非必经"的工作写成具体的、可被客户量化追踪的交付物清单**（如各类评估报告、应对预案、答复意见框架等具名文件）。这类清单一旦写入，易被客户当作律师承诺与交付节点追踪，律师自缚手脚、徒增不必要工作量；且这些工作是否实际发生取决于对方行为或程序进展，本身具有不确定性。
   - **正确写法**：只提示风险（"对方可能以提起 XX 作为反制手段"）+ 律师作初步评估；并明确"如实际发生，作为独立项目另行接受委托、专项应对，相关费用届时协商"。
   - **适用场景**：专利无效宣告应对、反诉、二审/再审、执行异议、追加当事人等一切"取决于对方行为或程序进展"的后续工作——均按"提示风险 + 初步评估 + 另行协商"处理，不在本方案里预列具体交付文件。
+- **对外表达**。按实际委托状态称呼客户。用事实、判断依据和成立条件向客户说明风险，内部沟通口径留在工作底稿。
 
 **可视化扩展（可选）**：
 
@@ -231,6 +242,8 @@ NODE_PATH=$(npm root -g) node word/render.js \
 ```
 
 用户要包含承办团队、相关裁判文书、律所简介和荣誉的完整版时，增加 `--full --lawyers 姓名1,姓名2`；渲染器默认从本地 `config/team-config.md` 读取，经 `--team-config` 可覆盖。未选主办律师时先根据已提供材料确定，不能随意把配置中所有人列为承办团队。交付前检查所有引用图片已脱敏；逐页检查 DOCX 及导出的 PDF，并在实际 WPS、Microsoft Word 中核对封面和分页。页数随内容变化，不把既有案例的 6/10 页当作固定规范。
+
+按实际需要选择附页，将团队、律所简介和荣誉放在正文之后。选用既往裁判材料前核对展示授权与脱敏情况。Word 可在完整版中使用 `--back-matter team,firm,honors` 选择团队与律所附页。选项见[Word 管线说明](word/README.md#安装与运行)。
 
 Word 的正文页码从 1 起算，后部附页用页名作页脚。具体版式和页码限制见 [Word 管线说明](word/README.md)。
 

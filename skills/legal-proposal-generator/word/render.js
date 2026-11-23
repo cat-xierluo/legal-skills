@@ -18,7 +18,7 @@ function args(argv) {
     const split = arg.indexOf('=');
     const key = arg.slice(2, split < 0 ? undefined : split);
     const value = split < 0 ? argv[++i] : arg.slice(split + 1);
-    if (!['input', 'output', 'cover', 'team-config', 'lawyers', 'law-firm', 'client', 'lawyer', 'date', 'title', 'subtitle'].includes(key) || !value || value.startsWith('--')) throw new Error('无效参数：' + arg);
+    if (!['input', 'output', 'cover', 'team-config', 'lawyers', 'law-firm', 'client', 'lawyer', 'date', 'title', 'subtitle', 'back-matter'].includes(key) || !value || value.startsWith('--')) throw new Error('无效参数：' + arg);
     out[key] = value;
   }
   if (!out.input || !out.output) throw new Error('用法：node word/render.js --input 方案.md --output 方案.docx [--cover C|D|E|F] [--full --team-config config/team-config.md --lawyers 姓名1,姓名2]');
@@ -26,6 +26,15 @@ function args(argv) {
   out.cover = (out.cover || 'C').toUpperCase();
   if (!'CDEF'.includes(out.cover) || out.cover.length !== 1) throw new Error('封面风格只支持 C/D/E/F');
   if (out.full && !out.lawyers) throw new Error('完整版须使用 --lawyers 明确选择承办律师');
+  if (out['back-matter']) {
+    if (!out.full) throw new Error('--back-matter 仅在 --full 模式下可用');
+    const supported = ['team', 'judgments', 'firm', 'honors'];
+    const selected = out['back-matter'].split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+    if (!selected.length) throw new Error('--back-matter 不能为空');
+    const unknown = selected.find(item => !supported.includes(item));
+    if (unknown) throw new Error(`无效附页类型：${unknown}；支持 ${supported.join(', ')}`);
+    out.backMatter = new Set(selected);
+  }
   return out;
 }
 
@@ -201,7 +210,8 @@ async function main() {
   let backPages = [];
   if (option.full) {
     const config = path.resolve(option['team-config'] || path.join(__dirname, '..', 'config', 'team-config.md'));
-    backPages = backMatterPages(loadProfile(config, option.lawyers.split(',').map(s => s.trim())));
+    const names = option.lawyers.split(',').map(name => name.trim());
+    backPages = backMatterPages(loadProfile(config, names, option.backMatter));
   }
   const cover = B.buildCover(option.cover, data.cover, __dirname);
   const doc = new Document({styles: B.docStyles(), numbering: B.makeNumbering(rendered.lists), sections: [
