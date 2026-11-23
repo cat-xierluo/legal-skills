@@ -34,13 +34,13 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-23 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.6.0（源码） | 诉讼方案按委托阶段组织正文，可用简短指令精简已有方案。Word 支持选择附页。 |
 | 2026-11-21 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.1（源码） | 新增跨设备同步方案：划分数据域，比较 WebDAV/S3/GitHub/一次性备份，明确登录态、凭据与恢复边界。源码待发布。 |
 | 2026-11-21 | 更新 | [legal-material-organizer](skills/legal-material-organizer/) | v0.17.0（源码） | 单个可读文件与混合材料统一先入库；整理时读取并优先沿用当前案件目录结构，不强制交接 new-case。 |
 | 2026-11-21 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.1（源码） | 只消费已整理可读材料，新增证据立场、证明力、事实贡献和风险信号的法律语义标签。 |
 | 2026-11-21 | 更新 | [new-case](skills/new-case/) | v1.6.0（源码） | 职责收窄为案件目录骨架与管理文件初始化，材料入库统一交给 legal-material-organizer。 |
 | 2026-11-20 | 更新 | [pdf-processor](skills/pdf-processor/) | v2.17.2（源码） | 拍照件有明确栏间空隙时分别测量两栏倾角，修复错行双栏误旋正。源码待发布。 |
 | 2026-11-20 | 更新 | [git-workflow](skills/git-workflow/) | v1.27.1（源码） | 固化跨目录 Worktree 统一排查口径，区分仓外、嵌套、detached 与未登记目录；partial clone 缺对象时不把空 diff 当等价。源码待发布。 |
-| 2026-11-19 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.5.0（源码） | 审定方案可选设计版 HTML，内置服务蓝图、决策策略和 A4 打印样式。 |
 | 2026-11-16 | 更新 | [slides](skills/slides/) | v1.6.1（源码） | 页内动效在原版式中更新业务状态；步进并入放映 HUD，PPTX/PDF 继续导出静态正文。 |
 
 </details>
@@ -275,9 +275,9 @@
 <td>通用·文书</td>
 <td style="word-break:break-word">根据案件材料或沟通记录生成诉讼方案、咨询报告、非诉方案、建议书、沟通报告和结案汇报。对外方案支持可编辑 Word，设计版 HTML 内置服务蓝图与决策策略模板</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.5.0</td>
+<td style="text-align:center">v0.6.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-proposal-generator-0.4.1.zip">已发布 v0.4.1</a></td>
-<td>源码 v0.5.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td>
+<td>源码 v0.6.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td>
 </tr>
 <tr>
 <td><a href="skills/legal-client-brief/"><strong>legal-client-brief</strong></a></td>
