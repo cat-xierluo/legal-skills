@@ -25,7 +25,17 @@ NODE_PATH=$(npm root -g) node word/render.js \
   --cover F --full --team-config config/team-config.md --lawyers 张三,李四
 ```
 
-在本 Skill 根目录执行上述命令。`--cover` 可选 C（顶部几何，默认）、D（对角斜切）、E（底部反转）、F（瑞士网格）。`--full` 的后部页数由律师与材料数量决定，不保证固定 10 页。团队配置默认读取 `config/team-config.md`，可用 `--team-config` 指向另一份本地文件。找不到选定姓名或引用图片不存在时立即报错。交付裁判文书图片前核对脱敏。
+按交付需要用 `--back-matter` 选择附页。类型用逗号分隔，渲染器按团队、裁判文书、律所简介、荣誉的顺序输出所选附页。
+
+```bash
+NODE_PATH=$(npm root -g) node word/render.js \
+  --input /绝对路径/方案.md --output /绝对路径/方案-完整版.docx \
+  --cover C --full --lawyers 张三 --back-matter team,firm,honors
+```
+
+支持 `team`（服务团队）、`judgments`（典型案例与既往判决）、`firm`（律所简介）、`honors`（律所荣誉与资质）。省略参数时默认选择全部。`--back-matter` 仅在 `--full` 模式下可用。省略的附页和未选律师的图片无需存在。
+
+在本 Skill 根目录执行上述命令。`--cover` 可选 C（顶部几何，默认）、D（对角斜切）、E（底部反转）、F（瑞士网格）。`--full` 的后部页数由律师与材料数量决定，不保证固定 10 页。团队配置默认读取 `config/team-config.md`，可用 `--team-config` 指向另一份本地文件。生成团队页时，所选律师须已配置，所用图片须可读取。交付裁判文书图片前核对脱敏。
 
 ## Markdown 输入契约
 
