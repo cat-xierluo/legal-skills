@@ -1,5 +1,5 @@
 # litigation.yaml — 诉讼案件预设
-# 12层标准诉讼目录架构
+# 14层标准诉讼目录架构（00-11标准 + 12/13扩展）
 
 meta:
   id: "litigation"
@@ -74,6 +74,16 @@ directories:
     name: "参考文件"
     description: "辅助性参考材料（参考案例、法律条文、行业标准等）"
 
+  - id: "12"
+    icon: "📄"
+    name: "格式转换MD"
+    description: "PDF/图片/Word转换出的Markdown、转换索引及evidence.md页码对照（转换由organizer或用户完成）"
+
+  - id: "13"
+    icon: "📋"
+    name: "项目治理"
+    description: "项目总纲、任务、决策、变更记录和归档核验"
+
 management_files:
   case_info:
     enabled: true
@@ -91,6 +101,29 @@ management_files:
     enabled: true
     template: "templates/task-list.md"
     output: "[案件编号] 待办事项.md"
+  conversion_index:
+    enabled: true
+    template: "templates/conversion-index.md"
+    output: "12 - 📄 格式转换MD/转换索引.md"
+  evidence_index:
+    enabled: true
+    template: "templates/evidence-index.md"
+    output: "12 - 📄 格式转换MD/evidence.md"
+
+governance_files:
+  enabled: true
+  source: "用户级 AGENTS.md（$CODEX_HOME/AGENTS.md 或 ~/.codex/AGENTS.md / ~/.agents/AGENTS.md）"
+  output_dir: "13 - 📋 项目治理"
+  files:
+    - "PROJECT_CHARTER.md"
+    - "TASKS.md"
+    - "DECISIONS.md"
+    - "CHANGELOG.md"
+
+project_agents:
+  enabled: true
+  reference: "references/evidence-and-governance.md"
+  output: "AGENTS.md"
 
 detection:
   path_patterns:
