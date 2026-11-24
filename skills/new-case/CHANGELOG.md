@@ -2,6 +2,25 @@
 
 本文档记录 new-case skill 的重要变更。
 
+## [1.7.0] - 2026-11-24
+
+### 新增
+
+- **诉讼预设扩展为14目录**：00-11标准目录 + `12 - 📄 格式转换MD` + `13 - 📋 项目治理`
+- `12` 目录：新增 `转换索引.md` 与 `evidence.md` 骨架，要求每份转换MD登记原始文件名称、路径、PDF/原件页码和MD定位；写材料引用统一使用“原始文件名+页码”
+- `13` 目录：按用户级 `AGENTS.md` 建立 `PROJECT_CHARTER.md`、`TASKS.md`、`DECISIONS.md`、`CHANGELOG.md`
+- 案件根目录 `AGENTS.md`：写明案件标识、材料只读、派生文件另存、12/13目录、引用规则、治理读取顺序和本 Skill 的职责边界
+- 新增 `templates/evidence-index.md`、`templates/conversion-index.md`
+- 新增 `references/evidence-and-governance.md`，汇总12/13目录、evidence.md、项目AGENTS.md、治理文件与归档核验规则
+- `assets/litigation.yaml`：新增12/13目录、`conversion_index`、`evidence_index`、`governance_files`、`project_agents`
+- `SKILL.md`：新增“第四步半”骨架生成流程，更新管理文件表、参考文档、配置说明、输出验证和禁止事项
+
+### 边界
+
+- 不改变 v1.6.0 职责边界：本 Skill 不读取材料正文，不执行下载、OCR、ASR、格式转换、归类移动或重命名。
+- `12` 的转换索引与 `evidence.md` 初始为“暂无/待转换”；实际转换和页码回填由 `legal-material-organizer` 或用户完成。
+- 治理文件是建档骨架，不替代法律分析或正式法律意见。
+
 ## [1.6.0] - 2026-11-21
 
 ### 变更
