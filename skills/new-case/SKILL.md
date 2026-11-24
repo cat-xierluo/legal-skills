@@ -2,15 +2,15 @@
 name: new-case
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.6.0"
-description: 创建或初始化案件/咨询/商标/专利档案目录骨架和管理文件，并可从用户描述或已有本地目录学习个人文档规范，存入不公开的本地覆盖配置。支持诉讼、咨询、商标和专利四种预设。实际新材料下载、内容识别、归类移动和重命名由 legal-material-organizer 承接。不要用于：单独生成法律文书、进行法律研究、证据分析或材料内容整理。
+version: "1.7.0"
+description: 创建或初始化案件/咨询/商标/专利档案目录骨架和管理文件，并可从用户描述或已有本地目录学习个人文档规范，存入不公开的本地覆盖配置。支持诉讼（14目录：00-11标准+12格式转换MD+13项目治理）、咨询、商标和专利四种预设。实际新材料下载、内容识别、归类移动、转换和重命名由 legal-material-organizer 承接。不要用于：单独生成法律文书、进行法律研究、证据分析或材料内容整理。
 license: CC-BY-NC
 ---
 
 # New Case - 创建新案件档案结构
 
 为案件或项目建立可持续采用的目录骨架、管理文件和命名结构合同。支持四种预设：
-- **诉讼案件 (litigation)**：12层标准诉讼目录，生成案件信息看板、工时记录和期限管理文件
+- **诉讼案件 (litigation)**：14层标准诉讼目录（00-11标准 + 12格式转换MD + 13项目治理），生成案件信息看板、工时记录、期限管理、evidence.md页码对照、项目AGENTS.md和治理文件骨架
 - **潜在项目/咨询 (consultation)**：2目录轻量结构（客户材料 + 工作文件），生成项目信息卡片和待办事项
 - **商标案件 (trademark)**：知产业务，覆盖商标注册 / 异议 / 驳回复审 / 无效宣告 / 变更 / 转让；**单一预设下挂 2 个业务子模板**：(1) 注册模板（**7 目录**，注册/变更/转让，**含独立商标注册证目录**）、(2) 异议/复审/无效模板（**8 目录**，对抗性案件，含证据材料 + 独立商标注册证目录）。**目录顺序按项目进展**：委托 → 图样 → 申请书 → 律师工作 → 官方文书（不含注册证）→ 商标注册证（独立）→ 发票财务。**工作记录/沟通并入 1 委托**（与专利 DEC-009 一致）。多个申请号的同类文件归位到一起，生成项目信息卡和续展提醒待办；文件日期前缀由 organizer 在整理计划中处理。
 - **专利案件 (patent)**：知产业务，覆盖发明 / 实用新型 / 外观设计 / 无效 / 复审 / 检索 / PCT / 变更 / 年费 10 种子业务；**单一预设下挂 3 个业务子模板**：(1) 申请模板（7 目录，发明/实用新型/外观/PCT）、(2) 复审/无效模板（8 目录，复审/无效，含证据+对方提交）、(3) 检索/其他模板（4 目录，检索/布局/变更/年费）。**目录顺序按项目进展**：委托（含工作记录）→ 清单/客户提供 → 客户提供/律师工作 → 律师工作/申请书 → 国知局文件 → 发票/财务。**律师工作与文件进程合并**（都是律师产出）；**2 工作记录已合并入 1 委托材料**（沟通录音/邮件/会议纪要本质是律师-客户工作过程记录）。每个项目按业务子类型选模板，**不创建空目录**。生成项目信息卡和年费提醒待办。
@@ -94,7 +94,13 @@ license: CC-BY-NC
 
 读取预设配置的 `directories` 部分，按 id 排序创建目录。
 
-**诉讼案件**：创建12个标准目录（`00 - 📅 日程管理` 至 `11 - 📚 参考文件`）
+**诉讼案件**：创建14个目录（`00 - 📅 日程管理` 至 `11 - 📚 参考文件`，加 `12 - 📄 格式转换MD`、`13 - 📋 项目治理`）
+
+```
+00-11  标准诉讼目录
+12 - 📄 格式转换MD/     转换索引.md、evidence.md、<镜像来源子目录>/
+13 - 📋 项目治理/       PROJECT_CHARTER.md、TASKS.md、DECISIONS.md、CHANGELOG.md
+```
 
 **咨询项目**：创建2个目录：
 ```
@@ -130,7 +136,7 @@ license: CC-BY-NC
 ```
 
 **目录命名与编号规则**：
-- 目录编号统一用 `01-08` 两位数（与诉讼项目 `00-11` 一致）
+- 目录编号统一用 `01-08` 两位数（与诉讼项目 `00-13` 一致）
 - "发票/财务" 用 `💰 发票财务` 表示（macOS 终端工具不支持文件名含 `/`，故用空格代替）
 - 商标注册证是**独立一级目录**（DEC-2026-06-11），不是 05/06 官方文书的子目录
 - 商标注册证目录可声明偏好 `YYMMDD ` 日期前缀；具体日期读取、冲突避让和重命名由 organizer 规划并执行
@@ -228,6 +234,8 @@ OCR、日期识别和人工复核限制由 organizer 记录在材料清单中；
 | 工时记录 | ✅ | ❌ | ❌ | ❌ | timesheet.md |
 | 期限管理 YAML | ✅ | ❌ | ❌ | ❌ | deadline-yaml.md |
 | 待办事项 | ✅ | ✅ | ✅ | ✅ | task-list / trademark-task-list / patent-task-list |
+| 格式转换索引 | ✅ | ❌ | ❌ | ❌ | conversion-index.md |
+| evidence页码对照 | ✅ | ❌ | ❌ | ❌ | evidence-index.md |
 
 **诉讼案件**生成案件信息看板，详见 `templates/case-info.md`。
 
@@ -236,6 +244,23 @@ OCR、日期识别和人工复核限制由 organizer 记录在材料清单中；
 **商标案件**生成项目信息卡（含续展提醒 + 业务子类型 + 引证商标），详见 `templates/trademark-info.md`，待办模板为 `templates/trademark-task-list.md`。
 
 **专利案件**生成项目信息卡（含年费提醒 + 业务子类型 + 引证对比文件 + 对方当事人），详见 `templates/patent-info.md`，待办模板为 `templates/patent-task-list.md`。
+
+### 第四步半：生成格式转换与治理骨架（诉讼案件）
+
+诉讼案件在生成常规管理文件后，继续创建以下骨架文件。本步骤不读取材料正文，不执行下载、OCR、ASR、格式转换、归类移动或重命名；实际材料处理和转换由 `legal-material-organizer` 或用户完成。
+
+1. **`12 - 📄 格式转换MD/转换索引.md`**：按 `templates/conversion-index.md` 生成，初始为“暂无”状态。
+2. **`12 - 📄 格式转换MD/evidence.md`**：按 `templates/evidence-index.md` 生成，初始为“待转换”状态；页码、MD文件名和MD定位由 organizer 或用户完成转换后回填。用户明确提供页数时可直接写入。
+3. **案件根目录 `AGENTS.md`**：按 [references/evidence-and-governance.md](references/evidence-and-governance.md) 第4节生成。必须写明：本 Skill 不移动材料；原始材料只读；派生文件另存；12/13目录；引用用“原始文件名+页码”；治理读取顺序。
+4. **`13 - 📋 项目治理/`**：读取用户级 `AGENTS.md`（优先 `$CODEX_HOME/AGENTS.md`，其次 `~/.codex/AGENTS.md`、`~/.agents/AGENTS.md`），按 [references/evidence-and-governance.md](references/evidence-and-governance.md) 第5节生成：
+   - `PROJECT_CHARTER.md`
+   - `TASKS.md`
+   - `DECISIONS.md`
+   - `CHANGELOG.md`
+   - 如用户另行要求归档对比，再生成 `归档对比核验-YYYYMMDD.md`
+5. **同步治理状态**：把本次建档写入 `TASKS.md`、`DECISIONS.md` 和 `CHANGELOG.md`；重大功能/重构才建立 `specs/`。
+
+**引用铁律**：写起诉状、上诉状、代理意见、证据目录时，一律使用“原始文件名 + 页码”，不得只写MD文件名、MD标题或MD行号。转换文本与原件冲突时，以原件为准。
 
 ### 可选第五步：转入后续工作
 
@@ -253,6 +278,9 @@ OCR、日期识别和人工复核限制由 organizer 记录在材料清单中；
 | [references/classification-guide.md](references/classification-guide.md) | 目录用途和结构合同说明，供 organizer 识别既有结构 |
 | [references/extraction-rules.md](references/extraction-rules.md) | 建档时从用户明确说明或既有管理文件提取信息的规则 |
 | [references/local-conventions.md](references/local-conventions.md) | 从用户描述或已有目录学习个人规范，生成本地覆盖配置 |
+| [references/evidence-and-governance.md](references/evidence-and-governance.md) | 12/13目录、evidence.md、项目AGENTS.md、治理文件与归档核验规则 |
+| [templates/evidence-index.md](templates/evidence-index.md) | evidence.md 页码对照模板 |
+| [templates/conversion-index.md](templates/conversion-index.md) | 格式转换索引模板 |
 
 ## 时间要求
 
@@ -273,13 +301,15 @@ OCR、日期识别和人工复核限制由 organizer 记录在材料清单中；
 
 - **meta**：预设元信息（ID、名称、描述、编号格式）
 - **directories**：目录定义（编号、图标、名称、描述）
-- **management_files**：管理文件生成配置（启用/禁用、模板路径、输出路径）
+- **management_files**：管理文件生成配置（启用/禁用、模板路径、输出路径；含 `conversion_index`、`evidence_index`）
+- **governance_files**：治理文件配置（来源用户级 `AGENTS.md`、输出目录、文件清单）
+- **project_agents**：项目根目录 `AGENTS.md` 配置
 - **detection**：自动检测规则（路径关键词、文件关键词、排除关键词）
 - **classification**：目录用途说明（关键词→目标目录），供 organizer 识别既有结构，不指示本 Skill 移动文件
 - **root_files**（可选）：根目录保留文件规则
 
 现有预设：
-- `assets/litigation.yaml` — 诉讼案件（12目录）
+- `assets/litigation.yaml` — 诉讼案件（14目录：00-11标准 + 12格式转换MD + 13项目治理）
 - `assets/consultation.yaml` — 潜在项目/咨询（2目录）
 - `assets/trademark.yaml` — 商标案件（单一预设下挂 2 个业务子模板：注册 7 目录含独立商标注册证/异议复审无效 8 目录含独立商标注册证；目录顺序按项目进展）
 - `assets/patent.yaml` — 专利案件（单一预设下挂 3 个业务子模板：申请 8 目录/复审无效 9 目录/检索其他 5 目录；目录顺序按项目进展）
@@ -304,6 +334,9 @@ OCR、日期识别和人工复核限制由 organizer 记录在材料清单中；
 - [ ] 目录结构已按预设配置创建
 - [ ] 未读取新材料正文，未移动、重命名或覆盖任何新材料
 - [ ] 管理文件已按预设的 management_files 配置生成
+- [ ] `12 - 📄 格式转换MD/转换索引.md` 与 `evidence.md` 已生成
+- [ ] 案件根目录 `AGENTS.md` 已生成
+- [ ] `13 - 📋 项目治理/` 四份治理文件已按用户级 `AGENTS.md` 生成
 - [ ] 如加载个人配置，已验证 YAML、预设 ID、目录 ID 和模板路径
 - [ ] 目录和结构合同可被 organizer 识别
 - [ ] 时间逻辑正确
@@ -313,6 +346,8 @@ OCR、日期识别和人工复核限制由 organizer 记录在材料清单中；
 - 禁止在案件档案中记录项目自身的 SuitAgent 系统信息
 - 禁止创建额外的说明文档或 README
 - 禁止下载、OCR、ASR、归类、移动或重命名新材料
+- 禁止只生成 `转换索引.md` 而不生成 `evidence.md`
+- 禁止用 MD 行号替代原始文件页码
 - 禁止虚构案件信息
 - 禁止在用户未明确要求“学习/记住/更新规范”时写入个人配置
 - 禁止将个人习惯或本地绝对路径写入公开 `assets/*.yaml`
