@@ -69,8 +69,11 @@ metadata:
 6. **出短名单和链接清单**：
 
    ```bash
-   python3 "$SKILL_DIR/scripts/radar.py" shortlist --workspace "$WS" --top 12
+   python3 "$SKILL_DIR/scripts/radar.py" shortlist --workspace "$WS" --top 12 \
+     --exclude-terms "请律师" "找律师"
    ```
+
+   短名单只收与主题相关的作品：要么直接命中主题词，要么命中至少两个主题片段。`--include-terms` 追加主题词，`--exclude-terms` 排除指定说法。每条入选作品都带 `matched_terms`，说明它为什么切题。
 
 7. **校验**（报告、短名单、链接三方一致才继续）：
 
@@ -85,6 +88,8 @@ metadata:
    python3 "$SKILL_DIR/scripts/radar.py" download --workspace "$WS" --execute
    ```
 
+   `download --execute` 会先校验每条链接，再按作品 ID 回查落盘文件。回执里的 `verified` 才是真正取到媒体的数量，`media_path` 可直接交给转录环节。
+
 ## 产物
 
 | 文件 | 内容 |
@@ -95,14 +100,14 @@ metadata:
 | `candidates.md` | 给人看的报告 |
 | `shortlist.json` | 入选作品与入选理由 |
 | `links.txt` | 一行一个作品链接，供下载器消费 |
-| `download_receipt.json` | 下载回执，含逐条失败原因 |
+| `download_receipt.json` | 下载回执，含逐条 `media_path`、字节数与失败原因 |
 
 ## 判断口径
 
 读 `candidates.md` 时按这个顺序：
 
 1. 先看**口径与局限**，确认样本量、采集时间和模式。样本小于 20 条时结论只能当线索。
-2. 看**时间分布**：近 30 天占比高说明话题在更新，适合做时效型内容；占比低说明存量为主，适合做长青体系。
+2. 看**时间分布**：近 30 天占比高说明话题在更新，适合做时效型内容；占比低说明存量为主，适合做长青体系。判断时效以**分采集模式的时间分布**里的综合排序为基线，「一周内」筛选的比例只在它自己那一列内有意义。
 3. 看**互动分布**的中位数和 P90，而不是最大值——单条爆款会严重拉高均值。
 4. 看**高频话题标签**里“出现次数 × 点赞中位数”都靠前的，那是这个话题真正的切入口。
 5. 看**相关搜索**里的疑问式词，那是现成的选题句式。

@@ -25,6 +25,20 @@ SIGNALS_SCHEMA = "douyin-topic-radar/signals/1"
 SHORTLIST_SCHEMA = "douyin-topic-radar/shortlist/1"
 DEFAULT_WORKSPACE = Path.home() / ".local/state/douyin-topic-radar"
 MODES = ("comprehensive", "latest", "top")
+WORK_URL = re.compile(r"https://www\.douyin\.com/video/(\d+)")
+MEDIA_SUFFIXES = {
+    ".mp4",
+    ".m4v",
+    ".webm",
+    ".mov",
+    ".mkv",
+    ".mp3",
+    ".m4a",
+    ".wav",
+    ".flac",
+    ".ogg",
+}
+CJK_CHAR = re.compile(r"[\u3400-\u9fff]")
 MODE_LABELS = {
     "comprehensive": "综合排序深滚",
     "latest": "最新发布 + 一周内",
@@ -380,6 +394,30 @@ RECENCY_BUCKETS = (("7d", 7), ("30d", 30), ("90d", 90))
 RECENCY_LABELS = {"7d": "≤7 天", "30d": "≤30 天", "90d": "≤90 天", ">90d": ">90 天"}
 
 
+def recency_buckets(observations: list[dict]) -> dict:
+    """按发布时间分桶。未知发布时间的作品单列，不混进比例分母。"""
+    known_ages = [
+        item["age_days"] for item in observations if item.get("age_days") is not None
+    ]
+    buckets = {}
+    for label, days in RECENCY_BUCKETS:
+        count = sum(1 for age in known_ages if age <= days)
+        buckets[label] = {
+            "count": count,
+            "ratio": round(count / len(known_ages), 4) if known_ages else None,
+        }
+    older = sum(1 for age in known_ages if age > 90)
+    buckets[">90d"] = {
+        "count": older,
+        "ratio": round(older / len(known_ages), 4) if known_ages else None,
+    }
+    return {
+        "known": len(known_ages),
+        "unknown": len(observations) - len(known_ages),
+        "buckets": buckets,
+    }
+
+
 def recency_score(age_days) -> float:
     if age_days is None:
         return 0.3
@@ -395,22 +433,18 @@ def recency_score(age_days) -> float:
 def compute_signals(
     observations: list[dict], meta: dict, topic: str
 ) -> dict:
-    known_ages = [item["age_days"] for item in observations if item.get("age_days") is not None]
-    buckets = {}
-    for label, days in RECENCY_BUCKETS:
-        count = sum(1 for age in known_ages if age <= days)
-        buckets[label] = {
-            "count": count,
-            "ratio": round(count / len(known_ages), 4) if known_ages else None,
-        }
-    buckets[">90d"] = {
-        "count": sum(1 for age in known_ages if age > 90),
-        "ratio": (
-            round(sum(1 for age in known_ages if age > 90) / len(known_ages), 4)
-            if known_ages
-            else None
-        ),
-    }
+    recency = recency_buckets(observations)
+    # 筛选样本会整体改变时间分布，必须与综合排序基线分开呈现，不能合并成一个比例。
+    recency_by_mode = {}
+    for mode in sorted({m for item in observations for m in (item.get("modes") or [])}):
+        recency_by_mode[mode] = recency_buckets(
+            [item for item in observations if mode in (item.get("modes") or [])]
+        )
+    recency_by_keyword = {}
+    for keyword in sorted({k for item in observations for k in (item.get("keywords") or [])}):
+        recency_by_keyword[keyword] = recency_buckets(
+            [item for item in observations if keyword in (item.get("keywords") or [])]
+        )
 
     stats = [item.get("stats") or {} for item in observations]
     engagement = {
@@ -479,11 +513,9 @@ def compute_signals(
         "observations": len(observations),
         "unique_authors": unique_authors,
         "unlinked_cards": meta.get("unlinked_cards", 0),
-        "recency": {
-            "known": len(known_ages),
-            "unknown": len(observations) - len(known_ages),
-            "buckets": buckets,
-        },
+        "recency": recency,
+        "recency_by_mode": recency_by_mode,
+        "recency_by_keyword": recency_by_keyword,
         "engagement": engagement,
         "hashtags": hashtags,
         "authors": author_rows,
@@ -494,15 +526,20 @@ def compute_signals(
 
 def topic_leads(signals: dict) -> list[str]:
     leads: list[str] = []
-    recency = signals.get("recency", {}).get("buckets", {})
+    # 时效结论只用综合排序样本，避免「一周内」筛选把近期占比整体抬高。
+    by_mode = signals.get("recency_by_mode") or {}
+    baseline = by_mode.get("comprehensive") or signals.get("recency") or {}
+    recency = baseline.get("buckets", {})
     ratio_30 = (recency.get("30d") or {}).get("ratio")
     if ratio_30 is not None and ratio_30 >= 0.5:
         leads.append(
-            f"近 30 天作品占 {format_ratio(ratio_30)}，话题仍在持续更新，适合做时效型内容。"
+            f"综合排序样本中近 30 天作品占 {format_ratio(ratio_30)}，"
+            "话题仍在持续更新，适合做时效型内容。"
         )
     elif ratio_30 is not None and ratio_30 < 0.2:
         leads.append(
-            f"近 30 天作品仅占 {format_ratio(ratio_30)}，存量内容为主，适合做体系化长青选题。"
+            f"综合排序样本中近 30 天作品仅占 {format_ratio(ratio_30)}，"
+            "存量内容为主，适合做体系化长青选题。"
         )
 
     tags = signals.get("hashtags") or []
@@ -591,6 +628,31 @@ def render_report(
                 for label, bucket in recency["buckets"].items()
             ]
             + [["未知", format_int(recency["unknown"]), "-"]],
+        )
+    )
+    lines.append("")
+    lines.append("## 分采集模式的时间分布")
+    lines.append("")
+    lines.append(
+        "各模式的筛选条件不同，比例只在同一模式内可比；判断话题时效以综合排序为基线。"
+    )
+    lines.append("")
+    lines.append(
+        table(
+            ["模式", "样本", "≤7 天", "≤30 天", "≤90 天", ">90 天", "未知"],
+            [
+                [
+                    MODE_LABELS.get(mode, mode),
+                    format_int(bucket["known"] + bucket["unknown"]),
+                    format_ratio((bucket["buckets"]["7d"] or {}).get("ratio")),
+                    format_ratio((bucket["buckets"]["30d"] or {}).get("ratio")),
+                    format_ratio((bucket["buckets"]["90d"] or {}).get("ratio")),
+                    format_ratio((bucket["buckets"][">90d"] or {}).get("ratio")),
+                    format_int(bucket["unknown"]),
+                ]
+                for mode, bucket in (signals.get("recency_by_mode") or {}).items()
+            ]
+            or [["-", "-", "-", "-", "-", "-", "-"]],
         )
     )
     lines.append("")
@@ -723,7 +785,14 @@ def command_rank(args: argparse.Namespace) -> int:
     topic = args.topic or meta.get("topic") or "未命名主题"
     signals = compute_signals(observations, meta, topic)
     write_json(workspace / "signals.json", signals)
-    shortlist = select_shortlist(observations, signals, args.top, args.per_author)
+    shortlist = select_shortlist(
+        observations,
+        signals,
+        args.top,
+        args.per_author,
+        args.include_terms,
+        args.exclude_terms,
+    )
     report = render_report(signals, observations, shortlist)
     report_path = workspace / "candidates.md"
     report_path.write_text(report, encoding="utf-8")
@@ -749,8 +818,54 @@ def command_rank(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 
 
+def expand_terms(keywords: list[str], extra_terms: list[str] | None) -> list[str]:
+    """把主题词展开成匹配片段。
+
+    中文没有空格分词，一个主题词往往以片段形式出现在文案里（「律师案源」→「案源」），
+    所以对含中文的词额外生成相邻两字片段。拉丁词保持整词，避免两字母片段误命中。
+    """
+    terms: list[str] = []
+    for source in [*keywords, *(extra_terms or [])]:
+        text = str(source or "").strip()
+        if not text:
+            continue
+        candidates = [text]
+        if CJK_CHAR.search(text) and len(text) > 2:
+            candidates.extend(
+                text[index : index + 2] for index in range(len(text) - 1)
+            )
+        for candidate in candidates:
+            normalized = candidate.strip().lower()
+            if normalized and normalized not in terms:
+                terms.append(normalized)
+    return terms
+
+
+def relevance_for(
+    item: dict, terms: list[str], primary_terms: list[str] | None = None
+) -> tuple[list[str], bool]:
+    """返回命中的主题片段，以及是否直接命中完整主题词。
+
+    单个两字片段（「律师」）不足以判断切题，几乎所有法律内容都会命中；只有完整主题词
+    或至少两个不同片段同时出现，才认为作品确实在谈这个主题。
+    """
+    haystack = " ".join(
+        [str(item.get("desc") or ""), " ".join(item.get("hashtags") or [])]
+    ).lower()
+    matched = [term for term in terms if term in haystack]
+    full_hit = any(
+        term in haystack for term in (primary_terms if primary_terms is not None else terms)
+    )
+    return matched, full_hit
+
+
 def select_shortlist(
-    observations: list[dict], signals: dict, top: int, per_author: int
+    observations: list[dict],
+    signals: dict,
+    top: int,
+    per_author: int,
+    include_terms: list[str] | None = None,
+    exclude_terms: list[str] | None = None,
 ) -> list[dict]:
     diggs = [
         (item.get("stats") or {}).get("digg")
@@ -760,6 +875,13 @@ def select_shortlist(
     digg_p50 = percentile(diggs, 0.5) or 0
     digg_p90 = percentile(diggs, 0.9) or 0
     spread = max(digg_p90 - digg_p50, 1)
+    terms = expand_terms(signals.get("keywords") or [], include_terms)
+    primary_terms = [
+        str(keyword).strip().lower()
+        for keyword in [*(signals.get("keywords") or []), *(include_terms or [])]
+        if str(keyword).strip()
+    ]
+    excluded = [str(term).strip().lower() for term in (exclude_terms or []) if str(term).strip()]
 
     def score(item: dict) -> float:
         stats = item.get("stats") or {}
@@ -770,11 +892,33 @@ def select_shortlist(
             if isinstance(stats.get(field), (int, float))
         )
         digg_norm = max(0.0, min(1.0, (digg - digg_p50) / spread))
-        return 0.55 * digg_norm + 0.2 * min(interaction / max(digg, 1), 1.0) + 0.25 * recency_score(
-            item.get("age_days")
+        matched, full_hit = relevance_for(item, terms, primary_terms)
+        relevance = min(len(matched) / 3, 1.0)
+        if full_hit:
+            relevance = 1.0
+        return (
+            0.45 * digg_norm
+            + 0.15 * min(interaction / max(digg, 1), 1.0)
+            + 0.15 * recency_score(item.get("age_days"))
+            + 0.25 * relevance
         )
 
-    ranked = sorted(observations, key=lambda item: (-score(item), item["aweme_id"]))
+    def admissible(item: dict) -> bool:
+        if not terms:
+            return True
+        haystack = " ".join(
+            [str(item.get("desc") or ""), " ".join(item.get("hashtags") or [])]
+        ).lower()
+        if any(term in haystack for term in excluded):
+            return False
+        matched, full_hit = relevance_for(item, terms, primary_terms)
+        # 与主题无关的作品不进短名单，避免高赞但受众不符的内容占据名额。
+        return full_hit or len(matched) >= 2
+
+    ranked = sorted(
+        (item for item in observations if admissible(item)),
+        key=lambda item: (-score(item), item["aweme_id"]),
+    )
     picked: list[dict] = []
     per_author_count: dict[str, int] = {}
     for item in ranked:
@@ -783,6 +927,7 @@ def select_shortlist(
             continue
         per_author_count[author] = per_author_count.get(author, 0) + 1
         stats = item.get("stats") or {}
+        matched, _ = relevance_for(item, terms, primary_terms)
         picked.append(
             {
                 "schema": SHORTLIST_SCHEMA,
@@ -798,7 +943,8 @@ def select_shortlist(
                 "age_days": item.get("age_days"),
                 "hashtags": item.get("hashtags") or [],
                 "score": round(score(item), 4),
-                "reason": "点赞分位 + 互动深度 + 近期性加权，同一作者最多 "
+                "matched_terms": matched,
+                "reason": "点赞分位 + 互动深度 + 近期性 + 主题相关性加权，同一作者最多 "
                 + str(per_author)
                 + " 条",
             }
@@ -817,7 +963,14 @@ def command_shortlist(args: argparse.Namespace) -> int:
         if signals_path.exists()
         else {}
     )
-    picked = select_shortlist(observations, signals, args.top, args.per_author)
+    picked = select_shortlist(
+        observations,
+        signals,
+        args.top,
+        args.per_author,
+        args.include_terms,
+        args.exclude_terms,
+    )
     write_json(workspace / "shortlist.json", picked)
     links_path = workspace / (args.links or "links.txt")
     links_path.write_text(
@@ -893,8 +1046,15 @@ def command_verify(args: argparse.Namespace) -> int:
         if len(links) != len(shortlist):
             errors.append(f"links.txt 有 {len(links)} 行，短名单有 {len(shortlist)} 条")
         for link in links:
-            if not re.fullmatch(r"https://www\.douyin\.com/video/\d+", link):
+            if not WORK_URL.fullmatch(link):
                 errors.append(f"links.txt 链接格式异常 {link}")
+        # 逐条对账：形状合法不代表是同一部作品，链接清单必须与短名单完全一致。
+        expected_links = [item.get("url") for item in shortlist]
+        for index, (link, expected) in enumerate(zip(links, expected_links), start=1):
+            if link != expected:
+                errors.append(
+                    f"links.txt 第 {index} 条与短名单不一致：{link} != {expected}"
+                )
 
     if errors:
         for error in errors:
@@ -921,6 +1081,24 @@ def command_verify(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 
 
+def find_downloaded_media(directory: Path, aweme_id: str) -> Path | None:
+    """按作品 ID 找本次落盘的媒体文件，只认非空常规文件。"""
+    candidates = []
+    for entry in directory.iterdir():
+        if entry.is_symlink() or not entry.is_file():
+            continue
+        if aweme_id not in entry.name:
+            continue
+        if entry.suffix.lower() not in MEDIA_SUFFIXES:
+            continue
+        if entry.stat().st_size <= 0:
+            continue
+        candidates.append(entry)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item.stat().st_size)
+
+
 def command_download(args: argparse.Namespace) -> int:
     workspace = Path(args.workspace).expanduser()
     links_path = Path(args.links).expanduser() if args.links else workspace / "links.txt"
@@ -933,6 +1111,11 @@ def command_download(args: argparse.Namespace) -> int:
     ]
     if not links:
         raise SystemExit("链接清单为空")
+    invalid = [link for link in links if not WORK_URL.fullmatch(link)]
+    if invalid:
+        for link in invalid:
+            print(f"FAIL 链接不是抖音作品地址：{link}", file=sys.stderr)
+        return 1
     target = Path(args.out_dir).expanduser() if args.out_dir else workspace / "downloads"
     tool = args.tool
 
@@ -956,6 +1139,7 @@ def command_download(args: argparse.Namespace) -> int:
     target.mkdir(parents=True, exist_ok=True)
     results = []
     for index, link in enumerate(links, start=1):
+        aweme_id = link.rsplit("/", 1)[-1]
         command = [
             tool,
             "--no-playlist",
@@ -963,15 +1147,22 @@ def command_download(args: argparse.Namespace) -> int:
             str(target),
             "-o",
             "%(id)s.%(ext)s",
+            "--",
             link,
         ]
         completed = subprocess.run(command, capture_output=True, text=True)
+        # 下载器退出码为 0 不代表真的落盘，按作品 ID 回查媒体文件才算成功。
+        media = find_downloaded_media(target, aweme_id)
         results.append(
             {
                 "index": index,
                 "url": link,
+                "aweme_id": aweme_id,
                 "returncode": completed.returncode,
-                "ok": completed.returncode == 0,
+                "media_path": str(media) if media else None,
+                "size_bytes": media.stat().st_size if media else None,
+                "ok": completed.returncode == 0 and media is not None,
+                "error": None if media else "下载器未产出可识别的媒体文件",
                 "stderr_tail": (completed.stderr or "")[-400:],
             }
         )
@@ -982,12 +1173,17 @@ def command_download(args: argparse.Namespace) -> int:
         "total": len(results),
         "succeeded": sum(1 for item in results if item["ok"]),
         "failed": sum(1 for item in results if not item["ok"]),
+        "verified": sum(1 for item in results if item["ok"]),
+        "media_bytes": sum(item["size_bytes"] or 0 for item in results),
         "results": results,
     }
     write_json(workspace / "download_receipt.json", receipt)
     print(
         json.dumps(
-            {key: receipt[key] for key in ("total", "succeeded", "failed")},
+            {
+                key: receipt[key]
+                for key in ("total", "succeeded", "failed", "verified", "media_bytes")
+            },
             ensure_ascii=False,
             indent=2,
         )
@@ -1038,6 +1234,18 @@ def build_parser() -> argparse.ArgumentParser:
     rank.add_argument("--topic", default=None)
     rank.add_argument("--top", type=int, default=12, help="报告内短名单条数")
     rank.add_argument("--per-author", type=int, default=2, help="同一作者最多入选条数")
+    rank.add_argument(
+        "--include-terms",
+        nargs="*",
+        default=None,
+        help="追加的主题词，用于判断作品是否切题；默认取关键词",
+    )
+    rank.add_argument(
+        "--exclude-terms",
+        nargs="*",
+        default=None,
+        help="命中即排除的词，例如面向委托人的「请律师」「找律师」",
+    )
     rank.set_defaults(func=command_rank)
 
     shortlist = sub.add_parser("shortlist", help="生成短名单与链接清单")
@@ -1045,6 +1253,18 @@ def build_parser() -> argparse.ArgumentParser:
     shortlist.add_argument("--top", type=int, default=12, help="短名单条数")
     shortlist.add_argument("--per-author", type=int, default=2, help="同一作者最多入选条数")
     shortlist.add_argument("--links", default="links.txt", help="链接清单文件名")
+    shortlist.add_argument(
+        "--include-terms",
+        nargs="*",
+        default=None,
+        help="追加的主题词，用于判断作品是否切题；默认取关键词",
+    )
+    shortlist.add_argument(
+        "--exclude-terms",
+        nargs="*",
+        default=None,
+        help="命中即排除的词，例如面向委托人的「请律师」「找律师」",
+    )
     shortlist.set_defaults(func=command_shortlist)
 
     verify = sub.add_parser("verify", help="交叉校验产物一致性")

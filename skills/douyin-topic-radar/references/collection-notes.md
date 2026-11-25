@@ -8,6 +8,13 @@
 
 采集器对每张卡片做一次有界遍历（最多访问 240 个 fiber 节点），取到 `awemeInfo` 后直接读：
 
+遍历有两条边界，缺一不可：
+
+- **不跟随根节点的 `sibling`**。卡片 fiber 的 `sibling` 是下一张卡片，跟过去就会把邻居的 ID 贴到当前卡片上。子树内部的 `sibling` 才是同层元素。
+- **元素节点必须仍在本卡片内**（`card.contains(stateNode)`）。这是结构变化时的第二道防线。
+
+读不到 `awemeInfo` 时该卡片留空（`aweme_id: null`），不猜测、不借用邻居数据。
+
 | 字段 | 含义 |
 |---|---|
 | `awemeId` | 作品 ID，拼 `https://www.douyin.com/video/<id>` |

@@ -35,17 +35,22 @@
   const findAwemeInfo = (card) => {
     const fiberKey = Object.keys(card).find((key) => key.startsWith("__reactFiber"));
     if (!fiberKey) return null;
-    const queue = [card[fiberKey]];
+    const root = card[fiberKey];
+    const queue = [root];
     let visited = 0;
     while (queue.length && visited < 240) {
       const fiber = queue.shift();
       visited += 1;
+      // 元素节点必须仍在本卡片内，避免沿 fiber 走到相邻卡片。
+      const node = fiber && fiber.stateNode;
+      if (node && node.nodeType === 1 && !card.contains(node)) continue;
       const props = fiber && fiber.memoizedProps;
       if (props && props.awemeInfo && props.awemeInfo.awemeId) {
         return props.awemeInfo;
       }
       if (fiber && fiber.child) queue.push(fiber.child);
-      if (fiber && fiber.sibling) queue.push(fiber.sibling);
+      // 根节点的 sibling 是下一张卡片，只有子树内部才允许横向移动。
+      if (fiber && fiber !== root && fiber.sibling) queue.push(fiber.sibling);
     }
     return null;
   };
