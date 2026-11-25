@@ -69,11 +69,27 @@ def _quad_is_convex(ordered_points: np.ndarray) -> bool:
 
 
 def _order_quad_clockwise(points: np.ndarray) -> np.ndarray:
-    """Order corners clockwise from the top-left-most one, robust to ties."""
+    """Order corners clockwise from the visual top-left, robust to rotation ties."""
     center = points.mean(axis=0)
     angles = np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0])
     ordered = points[np.argsort(angles)]
-    start = int(np.argmin(ordered[:, 0] + ordered[:, 1]))
+    candidates = []
+    for shift in range(4):
+        candidate = np.roll(ordered, -shift, axis=0)
+        top = candidate[1] - candidate[0]
+        left = candidate[3] - candidate[0]
+        top_angle = abs(float(np.degrees(np.arctan2(top[1], top[0])))) % 180
+        left_angle = abs(float(np.degrees(np.arctan2(left[1], left[0])))) % 180
+        tilt = (
+            min(top_angle, 180 - top_angle)
+            + min(abs(left_angle - 90), 180 - abs(left_angle - 90))
+        )
+        height = float(np.linalg.norm(left))
+        ratio = float(np.linalg.norm(top)) / height if height else 1.0
+        candidates.append((tilt, abs(ratio - 210 / 297), shift))
+    least_tilt = min(item[0] for item in candidates)
+    finalists = [item for item in candidates if item[0] <= least_tilt + 2.0]
+    start = min(finalists)[2]
     return np.roll(ordered, -start, axis=0).astype(np.float32)
 
 
