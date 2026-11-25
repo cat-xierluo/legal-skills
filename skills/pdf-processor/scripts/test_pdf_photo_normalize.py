@@ -1021,38 +1021,37 @@ class PhotoNormalizeTest(unittest.TestCase):
         rotated = page.rotate(
             45, resample=Image.Resampling.BICUBIC, expand=True, fillcolor="white",
         )
+        self.assertEqual(rotated.size, (990, 990))
 
-        mask = (np.asarray(rotated.convert("L")) < 120).astype(np.uint8) * 255
-        contours, _ = photo_normalize.cv2.findContours(
-            mask, photo_normalize.cv2.RETR_EXTERNAL, photo_normalize.cv2.CHAIN_APPROX_SIMPLE,
-        )
-        contour = max(contours, key=photo_normalize.cv2.contourArea)
-        approx = photo_normalize.cv2.approxPolyDP(
-            contour, 0.02 * photo_normalize.cv2.arcLength(contour, True), True,
-        ).reshape(-1, 2).astype(float)
-        quad = (approx / np.array([rotated.width - 1, rotated.height - 1])).tolist()
-
+        # 该四角序列曾在旧起点算法下被横置；四个起点轮换都必须还原为竖版
+        quad = [[0, 0.429], [0.428, 0], [1, 0.573], [0.571, 1]]
         with tempfile.TemporaryDirectory() as tempdir:
             source = Path(tempdir) / "rotated.png"
-            target = Path(tempdir) / "output.pdf"
             rotated.save(source)
+            for shift in range(4):
+                with self.subTest(shift=shift):
+                    target = Path(tempdir) / f"output-{shift}.pdf"
+                    report = photo_normalize.normalize_photo_pdf(
+                        source,
+                        target,
+                        rotation="0",
+                        page_size="a4",
+                        dpi=110,
+                        quad=quad[shift:] + quad[:shift],
+                    )
 
-            report = photo_normalize.normalize_photo_pdf(
-                source, target, rotation="0", page_size="a4", dpi=110, quad=quad,
-            )
-
-            self.assertEqual(report["quad"]["source"], "manual")
-            self.assertGreater(report["output_size"][1], report["output_size"][0])
-            with fitz.open(target) as document:
-                raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
-                pixels = np.frombuffer(raster.samples, dtype=np.uint8).reshape(
-                    raster.height, raster.width,
-                )
-            rows, columns = np.nonzero(pixels < 100)
-            self.assertGreater(
-                int(rows.max() - rows.min()), int(columns.max() - columns.min()),
-                "竖版页面被横置",
-            )
+                    self.assertEqual(report["quad"]["source"], "manual")
+                    self.assertGreater(report["output_size"][1], report["output_size"][0])
+                    with fitz.open(target) as document:
+                        raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
+                        pixels = np.frombuffer(raster.samples, dtype=np.uint8).reshape(
+                            raster.height, raster.width,
+                        )
+                    rows, columns = np.nonzero(pixels < 100)
+                    self.assertGreater(
+                        int(rows.max() - rows.min()), int(columns.max() - columns.min()),
+                        "竖版页面被横置",
+                    )
 
     def test_parse_quad_accepts_chinese_commas_and_rejects_wrong_count(self):
         self.assertEqual(
