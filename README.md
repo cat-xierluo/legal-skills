@@ -36,11 +36,11 @@
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-11-25 | 新上传 | [douyin-topic-radar](skills/douyin-topic-radar/) | v0.1.0（源码） | 按关键词检索抖音搜索页，采集作品级互动与发布时间，计算话题热度信号与选题线索，产出候选短名单并下载作品供对标拆解。 |
 | 2026-11-25 | 更新 | [git-workflow](skills/git-workflow/) | v1.27.2（源码） | 修复目标分支前进后创建 PR 与 squash 的隐私预检误拒，改用唯一共同祖先确定扫描范围。源码待发布。 |
+| 2026-11-25 | 更新 | [new-case](skills/new-case/) | v1.7.0（源码） | 分开判断案件类型和委托阶段，涉诉咨询按需启用正式目录，受托后复用接洽档案。 |
 | 2026-11-23 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.6.0（源码） | 诉讼方案按委托阶段组织正文，可用简短指令精简已有方案。Word 支持选择附页。 |
 | 2026-11-21 | 更新 | [magpie-optimizer](skills/magpie-optimizer/) | v1.8.1（源码） | 新增跨设备同步方案：划分数据域，比较 WebDAV/S3/GitHub/一次性备份，明确登录态、凭据与恢复边界。源码待发布。 |
 | 2026-11-21 | 更新 | [legal-material-organizer](skills/legal-material-organizer/) | v0.17.0（源码） | 单个可读文件与混合材料统一先入库；整理时读取并优先沿用当前案件目录结构，不强制交接 new-case。 |
 | 2026-11-21 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.3.1（源码） | 只消费已整理可读材料，新增证据立场、证明力、事实贡献和风险信号的法律语义标签。 |
-| 2026-11-21 | 更新 | [new-case](skills/new-case/) | v1.6.0（源码） | 职责收窄为案件目录骨架与管理文件初始化，材料入库统一交给 legal-material-organizer。 |
 | 2026-11-20 | 更新 | [pdf-processor](skills/pdf-processor/) | v2.17.2（源码） | 拍照件有明确栏间空隙时分别测量两栏倾角，修复错行双栏误旋正。源码待发布。 |
 
 </details>
@@ -156,7 +156,7 @@
 <td>工具·OCR</td>
 <td style="word-break:break-word">OCR、扫描识别、图片文字识别和文档识别工具，支持 PDF、图片、Office 文档和 URL 转 Markdown；法律材料可进行保守的术语与文书结构优化</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.0</td>
+<td style="text-align:center">v1.7.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/legal-ocr-1.6.0.zip">已发布 v1.6.0</a></td>
 <td>推荐统一入口；所属套件：<a href="expert-suites/legal-material-evidence/">法律材料与证据处理</a>、<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a>、<a href="expert-suites/contract-business-counsel/">合同审查与小微企业顾问</a></td></tr>
 <tr>
@@ -232,11 +232,11 @@
 <tr>
 <td><a href="skills/new-case/"><strong>new-case</strong></a></td>
 <td>通用·案件管理</td>
-<td style="word-break:break-word">创建诉讼、咨询、商标和专利档案目录骨架与管理文件；可学习个人目录规范，材料入库交给 legal-material-organizer</td>
+<td style="word-break:break-word">创建诉讼、咨询、商标和专利档案。涉诉咨询按需启用正式诉讼目录，受托后沿用。材料入库交给 legal-material-organizer。</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.6.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.11.08/new-case-1.5.0.zip">已发布 v1.5.0</a></td>
-<td>源码 v1.6.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a></td></tr>
+<td>源码 v1.7.0 待发布。所属套件：<a href="expert-suites/litigation-analysis-drafting/">诉讼分析及文书撰写</a></td></tr>
 <tr>
 <td><a href="skills/judgment-analysis/"><strong>judgment-analysis</strong></a></td>
 <td>通用·诉讼</td>
