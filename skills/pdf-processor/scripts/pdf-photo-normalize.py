@@ -68,6 +68,15 @@ def _quad_is_convex(ordered_points: np.ndarray) -> bool:
     return cv2.isContourConvex(ordered_points.astype(np.float32))
 
 
+def _order_quad_clockwise(points: np.ndarray) -> np.ndarray:
+    """Order corners clockwise from the top-left-most one, robust to ties."""
+    center = points.mean(axis=0)
+    angles = np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0])
+    ordered = points[np.argsort(angles)]
+    start = int(np.argmin(ordered[:, 0] + ordered[:, 1]))
+    return np.roll(ordered, -start, axis=0).astype(np.float32)
+
+
 def parse_quad(value: str) -> list[list[float]]:
     """Parse ``x1,y1,x2,y2,x3,y3,x4,y4`` corner text, accepting Chinese commas."""
     try:
@@ -90,10 +99,12 @@ def _manual_quad(
         raise ValueError("手动四角坐标必须是有限数值")
     if np.any(array < 0) or np.any(array > 1):
         raise ValueError("手动四角使用 0-1 归一化坐标")
-    ordered = _order_quad(array)
+    ordered = _order_quad_clockwise(array)
     if not _quad_is_convex(ordered) or cv2.contourArea(ordered) <= 0:
         raise ValueError("手动四角必须是凸四边形")
-    return ordered * np.array(image_size, dtype=np.float32)
+    return ordered * np.array(
+        (image_size[0] - 1, image_size[1] - 1), dtype=np.float32,
+    )
 
 
 def _has_document_edges(gray: np.ndarray, quad: np.ndarray) -> bool:
@@ -1496,7 +1507,7 @@ def normalize_photo_pdf(
     swaps_axes = clockwise in (90, 270)
     oriented_size = corrected_size[::-1] if swaps_axes else corrected_size
     final_size, resolved_page_size = resolve_page_size(oriented_size, page_size, dpi)
-    if quad_source == "paper_edges" and resolved_page_size in ("a4", "auto_a4"):
+    if quad_source in ("paper_edges", "manual") and resolved_page_size in ("a4", "auto_a4"):
         content_size = final_size
     else:
         content_size = _contained_size(oriented_size, final_size)
@@ -1537,7 +1548,7 @@ def normalize_photo_pdf(
                 debug_array,
                 [np.round(detected_quad).astype(np.int32)],
                 True,
-                (255, 0, 0) if quad_source == "paper_edges" else (0, 160, 0),
+                (255, 0, 0) if quad_source in ("paper_edges", "manual") else (0, 160, 0),
                 max(1, round(max(photo.size) / 600)),
             )
         outputs.append((debug_path, partial(Image.fromarray(debug_array).save, quality=95)))
@@ -1547,6 +1558,14 @@ def normalize_photo_pdf(
         tuple(pixels * 25.4 / mm for pixels, mm in zip(final_size, dimensions_mm))
         if dimensions_mm else (dpi, dpi)
     )
+    illumination_report = {
+        "strength": illumination_strength,
+        "contrast_strength": contrast_strength,
+        "before_shadow_score": _shadow_score(oriented),
+        "after_shadow_score": _shadow_score(enhanced),
+    }
+    if binarize:
+        illumination_report["status"] = "binarized"
     report = {
         "input": str(source_path),
         "output": str(target_path),
@@ -1556,23 +1575,18 @@ def normalize_photo_pdf(
         "rotation_reason": rotation_reason,
         "table_alignment": table_report,
         "text_deskew": text_report,
-        "illumination": {
-            "status": "binarized" if binarize else "normalized",
-            "strength": illumination_strength,
-            "contrast_strength": contrast_strength,
-            "before_shadow_score": _shadow_score(oriented),
-            "after_shadow_score": _shadow_score(enhanced),
-        },
-        "binarization": {
-            "status": "applied" if binarize else "disabled",
-            "high": binarize_high if binarize else None,
-            "low": binarize_low if binarize else None,
-        },
+        "illumination": illumination_report,
         "page_size": resolved_page_size,
         "output_size": final_size,
         "content_size": content_size,
         "dpi": dpi,
     }
+    if binarize:
+        report["binarization"] = {
+            "status": "applied",
+            "high": binarize_high,
+            "low": binarize_low,
+        }
     if report_path is not None:
         report_text = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
         outputs.append((report_path, lambda path: path.write_text(report_text, encoding="utf-8")))
@@ -1656,7 +1670,7 @@ def main() -> int:
     if not 0 <= args.contrast_strength <= 1:
         raise ValueError("对比度增强强度必须在 0-1")
     if not 0 <= args.bw_low < args.bw_high <= 255:
-        raise ValueError("黑白化阈值必须满足 0 <= 下阈值 < 上阈值 <= 255")
+        parser.error("黑白化阈值必须满足 0 <= 下阈值 < 上阈值 <= 255")
     manual_quad = None
     if args.quad:
         try:
@@ -1703,7 +1717,7 @@ def main() -> int:
         f"{report['illumination']['after_shadow_score']:.2f}"
     )
     print(f"页面策略: {report['page_size']}；输出尺寸: {report['output_size'][0]}×{report['output_size'][1]}")
-    if report["binarization"]["status"] == "applied":
+    if report.get("binarization", {}).get("status") == "applied":
         print(
             f"黑白化: 上阈值 {report['binarization']['high']}，"
             f"下阈值 {report['binarization']['low']}"

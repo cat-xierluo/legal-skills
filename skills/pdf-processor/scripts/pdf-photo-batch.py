@@ -65,14 +65,20 @@ def load_quad_overrides(
     path: str | Path, photos: list[Path],
 ) -> dict[str, list[list[float]]]:
     """Load per-photo normalized corners keyed by file name."""
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    source = Path(path)
+    if not source.is_file():
+        raise ValueError(f"四角覆盖文件不存在: {source}")
+    data = json.loads(source.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("四角覆盖文件必须是 JSON 对象，键为文件名，值为 4 个 [x, y] 点")
     overrides: dict[str, list[list[float]]] = {}
     for key, points in data.items():
         if not isinstance(points, (list, tuple)) or len(points) != 4:
             raise ValueError(f"四角覆盖格式错误: {key} 应为 4 个 [x, y] 点")
-        overrides[Path(key).name] = [[float(value) for value in point] for point in points]
+        name = Path(key).name
+        if name in overrides:
+            raise ValueError(f"四角覆盖文件存在重复文件名: {name}")
+        overrides[name] = [[float(value) for value in point] for point in points]
     unknown = sorted(set(overrides) - {photo.name for photo in photos})
     if unknown:
         raise ValueError(f"四角覆盖文件包含未匹配的照片: {unknown[0]}")
@@ -161,8 +167,9 @@ def normalize_photo_batch(
             "page_count": len(page_pdfs),
             "photos": page_reports,
             "dpi": dpi,
-            "quad_file": str(quad_path) if quad_path is not None else None,
         }
+        if quad_path is not None:
+            final_report["quad_file"] = str(quad_path)
         staged_report = temporary_root / "report.json"
         if report_path is not None:
             staged_report.write_text(

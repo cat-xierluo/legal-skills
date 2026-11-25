@@ -941,6 +941,76 @@ class PhotoNormalizeTest(unittest.TestCase):
                     )
                 self.assertFalse(target.exists())
 
+    def test_manual_quad_orders_diamond_and_any_corner_permutation(self):
+        diamond = [[0.5, 0.05], [0.95, 0.5], [0.5, 0.95], [0.05, 0.5]]
+        ordered = photo_normalize._order_quad_clockwise(np.asarray(diamond, dtype=np.float32))
+        self.assertEqual(
+            [tuple(point) for point in ordered.round(2)],
+            [(0.5, 0.05), (0.95, 0.5), (0.5, 0.95), (0.05, 0.5)],
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "photo.png"
+            make_document_photo().save(source)
+            reference = photo_normalize._manual_quad(
+                [[0.19, 0.10], [0.89, 0.15], [0.82, 0.90], [0.12, 0.84]], (900, 1200),
+            )
+            for shift in range(4):
+                rotated = [[0.19, 0.10], [0.89, 0.15], [0.82, 0.90], [0.12, 0.84]]
+                rotated = rotated[shift:] + rotated[:shift]
+                with self.subTest(shift=shift):
+                    candidate = photo_normalize._manual_quad(rotated, (900, 1200))
+                    np.testing.assert_allclose(candidate, reference, atol=1e-3)
+
+    def test_manual_quad_full_frame_quad_reaches_every_page_edge(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "frame.png"
+            target = Path(tempdir) / "output.pdf"
+            image = Image.new("RGB", (300, 400), "white")
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((0, 0, 299, 399), outline="black", width=3)
+            image.save(source)
+
+            report = photo_normalize.normalize_photo_pdf(
+                source,
+                target,
+                rotation="0",
+                page_size="original",
+                dpi=110,
+                quad=[[0, 0], [1, 0], [1, 1], [0, 1]],
+            )
+
+            self.assertEqual(report["quad"]["source"], "manual")
+            with fitz.open(target) as document:
+                raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
+                pixels = np.frombuffer(raster.samples, dtype=np.uint8).reshape(
+                    raster.height, raster.width,
+                )
+            for rows, columns in (
+                (slice(None), slice(0, 2)), (slice(None), slice(-2, None)),
+                (slice(0, 2), slice(None)), (slice(-2, None), slice(None)),
+            ):
+                self.assertLess(int(pixels[rows, columns].min()), 90)
+
+    def test_manual_quad_fills_a4_like_detected_paper(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "photo.png"
+            target = Path(tempdir) / "output.pdf"
+            make_document_photo().save(source)
+
+            report = photo_normalize.normalize_photo_pdf(
+                source,
+                target,
+                rotation="0",
+                page_size="a4",
+                dpi=110,
+                quad=[[0.19, 0.10], [0.89, 0.15], [0.82, 0.90], [0.12, 0.84]],
+            )
+
+            self.assertEqual(report["page_size"], "a4")
+            self.assertEqual(report["content_size"], report["output_size"])
+            self.assertAlmostEqual(report["output_size"][0] / report["output_size"][1], 210 / 297, places=3)
+
     def test_parse_quad_accepts_chinese_commas_and_rejects_wrong_count(self):
         self.assertEqual(
             photo_normalize.parse_quad("0.1，0.2，0.3，0.4，0.5，0.6，0.7，0.8"),
@@ -984,6 +1054,42 @@ class PhotoNormalizeTest(unittest.TestCase):
                     binarize_low=200,
                 )
             self.assertFalse(target.exists())
+
+    def test_default_report_keeps_2_17_2_shape(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "photo.png"
+            target = Path(tempdir) / "output.pdf"
+            make_document_photo().save(source)
+
+            report = photo_normalize.normalize_photo_pdf(
+                source, target, rotation="0", page_size="original", dpi=110,
+            )
+
+            self.assertNotIn("binarization", report)
+            self.assertNotIn("status", report["illumination"])
+            self.assertEqual(
+                set(report["illumination"]),
+                {"strength", "contrast_strength", "before_shadow_score", "after_shadow_score"},
+            )
+
+    def test_binarize_handles_flat_and_thin_stroke_extremes(self):
+        white = Image.new("RGB", (240, 320), "white")
+        black = Image.new("RGB", (240, 320), "black")
+        ramp = Image.new("RGB", (240, 320), "white")
+        ImageDraw.Draw(ramp).rectangle((60, 60, 180, 64), fill=(120, 120, 120))
+
+        for label, image, expected_min, expected_max, stroke in (
+            ("white", white, 255, 255, False),
+            ("black", black, 0, 0, False),
+            ("stroke", ramp, 0, 255, True),
+        ):
+            with self.subTest(label=label):
+                output = photo_normalize.binarize_page(image)
+                pixels = np.asarray(output.convert("L"))
+                self.assertEqual(int(pixels.min()), expected_min)
+                self.assertEqual(int(pixels.max()), expected_max)
+                if stroke:
+                    self.assertLess(int(pixels[60:65, 80:160].min()), 40)
 
 
 if __name__ == "__main__":

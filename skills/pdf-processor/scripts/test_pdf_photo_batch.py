@@ -147,6 +147,42 @@ class PhotoBatchTest(unittest.TestCase):
 
             self.assertFalse(output.exists())
 
+    def test_quad_file_rejects_missing_file_and_duplicate_names(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            make_partial_page("page").save(root / "page.png")
+            output = root / "merged.pdf"
+
+            with self.assertRaisesRegex(ValueError, "不存在"):
+                photo_batch.normalize_photo_batch(
+                    [str(root)], output, dpi=60, rotation="0", quad_file=root / "missing.json",
+                )
+
+            duplicate = root / "quads.json"
+            duplicate.write_text(json.dumps({
+                "page.png": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                "../page.png": [[0, 0], [1, 0], [1, 1], [0, 1]],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "重复文件名"):
+                photo_batch.normalize_photo_batch(
+                    [str(root)], output, dpi=60, rotation="0", quad_file=duplicate,
+                )
+
+            self.assertFalse(output.exists())
+
+    def test_default_report_keeps_2_17_2_shape(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            make_partial_page("page").save(root / "page.png")
+            report_path = root / "report.json"
+
+            report = photo_batch.normalize_photo_batch(
+                [str(root)], root / "merged.pdf", dpi=60, rotation="0", report_file=report_path,
+            )
+
+            self.assertNotIn("quad_file", report)
+            self.assertNotIn("binarization", report["photos"][0])
+
     def test_binarize_option_reaches_every_page(self):
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
