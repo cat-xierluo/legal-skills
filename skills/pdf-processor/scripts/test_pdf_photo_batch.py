@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import fitz
+import numpy as np
 from PIL import Image, ImageDraw
 
 
@@ -104,6 +105,70 @@ class PhotoBatchTest(unittest.TestCase):
 
             self.assertFalse(output.exists())
             self.assertFalse(report_path.exists())
+
+    def test_quad_file_applies_normalized_corners_per_photo(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            for name in ("record-2.png", "record-10.png"):
+                make_partial_page(name).save(root / name)
+            quad_path = root / "quads.json"
+            quad_path.write_text(json.dumps({
+                "record-2.png": [[0.15, 0.10], [0.85, 0.10], [0.85, 0.85], [0.15, 0.85]],
+            }), encoding="utf-8")
+            output = root / "merged.pdf"
+            report_path = root / "report.json"
+
+            report = photo_batch.normalize_photo_batch(
+                [str(root)], output, dpi=80, rotation="0",
+                quad_file=quad_path, report_file=report_path,
+            )
+
+            self.assertEqual(report["quad_file"], str(quad_path))
+            self.assertEqual(report["photos"][0]["quad"]["source"], "manual")
+            self.assertEqual(report["photos"][1]["quad"]["source"], "content_subject")
+            saved = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["photos"][0]["quad"]["source"], "manual")
+
+    def test_quad_file_rejects_unknown_photo_name(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            make_partial_page("page").save(root / "page.png")
+            quad_path = root / "quads.json"
+            quad_path.write_text(
+                json.dumps({"missing.png": [[0, 0], [1, 0], [1, 1], [0, 1]]}),
+                encoding="utf-8",
+            )
+            output = root / "merged.pdf"
+
+            with self.assertRaisesRegex(ValueError, "未匹配"):
+                photo_batch.normalize_photo_batch(
+                    [str(root)], output, dpi=60, rotation="0", quad_file=quad_path,
+                )
+
+            self.assertFalse(output.exists())
+
+    def test_binarize_option_reaches_every_page(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            for name in ("record-2.png", "record-10.png"):
+                make_partial_page(name).save(root / name)
+            output = root / "merged.pdf"
+            report_path = root / "report.json"
+
+            report = photo_batch.normalize_photo_batch(
+                [str(root)], output, dpi=80, rotation="0",
+                binarize=True, binarize_high=230, binarize_low=200, report_file=report_path,
+            )
+
+            self.assertTrue(all(
+                item["binarization"] == {"status": "applied", "high": 230.0, "low": 200.0}
+                for item in report["photos"]
+            ))
+            with fitz.open(output) as document:
+                raster = document[0].get_pixmap(dpi=80, colorspace=fitz.csGRAY)
+                pixels = np.frombuffer(raster.samples, dtype=np.uint8)
+            midtones = np.count_nonzero((pixels > 70) & (pixels < 190))
+            self.assertLess(midtones / pixels.size, 0.02)
 
     def test_batch_rolls_back_pdf_when_report_publish_fails(self):
         with tempfile.TemporaryDirectory() as tempdir:

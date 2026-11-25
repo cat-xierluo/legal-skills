@@ -900,6 +900,91 @@ class PhotoNormalizeTest(unittest.TestCase):
             with Image.open(source) as image:
                 self.assertEqual(image.n_frames, 2)
 
+    def test_manual_quad_overrides_detection_and_reports_manual_source(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "photo.png"
+            target = Path(tempdir) / "output.pdf"
+            make_document_photo().save(source)
+
+            with patch.object(photo_normalize, "detect_document_quad", return_value=None), \
+                    patch.object(photo_normalize, "detect_content_subject", return_value=None):
+                report = photo_normalize.normalize_photo_pdf(
+                    source,
+                    target,
+                    rotation="0",
+                    page_size="original",
+                    dpi=110,
+                    quad=[[0.189, 0.100], [0.889, 0.150], [0.822, 0.900], [0.122, 0.842]],
+                )
+
+            self.assertEqual(report["quad"]["source"], "manual")
+            self.assertTrue(report["quad"]["quad_detected"])
+            self.assertEqual(report["quad"]["content_subject"], {"status": "not_detected"})
+            with fitz.open(target) as document:
+                raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
+                pixels = np.frombuffer(raster.samples, dtype=np.uint8)
+            self.assertGreater(np.count_nonzero(pixels < 60), 200)
+
+    def test_manual_quad_rejects_invalid_corners(self):
+        for quad in (
+            [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9]],
+            [[0.1, 0.1], [0.5, 0.1], [0.9, 0.1], [0.5, 0.1]],
+            [[0.1, 0.1], [1.4, 0.1], [0.9, 0.9], [0.1, 0.9]],
+        ):
+            with self.subTest(quad=quad), tempfile.TemporaryDirectory() as tempdir:
+                source = Path(tempdir) / "photo.png"
+                target = Path(tempdir) / "output.pdf"
+                make_document_photo().save(source)
+                with self.assertRaises(ValueError):
+                    photo_normalize.normalize_photo_pdf(
+                        source, target, rotation="0", dpi=110, quad=quad,
+                    )
+                self.assertFalse(target.exists())
+
+    def test_parse_quad_accepts_chinese_commas_and_rejects_wrong_count(self):
+        self.assertEqual(
+            photo_normalize.parse_quad("0.1，0.2，0.3，0.4，0.5，0.6，0.7，0.8"),
+            [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6], [0.7, 0.8]],
+        )
+        with self.assertRaisesRegex(ValueError, "8 个数字"):
+            photo_normalize.parse_quad("0.1,0.2,0.3")
+
+    def test_binarize_renders_binary_page_and_reports_thresholds(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "photo.png"
+            target = Path(tempdir) / "output.pdf"
+            make_document_photo().save(source)
+
+            report = photo_normalize.normalize_photo_pdf(
+                source, target, rotation="0", page_size="original", dpi=110, binarize=True,
+            )
+
+            self.assertEqual(report["binarization"], {"status": "applied", "high": 235.0, "low": 195.0})
+            self.assertEqual(report["illumination"]["status"], "binarized")
+            with fitz.open(target) as document:
+                raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
+                pixels = np.frombuffer(raster.samples, dtype=np.uint8)
+            midtones = np.count_nonzero((pixels > 70) & (pixels < 190))
+            self.assertLess(midtones / pixels.size, 0.02)
+            self.assertGreater(np.count_nonzero(pixels < 60), 200)
+
+    def test_binarize_rejects_inverted_thresholds(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "photo.png"
+            target = Path(tempdir) / "output.pdf"
+            make_document_photo().save(source)
+            with self.assertRaisesRegex(ValueError, "黑白化阈值"):
+                photo_normalize.normalize_photo_pdf(
+                    source,
+                    target,
+                    rotation="0",
+                    dpi=110,
+                    binarize=True,
+                    binarize_high=180,
+                    binarize_low=200,
+                )
+            self.assertFalse(target.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
