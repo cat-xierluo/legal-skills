@@ -63,6 +63,18 @@ def pr_metadata(repo, target, remote_url):
         raise PrivacyError('SAFE_PR_METADATA_INVALID: 无法完整读取 PR 元数据') from None
 
 
+def pr_merge_base(checker, base_oid, head_oid):
+    checker.require_complete_history()
+    bases = checker.git('merge-base', '--all', base_oid, head_oid, allow_exit_one=True).decode('ascii').splitlines()
+    if not bases:
+        raise PrivacyError('SAFE_PR_NO_MERGE_BASE: 没有共同祖先')
+    if len(bases) > 1:
+        raise PrivacyError('SAFE_PR_MULTIPLE_MERGE_BASES: 共同祖先不唯一')
+    if not OID.fullmatch(bases[0]):
+        raise PrivacyError('SAFE_PR_MERGE_BASE_INVALID: 无法确定唯一共同祖先')
+    return bases[0]
+
+
 def run(args):
     checker = Checker(args.repo)
     if not OID.fullmatch(args.expected_head):
@@ -97,7 +109,8 @@ def run(args):
         raise PrivacyError('SAFE_PR_HEAD_CHANGED: 远端 head 已变化，停止发布')
     # Fetch exactly the advertised objects; missing/unreadable history fails closed.
     checker.git('fetch', '--', args.remote, base_oid, head_oid)
-    checker.scan_range(base_oid, head_oid)
+    scan_base = pr_merge_base(checker, base_oid, head_oid)
+    checker.scan_range(scan_base, head_oid)
     checker.finish()
     if remote_oid(checker, args.remote, base_ref) != base_oid or remote_oid(checker, args.remote, head_ref) != head_oid:
         raise PrivacyError('SAFE_PR_REMOTE_CHANGED: 预检期间远端发生变化')

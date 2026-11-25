@@ -96,6 +96,8 @@ python3 "$git_workflow_dir/scripts/safe-pr.py" squash --number '<N>' \
 
 最终标题包含 `(#N)`（已有不重复），API 自定义标题不会自动加编号；当前 PR 标题/正文、每笔历史与最终 squash 说明都须精确检查。helper 的 head 绑定不代替 review/CI/授权。其他合并方法/API 也检查相同范围及最终文本，不能依赖自动生成说明。
 
+helper 从目标分支顶点与 PR head 的唯一共同祖先开始逐笔检查，主干前进不造成预检误拒；没有共同祖先或共同祖先不唯一时停止。该 head 条件不绑定 base，本地扫描范围也不同于服务端生成的 squash 结果，边界见[隐私预检](privacy-preflight.md)。
+
 用户明确要保留多个原子 commit 时按原意选择合并方法，仍满足所有门禁，不强制 squash。所谓“把 PR 拉进 main”默认核正式服务端交付；不得用 fast-forward pull 代替 PR 来源记录和验收，也不能把 CLOSED 称为 MERGED。本地采用遵循[改动集成](change-integration.md)。
 
 完成后读取真实 `MERGED`、`mergedAt`、`mergeCommit` 和目标侧内容。main 被另一树占用或 cleanup 报错时先对账，区分云端合并、本机待同步与清理失败；不切换/删除别人的树，不重放已完成合并。[生命周期合同](branch-lifecycle-and-cleanup.md)维护清理、批量验收与取代旧 PR 的授权和覆盖关系，合并默认不附删除参数。
@@ -106,7 +108,7 @@ python3 "$git_workflow_dir/scripts/safe-pr.py" squash --number '<N>' \
 
 | 场景 | 处理 |
 |---|---|
-| BEHIND、无内容冲突 | 核原 head owner、项目同步策略及授权，再更新 base；不能盲目 update-branch |
+| BEHIND、无内容冲突 | 核原 head owner、项目同步策略及授权，再更新 base；不能盲目 update-branch。`safe-pr.py` 的隐私范围以共同祖先为准，BEHIND 本身不触发预检误拒 |
 | 共享文档冲突 | 保留双方有效记录，串行分配版本/编号，按文件解决；未发表短分支可按项目策略 rebase，已发表历史须另核授权 |
 | 代码冲突或旧候选带入无关差异 | 按授权在最新目标开隔离窄采用候选，保留原 PR/分支及来源映射；覆盖和未采用处置完成后按取代合同关闭 |
 | 少量集中冲突 | 按文件解决，核最终 message/patch/blob；网页处理同样核发布文本、实际服务端结果和候选 |

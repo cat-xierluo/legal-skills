@@ -424,7 +424,7 @@ class PrivacyIntegration(unittest.TestCase):
         self.assertIn('SAFE_PUSH_HEAD_CHANGED', result.stderr)
         self.assertEqual('', self.git('ls-remote', 'origin', 'refs/heads/feat/privacy').stdout)
 
-    def fake_gh(self, metadata):
+    def fake_gh(self, metadata, race_ref=None, race_oid=None):
         binary = self.root / 'bin'
         binary.mkdir()
         data = self.root / 'metadata.json'
@@ -440,22 +440,47 @@ class PrivacyIntegration(unittest.TestCase):
         fake.chmod(0o755)
         # Local transport stays isolated; advertise a GitHub URL to the target parser.
         git_stub = binary / 'git'
-        git_stub.write_text('#!' + sys.executable + '\nimport subprocess,sys\n'
+        git_stub.write_text('#!' + sys.executable + '\nimport json,subprocess,sys\nfrom pathlib import Path\n'
+                            + f'with Path({str(self.root / "git-log.jsonl")!r}).open("a") as log: log.write(json.dumps(sys.argv[1:])+"\\n")\n'
                             + 'if sys.argv[-3:] == ["remote","get-url","origin"]:\n'
                             + ' print("git@github.com:example/example.git")\n'
                             + 'else:\n'
+                            + f' counter={str(self.root / "base-reads")!r}\n'
+                            + f' race_ref={race_ref!r}\n'
+                            + f' race_oid={race_oid!r}\n'
+                            + ' if race_ref and sys.argv[-1:] == [race_ref] and "ls-remote" in sys.argv:\n'
+                            + '  path=Path(counter)\n'
+                            + '  if path.exists():\n'
+                            + f'   subprocess.run([{shutil.which("git")!r}, "--git-dir", {str(self.remote)!r}, "update-ref", race_ref, race_oid], check=True)\n'
+                            + '  path.write_text("seen")\n'
                             + f' sys.exit(subprocess.run([{shutil.which("git")!r},*sys.argv[1:]]).returncode)\n')
         git_stub.chmod(0o755)
         return dict(ENV, PATH=str(binary) + os.pathsep + ENV['PATH']), log
 
-    def safe_pr(self, mode, title='fix(git-workflow): clean (#227)', body='Clean summary\n', pr_body='Clean PR'):
+    def safe_pr(self, mode, title='fix(git-workflow): clean (#227)', body='Clean summary\n', pr_body='Clean PR',
+                diverged=False, prior_leak=False, race=None, graft=False):
+        if prior_leak:
+            self.write('sensitive.txt', CASE)
+            self.commit('add synthetic sensitive material')
+            (self.repo / 'sensitive.txt').unlink()
+            self.commit('remove synthetic sensitive material')
         self.write('clean.txt', 'clean')
         head = self.commit('clean')
         self.git('push', 'origin', 'HEAD:refs/heads/feat/privacy', 'HEAD:refs/pull/227/head')
+        if diverged:
+            self.git('switch', '-c', 'fixture-main', self.base)
+            self.write('base-advance.txt', 'independent base change')
+            advanced = self.commit('advance base')
+            self.git('push', 'origin', advanced + ':refs/heads/main')
+        if graft:
+            grafts = self.repo / '.git/info/grafts'
+            grafts.write_text(head + '\n')
         title_file, body_file = self.root / 'title', self.root / 'body'
         title_file.write_text(title)
         body_file.write_text(body)
-        env, log = self.fake_gh(dict(headRefOid=head, baseRefName='main', title=title, body=body if mode == 'create' else pr_body, state='OPEN', isDraft=False))
+        race_ref = {'base': 'refs/heads/main', 'head': 'refs/pull/227/head'}.get(race)
+        race_oid = head if race == 'base' else self.base if race == 'head' else None
+        env, log = self.fake_gh(dict(headRefOid=head, baseRefName='main', title=title, body=body if mode == 'create' else pr_body, state='OPEN', isDraft=False), race_ref, race_oid)
         extra = ['--base', 'main', '--head', 'feat/privacy'] if mode == 'create' else ['--number', '227']
         result = self.cmd(sys.executable, str(SCRIPTS / 'safe-pr.py'), mode, '--expected-head', head,
                           '--title-file', str(title_file), '--body-file', str(body_file), *extra, env=env, check=False)
@@ -509,6 +534,80 @@ class PrivacyIntegration(unittest.TestCase):
         merge = next(call for call in calls if call[:2] == ['pr', 'merge'])
         self.assertEqual(head, merge[merge.index('--match-head-commit') + 1])
         self.assertEqual('Clean summary\n', merge[merge.index('--body') + 1])
+
+    def test_squash_accepts_diverged_base_with_complete_pr_history(self):
+        result, calls, head = self.safe_pr('squash', diverged=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        merge = next(call for call in calls if call[:2] == ['pr', 'merge'])
+        self.assertEqual(head, merge[merge.index('--match-head-commit') + 1])
+
+    def test_squash_diverged_base_blocks_earlier_removed_sensitive_content(self):
+        result, calls, _ = self.safe_pr('squash', diverged=True, prior_leak=True)
+        self.assert_private_failure(result)
+        self.assertIn('case-number', result.stderr)
+        self.assertFalse(any(call[:2] == ['pr', 'merge'] for call in calls))
+
+    def test_squash_rejects_base_change_before_merge(self):
+        result, calls, _ = self.safe_pr('squash', diverged=True, race='base')
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('SAFE_PR_REMOTE_CHANGED', result.stderr)
+        self.assertFalse(any(call[:2] == ['pr', 'merge'] for call in calls))
+
+    def test_squash_merge_base_rejects_disconnected_and_criss_cross_history(self):
+        spec = importlib.util.spec_from_file_location('safe_pr_fixture', SCRIPTS / 'safe-pr.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        tree = self.git('rev-parse', 'HEAD^{tree}').stdout.strip()
+        def make_commit(message, *parents):
+            args = ['commit-tree', tree]
+            for parent in parents:
+                args.extend(['-p', parent])
+            return self.git(*args, '-m', message).stdout.strip()
+        first = make_commit('first', self.base)
+        second = make_commit('second', self.base)
+        left = make_commit('left merge', first, second)
+        right = make_commit('right merge', second, first)
+        isolated = make_commit('isolated')
+        checker = Checker(self.repo)
+        disconnected = self.git('merge-base', '--all', first, isolated, check=False)
+        self.assertEqual(1, disconnected.returncode)
+        self.assertEqual('', disconnected.stdout)
+        for base, head, error in ((left, right, 'SAFE_PR_MULTIPLE_MERGE_BASES'),
+                                  (first, isolated, 'SAFE_PR_NO_MERGE_BASE')):
+            with self.subTest(base=base, head=head):
+                with self.assertRaisesRegex(PrivacyError, error):
+                    module.pr_merge_base(checker, base, head)
+
+    def test_create_accepts_diverged_base_with_exact_draft_text(self):
+        result, calls, _ = self.safe_pr('create', diverged=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        create = next(call for call in calls if call[:2] == ['pr', 'create'])
+        self.assertIn('--draft', create)
+        self.assertEqual('main', create[create.index('--base') + 1])
+        self.assertEqual('feat/privacy', create[create.index('--head') + 1])
+        self.assertEqual('fix(git-workflow): clean (#227)', create[create.index('--title') + 1])
+        self.assertEqual('Clean summary\n', create[create.index('--body') + 1])
+
+    def test_squash_rejects_graft_without_merge(self):
+        result, calls, _ = self.safe_pr('squash', graft=True)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('PRIVACY_HISTORY_INCOMPLETE', result.stderr)
+        self.assertFalse(any(call[:2] == ['pr', 'merge'] for call in calls))
+
+    def test_squash_rejects_head_change_before_merge(self):
+        result, calls, _ = self.safe_pr('squash', diverged=True, race='head')
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('SAFE_PR_REMOTE_CHANGED', result.stderr)
+        self.assertFalse(any(call[:2] == ['pr', 'merge'] for call in calls))
+
+    def test_squash_checks_only_range_objects(self):
+        result, _, _ = self.safe_pr('squash', diverged=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        calls = [json.loads(line) for line in (self.root / 'git-log.jsonl').read_text().splitlines()]
+        object_checks = [call for call in calls if 'rev-list' in call and '--objects' in call and '--missing=error' in call]
+        self.assertTrue(object_checks)
+        for call in object_checks:
+            self.assertTrue(any('..' in arg for arg in call))
 
 
 if __name__ == '__main__':

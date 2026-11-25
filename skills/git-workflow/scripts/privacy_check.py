@@ -68,11 +68,13 @@ class Checker:
                 self.denylist.extend(line.strip() for line in read_text(path).splitlines()
                                      if line.strip() and not line.lstrip().startswith('#'))
 
-    def git(self, *args, input=None, env=None):
+    def git(self, *args, input=None, env=None, allow_exit_one=False):
         try:
             result = subprocess.run(['git', '--no-replace-objects', '-C', self.repo, *args],
                                     input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    env=env, check=True)
+                                    env=env, check=False)
+            if result.returncode and not (allow_exit_one and result.returncode == 1):
+                raise subprocess.CalledProcessError(result.returncode, result.args)
             return result.stdout
         except (OSError, subprocess.CalledProcessError):
             raise PrivacyError('PRIVACY_GIT_READ_FAILED: Git 操作失败，未完成检查') from None
@@ -221,10 +223,7 @@ class Checker:
                                  '--no-renames', '--full-index', '--binary'), 'staged-patch')
         return tree
 
-    def scan_range(self, base, head):
-        # Only immutable OIDs: callers resolve/fetch their actual integration base.
-        if not OID.fullmatch(base) or not OID.fullmatch(head):
-            raise PrivacyError('PRIVACY_RANGE_INVALID: 范围必须使用完整不可变 OID')
+    def require_complete_history(self):
         if self.git('rev-parse', '--is-shallow-repository').strip() != b'false':
             raise PrivacyError('PRIVACY_HISTORY_INCOMPLETE: 浅克隆不能证明完整历史')
         grafts = Path(os.fsdecode(self.git('rev-parse', '--git-path', 'info/grafts')).strip())
@@ -232,6 +231,12 @@ class Checker:
             grafts = Path(self.repo) / grafts
         if grafts.exists() and grafts.stat().st_size:
             raise PrivacyError('PRIVACY_HISTORY_INCOMPLETE: 拒绝 graft 改写历史视图')
+
+    def scan_range(self, base, head):
+        # Only immutable OIDs: callers resolve/fetch their actual integration base.
+        if not OID.fullmatch(base) or not OID.fullmatch(head):
+            raise PrivacyError('PRIVACY_RANGE_INVALID: 范围必须使用完整不可变 OID')
+        self.require_complete_history()
         self.git('cat-file', '-e', base + '^{commit}')
         self.git('cat-file', '-e', head + '^{commit}')
         self.git('merge-base', '--is-ancestor', base, head)
