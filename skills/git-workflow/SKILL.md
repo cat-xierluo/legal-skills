@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。用于分支与 worktree 管理、主目录 main 防切换保护、Skill 稀疏检出、PR 创建/审查/合并，以及提交身份和隐私检查；也支持 CI 额度治理、敏感文件历史撤回与仓库瘦身。不要用于批量生成提交信息、项目任务分配或本地 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.27.1"
+  version: "1.27.2"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -43,6 +43,7 @@ metadata:
 - 单 Skill/具名套件默认**创建时稀疏检出**。副作用前固定目标、真实依赖、基准与磁盘预算，入口不支持目录范围时停在创建前，不把缺少参数当作全量许可。已有树限缩先保护 dirty/index、ignored/untracked 和 Session；详细方法只在稀疏合同维护。
 - `force push`、`reset --hard`、丢弃修改、`clean -f`、强删分支、跳过 hooks/签名及改写历史须有具体明确授权。锁先查持有者，不直接删；hook 失败修复后新建提交，不绕过。默认新建 commit，amend 须用户要求；精确暂存文件。
 - 普通提交发表走 `safe-push.sh`，身份和隐私核验**完整 PR range**并绑定不可变 OID；不得只查 HEAD、用 `HEAD~1` 缩窄范围或裸 push 绕门。创建/合并 PR 用 `safe-pr.py` 核最终完整文本与精确 head，不使用未经检查的自动说明。已明确授权的历史重写与精确 ref 删除按对应专页执行，不能借该例外绕过普通发表门禁。
+- `safe-pr.py` 的隐私范围从目标分支与 PR head 的唯一共同祖先扫到 head，主干前进不构成误拒；无共同祖先或不唯一时停止，边界见[隐私预检](references/privacy-preflight.md)。
 - 合并须绑定授权、可读 diff、允许范围、独立 review 和最终 checks。审查者使用隔离候选或只读材料，不在共享主目录试合并、修复索引或执行恢复实验。未知、失败、缺失或候选漂移时停止；helper 不代替这些门禁。不绕仓库保护、自 approve 限制或用 admin override。
 - Monorepo 不在本地直接 feature→main merge。按实际允许范围窄采用或正式 PR 保留目标侧其他模块；主干→长期功能线同步属于另一个方向，遵循功能线合同。
 - 单任务清理绑定生命周期及精确 tip；长期分支与固定树不随子 PR 删除。已合并后的清理失败记录 `CLEANUP_PENDING`，不重放 push/merge；批量候选不等于删除授权。

@@ -14,10 +14,12 @@
 | batch commit | 全部分组最终完整说明（含 Markdown 提取和 `--local-ref`），全部变更路径、暂存 blob、完整 staged patch | 全部通过才预览/提交；原 index 的 tree 快照；临时 index 逐组提交；不重新 add 工作区 |
 | pre-commit / commit-msg | staged 内容 / Git 传入的完整说明文件 | 仓库已启用 hook 时复用共享 checker；本次不自动启用 |
 | safe-push | 最新 integration base 到待推送 HEAD 的每笔 message、patch、变更 blob | fetch 明确 base ref；固定 base/head OID；身份和隐私核验同一对象；push 使用该 head OID |
-| 创建 PR | 已推送完整范围，最终标题、正文 | 文件只读一次，原字符串传给 gh；默认 draft；提交后复核 PR head、base、文本 |
-| squash | 完整 PR 范围、当前 PR 标题正文、最终 squash 标题正文 | 明确 final text，不使用自动拼接；`--match-head-commit` 绑定核验的 head |
+| 创建 PR | 目标分支顶点与 PR head 的唯一共同祖先到 head 的每笔 message、patch、变更 blob，最终标题、正文 | 文件只读一次，原字符串传给 gh；默认 draft；提交后复核 PR head、base、文本 |
+| squash | 目标分支顶点与 PR head 的唯一共同祖先到 head 的每笔 message、patch、变更 blob，当前 PR 标题正文、最终 squash 标题正文 | 明确 final text，不使用自动拼接；`--match-head-commit` 绑定核验的 head，不绑定 base |
 
-范围为空、缺少 revision/object、浅克隆、无祖先关系、graft、读失败或子模块均停止。非 UTF-8/二进制必须有独立格式审查凭据，否则停止。不会将这些情况当作“没有发现”。可读 patch 默认检查删除行；仅对完整 Git hunk 中的 `local-user-path` 删除内容行不产生路径阻断，允许把既有本机路径清理为 `~`、`$HOME` 或相对路径。新增行、上下文、路径元数据、提交说明和变更后的 blob 仍检查本机路径；手机号、案号、私钥与本地黑名单等其他规则在删除行也继续检查。逐笔历史检查不变：待推送范围内先加入路径再删除仍会在早期提交被拒绝。链接改成实体目录时递归检查真实文件及其路径，不把目录当作不可读内容，也不跳过目录；子模块仍停止。二进制材料须先完成下述格式审查，当前脚本不提供跳过开关。
+范围为空、缺少 revision/object、浅克隆、graft、读失败或子模块均停止。`safe-push` 与手动 range 模式要求 base 是 head 的祖先；创建 PR 与 squash 改用唯一共同祖先，没有共同祖先或共同祖先不唯一均停止。非 UTF-8/二进制必须有独立格式审查凭据，否则停止。不会将这些情况当作“没有发现”。可读 patch 默认检查删除行；仅对完整 Git hunk 中的 `local-user-path` 删除内容行不产生路径阻断，允许把既有本机路径清理为 `~`、`$HOME` 或相对路径。新增行、上下文、路径元数据、提交说明和变更后的 blob 仍检查本机路径；手机号、案号、私钥与本地黑名单等其他规则在删除行也继续检查。逐笔历史检查不变：待推送范围内先加入路径再删除仍会在早期提交被拒绝。链接改成实体目录时递归检查真实文件及其路径，不把目录当作不可读内容，也不跳过目录；子模块仍停止。二进制材料须先完成下述格式审查，当前脚本不提供跳过开关。
+
+创建 PR 与 squash 读取目标分支的远端顶点，再求它与 PR head 的唯一共同祖先。逐笔检查 head 可达且共同祖先不可达的提交，其中也包括满足这一条件的其他分支提交。共同祖先及其历史属于本次检查的基线。
 
 ## 手动启用仓库自带 hook
 
@@ -54,6 +56,8 @@ python3 skills/git-workflow/scripts/safe-pr.py squash --number 227 \
 准备文本文件时优先放在 Git 目录或仓库外，避免误暂存。`safe-pr.py --repo PATH --remote NAME` 可指定本地检出与远端；PR 的 GitHub 目标由该 remote URL 规范化为 `HOST/OWNER/REPO`（支持 HTTPS、`git@HOST:OWNER/REPO.git` 和 `ssh://git@HOST/OWNER/REPO.git`），不把 URL 内凭据传给 gh，避免默认仓库漂移。本地路径或无法核对的远端格式停止。
 
 创建 PR 的 GitHub API 没有原子 head-OID 条件参数：helper 在发送前后均核对，但并行写同一远端分支仍有极短竞态窗口。使用独占 feature 分支；若后验失败，先查看已创建 PR，不得盲目再次创建。squash 使用服务端 head 条件，仍需事后查看 mergedAt / mergeCommit；本地成功退出不替代合并结果核对。网络失败可能已经产生远端效果，不自动重试。
+
+合并预检有两处边界。其一，`--match-head-commit` 只在服务端绑定 head，不绑定 base；PR 标题正文也只在预检开始时读取。预检通过后到合并之间目标分支再前进，服务端可能基于新的 base 生成结果。其二，本地逐提交扫描的范围与服务端基于 base 生成的 squash 结果不是同一对象，扫描通过不等于服务端最终 tree 已逐字节检查。合并后读取真实 `mergedAt`、`mergeCommit` 并核对目标侧实际内容；要求逐字节保证服务端结果时，另加服务端约束，不把本地预检当作原子锁定。
 
 直接使用 GitHub connector/API 时也必须检查同一组完整文本与准确提交范围，并将已检查的字符串/OID原样作为 API 参数；不得改成自动生成正文或只检查净 diff。普通提交的裸 `git push`、`gh pr create --fill` 与自动 squash message 均不替代此流程。历史重写与精确 ref 删除是专页限定的已授权维护路径，不属于普通提交发表，也不构成任意 force 的例外。
 
