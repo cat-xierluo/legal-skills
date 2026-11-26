@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.10.0"
+version: "1.10.1"
 license: MIT
 description: 元典法律检索与精选报告。查询中国法律法规、案例或围绕案件争点查找依据时使用；优先直接调用可用的元典 MCP，无 MCP 时使用 API。轻量理解问题、筛除不适用候选，按需生成可追溯报告。不要用于替代完整证据审查、诉讼方案或正式法律意见。
 ---
