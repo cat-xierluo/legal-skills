@@ -39,6 +39,9 @@ MEDIA_SUFFIXES = {
     ".ogg",
 }
 CJK_CHAR = re.compile(r"[\u3400-\u9fff]")
+DRIVER_MARKER = re.compile(
+    "__SPACE_ID__|__KEYWORD__|__MODE__|__ROUNDS__|__SCROLL_STEP__|__OUT__|__PAGE__|__FINISH__|__COLLECTOR__"
+)
 MODE_LABELS = {
     "comprehensive": "综合排序深滚",
     "latest": "最新发布 + 一周内",
@@ -132,6 +135,21 @@ def escape_cell(text: str | None, limit: int = 60) -> str:
     return flattened.replace("|", "\\|")
 
 
+SHORTLIST_BEGIN = "<!-- shortlist:begin -->"
+SHORTLIST_END = "<!-- shortlist:end -->"
+
+
+def report_shortlist_ids(report_path: Path) -> list[str]:
+    """从报告的候选短名单段落按顺序取出作品 ID。"""
+    if not report_path.is_file():
+        return []
+    text = report_path.read_text(encoding="utf-8")
+    if SHORTLIST_BEGIN not in text or SHORTLIST_END not in text:
+        return []
+    section = text.split(SHORTLIST_BEGIN, 1)[1].split(SHORTLIST_END, 1)[0]
+    return re.findall(r"douyin\.com/video/(\d+)", section)
+
+
 def format_int(value) -> str:
     if not isinstance(value, (int, float)):
         return "-"
@@ -199,9 +217,9 @@ def build_driver(
         "__FINISH__": "1" if finish else "0",
         "__COLLECTOR__": json.dumps(collector, ensure_ascii=False),
     }
-    for marker, value in replacements.items():
-        template = template.replace(marker, value)
-    return template
+    # 单次扫描只替换模板自身的占位符。逐个 str.replace 会把用户关键词里恰好出现的
+    # 占位符字面量（如 "__OUT__"）再替换一遍，生成语法错误的脚本。
+    return DRIVER_MARKER.sub(lambda match: replacements[match.group(0)], template)
 
 
 def command_driver(args: argparse.Namespace) -> int:
@@ -741,6 +759,8 @@ def render_report(
     lines.append("")
     lines.append("## 候选短名单")
     lines.append("")
+    # 供 verify 精确解析该段落，短名单与报告因此必须逐条相等。
+    lines.append("<!-- shortlist:begin -->")
     lines.append(
         table(
             ["#", "作品", "作者", "点赞", "评论", "发布", "链接"],
@@ -761,6 +781,7 @@ def render_report(
             or [["-", "-", "-", "-", "-", "-", "-"]],
         )
     )
+    lines.append("<!-- shortlist:end -->")
     lines.append("")
     lines.append("## 相关搜索")
     lines.append("")
@@ -796,6 +817,8 @@ def command_rank(args: argparse.Namespace) -> int:
     report = render_report(signals, observations, shortlist)
     report_path = workspace / "candidates.md"
     report_path.write_text(report, encoding="utf-8")
+    # 短名单的唯一来源就是本次报告所选的那一份，后续步骤直接复用它。
+    write_json(workspace / "shortlist.json", shortlist)
     print(
         json.dumps(
             {
@@ -804,6 +827,7 @@ def command_rank(args: argparse.Namespace) -> int:
                 "shortlist": len(shortlist),
                 "signals": str(workspace / "signals.json"),
                 "report": str(report_path),
+                "shortlist_path": str(workspace / "shortlist.json"),
                 "leads": topic_leads(signals),
             },
             ensure_ascii=False,
@@ -963,14 +987,19 @@ def command_shortlist(args: argparse.Namespace) -> int:
         if signals_path.exists()
         else {}
     )
-    picked = select_shortlist(
-        observations,
-        signals,
-        args.top,
-        args.per_author,
-        args.include_terms,
-        args.exclude_terms,
-    )
+    # 报告已经选过一次短名单并落盘；直接复用，避免与 rank 各算一次产生两份不同结果。
+    shortlist_path = workspace / "shortlist.json"
+    if shortlist_path.is_file():
+        picked = json.loads(shortlist_path.read_text(encoding="utf-8"))
+    else:
+        picked = select_shortlist(
+            observations,
+            signals,
+            args.top,
+            args.per_author,
+            args.include_terms,
+            args.exclude_terms,
+        )
     write_json(workspace / "shortlist.json", picked)
     links_path = workspace / (args.links or "links.txt")
     links_path.write_text(
@@ -1030,6 +1059,15 @@ def command_verify(args: argparse.Namespace) -> int:
             errors.append(f"shortlist 链接格式异常 {item.get('url')}")
 
     report = (workspace / "candidates.md").read_text(encoding="utf-8")
+    report_ids = report_shortlist_ids(workspace / "candidates.md")
+    if not report_ids:
+        errors.append("candidates.md 缺少候选短名单段落，无法核对")
+    shortlist_ids = [item["aweme_id"] for item in shortlist]
+    if report_ids != shortlist_ids:
+        errors.append(
+            "candidates.md 的候选短名单与 shortlist.json 不一致："
+            f"报告 {len(report_ids)} 条 / 短名单 {len(shortlist_ids)} 条"
+        )
     for item in shortlist:
         if item["aweme_id"] not in report:
             errors.append(f"candidates.md 未包含短名单作品 {item['aweme_id']}")
@@ -1081,18 +1119,48 @@ def command_verify(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 
 
-def find_downloaded_media(directory: Path, aweme_id: str) -> Path | None:
-    """按作品 ID 找本次落盘的媒体文件，只认非空常规文件。"""
-    candidates = []
-    for entry in directory.iterdir():
+def snapshot_media(directory: Path) -> dict[str, tuple[int, int]]:
+    """记录目录下已有媒体的 (大小, mtime_ns)，用来区分本次新产出与历史遗留。"""
+    snapshot: dict[str, tuple[int, int]] = {}
+    if not directory.is_dir():
+        return snapshot
+    for entry in directory.rglob("*"):
         if entry.is_symlink() or not entry.is_file():
+            continue
+        if entry.name.startswith("._") or entry.suffix.lower() not in MEDIA_SUFFIXES:
+            continue
+        stat = entry.stat()
+        snapshot[str(entry.relative_to(directory))] = (stat.st_size, stat.st_mtime_ns)
+    return snapshot
+
+
+def find_downloaded_media(
+    directory: Path,
+    aweme_id: str,
+    before: dict[str, tuple[int, int]] | None = None,
+) -> Path | None:
+    """按作品 ID 找本次落盘的媒体文件。
+
+    只认非空常规文件；当传入运行前快照时，还必须是新增或内容发生变化的文件，
+    否则历史遗留的旧文件会被误记成本次成功。
+    """
+    candidates = []
+    for entry in directory.rglob("*"):
+        if entry.is_symlink() or not entry.is_file():
+            continue
+        if entry.name.startswith("._"):
             continue
         if aweme_id not in entry.name:
             continue
         if entry.suffix.lower() not in MEDIA_SUFFIXES:
             continue
-        if entry.stat().st_size <= 0:
+        stat = entry.stat()
+        if stat.st_size <= 0:
             continue
+        if before is not None:
+            key = str(entry.relative_to(directory))
+            if before.get(key) == (stat.st_size, stat.st_mtime_ns):
+                continue
         candidates.append(entry)
     if not candidates:
         return None
@@ -1127,7 +1195,7 @@ def command_download(args: argparse.Namespace) -> int:
                     "tool": tool,
                     "count": len(links),
                     "out_dir": str(target),
-                    "command": f'{tool} --no-playlist -P "{target}" -o "%(id)s.%(ext)s" "<url>"',
+                    "command": f'{tool} --no-playlist -P "{target}" -o "%(id)s.%(ext)s" -- "<url>"',
                     "next": "确认后加 --execute 执行；下载失败会逐条记录，不中断整批。",
                 },
                 ensure_ascii=False,
@@ -1140,6 +1208,8 @@ def command_download(args: argparse.Namespace) -> int:
     results = []
     for index, link in enumerate(links, start=1):
         aweme_id = link.rsplit("/", 1)[-1]
+        # 记录本条下载前的目录状态：只有新增或变化的文件才算本次产出。
+        before = snapshot_media(target)
         command = [
             tool,
             "--no-playlist",
@@ -1151,8 +1221,8 @@ def command_download(args: argparse.Namespace) -> int:
             link,
         ]
         completed = subprocess.run(command, capture_output=True, text=True)
-        # 下载器退出码为 0 不代表真的落盘，按作品 ID 回查媒体文件才算成功。
-        media = find_downloaded_media(target, aweme_id)
+        # 下载器退出码为 0 不代表真的落盘；按作品 ID 回查本次新增或变化的媒体才算成功。
+        media = find_downloaded_media(target, aweme_id, before)
         results.append(
             {
                 "index": index,

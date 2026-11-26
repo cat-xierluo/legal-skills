@@ -63,17 +63,19 @@ metadata:
 5. **算信号 + 出报告**：
 
    ```bash
-   python3 "$SKILL_DIR/scripts/radar.py" rank --workspace "$WS"
+   python3 "$SKILL_DIR/scripts/radar.py" rank --workspace "$WS" \
+     --exclude-terms "请律师" "找律师"
    ```
+
+   短名单在这一步就定下来，同时写入报告和 `shortlist.json`，是本流程唯一的短名单来源。短名单只收与主题相关的作品：要么直接命中主题词，要么命中至少两个主题片段。`--include-terms` 追加主题词，`--exclude-terms` 排除指定说法。每条入选作品都带 `matched_terms`，说明它为什么切题。
 
 6. **出短名单和链接清单**：
 
    ```bash
-   python3 "$SKILL_DIR/scripts/radar.py" shortlist --workspace "$WS" --top 12 \
-     --exclude-terms "请律师" "找律师"
+   python3 "$SKILL_DIR/scripts/radar.py" shortlist --workspace "$WS"
    ```
 
-   短名单只收与主题相关的作品：要么直接命中主题词，要么命中至少两个主题片段。`--include-terms` 追加主题词，`--exclude-terms` 排除指定说法。每条入选作品都带 `matched_terms`，说明它为什么切题。
+   这一步复用第 5 步的短名单生成 `links.txt`，不会重新挑选。要换筛选条件，回到第 5 步重跑 `rank`。
 
 7. **校验**（报告、短名单、链接三方一致才继续）：
 
@@ -88,7 +90,7 @@ metadata:
    python3 "$SKILL_DIR/scripts/radar.py" download --workspace "$WS" --execute
    ```
 
-   `download --execute` 会先校验每条链接，再按作品 ID 回查落盘文件。回执里的 `verified` 才是真正取到媒体的数量，`media_path` 可直接交给转录环节。
+   `download --execute` 会先校验每条链接，再按作品 ID 回查本次新增或变化的媒体文件。回执里的 `verified` 才是真正取到媒体的数量，`media_path` 可直接交给转录环节；目标目录里运行前就存在的旧文件不会被计入。
 
 ## 产物
 
@@ -136,7 +138,7 @@ metadata:
 
 能力边界：
 
-- **文件访问**：只写调用方通过 `--workspace` 指定的目录；不扫描主目录、不读媒体库、不碰浏览器 profile。
+- **文件访问**：只写调用方通过 `--workspace` 与 `--out-dir` 指定的目录；不扫描主目录、不读媒体库、不碰浏览器 profile。
 - **子进程**：只有 `download --execute` 会调用 `yt-dlp`，命令用参数数组传递，不经过 shell，不拼接不可信输入。其余子命令不启动任何外部进程。
 - **网络**：Python 脚本不发起任何网络请求；抓取由 ego-browser 在已登录的浏览器里完成。
 - **环境变量与凭据**：不读取 `os.environ`，不读取 `.env`、cookie 或令牌文件。

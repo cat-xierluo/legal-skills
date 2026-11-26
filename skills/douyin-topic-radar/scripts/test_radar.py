@@ -406,6 +406,139 @@ class RadarTestCase(unittest.TestCase):
             ["律师案源", "律师", "师案", "案源"],
         )
 
+    def test_driver_keyword_containing_placeholder_is_not_replaced_twice(self) -> None:
+        source = radar.build_driver(
+            keyword="__OUT__",
+            mode="comprehensive",
+            rounds=3,
+            out_path=self.workspace / "raw" / "x.json",
+            page="p1",
+            space_id=None,
+            finish=False,
+            scroll_step=2800,
+        )
+        self.assertIn('const KEYWORD = "__OUT__";', source)
+        self.assertNotIn('const KEYWORD = ""', source)
+        self.assertIn("const OUT_PATH = ", source)
+
+    def test_download_ignores_stale_media_from_earlier_run(self) -> None:
+        link = "https://www.douyin.com/video/7000000000000000001"
+        (self.workspace / "links.txt").write_text(link + "\n", encoding="utf-8")
+        target = self.workspace / "downloads"
+        target.mkdir(parents=True, exist_ok=True)
+        stale = target / "7000000000000000001.mp4"
+        stale.write_bytes(b"old")
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with patch.object(radar.subprocess, "run", return_value=completed):
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                code = radar.main(
+                    ["download", "--workspace", str(self.workspace), "--execute"]
+                )
+        receipt = json.loads(
+            (self.workspace / "download_receipt.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["verified"], 0)
+        self.assertEqual(receipt["failed"], 1)
+        self.assertIsNone(receipt["results"][0]["media_path"])
+
+    def test_download_accepts_media_written_in_subdirectory(self) -> None:
+        link = "https://www.douyin.com/video/7000000000000000001"
+        (self.workspace / "links.txt").write_text(link + "\n", encoding="utf-8")
+        target = self.workspace / "downloads"
+
+        def fake_run(command, **kwargs):
+            (target / "sub").mkdir(parents=True, exist_ok=True)
+            (target / "sub" / "7000000000000000001.mp4").write_bytes(b"0" * 512)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with patch.object(radar.subprocess, "run", side_effect=fake_run):
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                code = radar.main(
+                    ["download", "--workspace", str(self.workspace), "--execute"]
+                )
+        receipt = json.loads(
+            (self.workspace / "download_receipt.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(receipt["verified"], 1)
+
+    def test_rank_and_shortlist_share_one_shortlist(self) -> None:
+        self.run_command(
+            "normalize",
+            "--raw",
+            str(self.raw_dir / "*.json"),
+            "--workspace",
+            str(self.workspace),
+        )
+        self.run_command(
+            "rank",
+            "--workspace",
+            str(self.workspace),
+            "--exclude-terms",
+            "实习律师",
+        )
+        from_rank = json.loads(
+            (self.workspace / "shortlist.json").read_text(encoding="utf-8")
+        )
+        self.run_command(
+            "shortlist",
+            "--workspace",
+            str(self.workspace),
+            "--exclude-terms",
+            "实习律师",
+        )
+        from_shortlist = json.loads(
+            (self.workspace / "shortlist.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            [item["aweme_id"] for item in from_rank],
+            [item["aweme_id"] for item in from_shortlist],
+        )
+
+    def test_verify_rejects_report_shortlist_drift(self) -> None:
+        self.prepare_full_run()
+        report_path = self.workspace / "candidates.md"
+        report = report_path.read_text(encoding="utf-8")
+        shortlist = json.loads(
+            (self.workspace / "shortlist.json").read_text(encoding="utf-8")
+        )
+        # 把报告里第一条替换成另一条作品，模拟 rank 与 shortlist 各算一次
+        first = shortlist[0]["aweme_id"]
+        replacement = "7000000000000000123"
+        head, section = report.split(radar.SHORTLIST_BEGIN, 1)
+        section, tail = section.split(radar.SHORTLIST_END, 1)
+        section = section.replace(
+            f"https://www.douyin.com/video/{first}",
+            f"https://www.douyin.com/video/{replacement}",
+            1,
+        )
+        report_path.write_text(
+            head + radar.SHORTLIST_BEGIN + section + radar.SHORTLIST_END + tail,
+            encoding="utf-8",
+        )
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            code = radar.main(["verify", "--workspace", str(self.workspace)])
+        self.assertEqual(code, 1)
+        self.assertIn("不一致", buffer.getvalue())
+
+    def test_report_shortlist_ids_parsed_in_order(self) -> None:
+        report_path = self.workspace / "candidates.md"
+        report_path.write_text(
+            "<!-- shortlist:begin -->\n"
+            "| 1 | https://www.douyin.com/video/7000000000000000002 |\n"
+            "| 2 | https://www.douyin.com/video/7000000000000000001 |\n"
+            "<!-- shortlist:end -->\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            radar.report_shortlist_ids(report_path),
+            ["7000000000000000002", "7000000000000000001"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
