@@ -34,7 +34,6 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-11-25 | 新上传 | [douyin-topic-radar](skills/douyin-topic-radar/) | v0.1.0（源码） | 按关键词检索抖音搜索页，采集作品级互动与发布时间，计算话题热度信号与选题线索，产出候选短名单并下载作品供对标拆解。 |
 | 2026-11-25 | 更新 | [git-workflow](skills/git-workflow/) | v1.27.2（源码） | 修复目标分支前进后创建 PR 与 squash 的隐私预检误拒，改用唯一共同祖先确定扫描范围。源码待发布。 |
 | 2026-11-25 | 更新 | [new-case](skills/new-case/) | v1.7.0（源码） | 分开判断案件类型和委托阶段，涉诉咨询按需启用正式目录，受托后复用接洽档案。 |
 | 2026-11-23 | 更新 | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.6.0（源码） | 诉讼方案按委托阶段组织正文，可用简短指令精简已有方案。Word 支持选择附页。 |
@@ -124,15 +123,6 @@
 </tr>
 </thead>
 <tbody>
-<tr>
-<td><a href="skills/douyin-topic-radar/"><strong>douyin-topic-radar</strong></a></td>
-<td>工具·选题</td>
-<td style="word-break:break-word">按关键词检索抖音搜索页，采集作品级点赞、评论、收藏、分享与发布时间，计算话题热度信号与选题线索，生成候选短名单并下载作品供对标拆解；数据只落本地</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.1.0</td>
-<td style="text-align:center">尚无公开下载</td>
-<td>源码 v0.1.0 待发布；需已安装 ego-browser 且抖音处于登录态</td>
-</tr>
 <tr>
 <td><a href="skills/wechat-article-fetch/"><strong>wechat-article-fetch</strong></a></td>
 <td>工具·搜索</td>
