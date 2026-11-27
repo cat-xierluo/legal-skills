@@ -162,7 +162,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, required=True, help="disk_probe 或监控生成的 report.json")
     parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
-    parser.add_argument("--out", type=Path)
+    parser.add_argument("--out", "--output", dest="out", type=Path,
+                        help="输出 JSON 路径（--out 与 --output 等价）")
     args = parser.parse_args()
     result = analyze(json.loads(args.report.read_text()), args.policy)
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"

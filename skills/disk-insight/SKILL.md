@@ -3,7 +3,7 @@ name: disk-insight
 description: 分析 macOS 磁盘占用和近期增长，重点识别大模型、Agent 会话、工作树、依赖缓存及可视化产物；默认自动发现并只读复用本地 Fathom 历史，同时输出 APFS 容量变化，无历史时独立定向采集。用于“空间不够”“最近什么膨胀了”“哪些 AI 产物该保留或调整”。不执行自动清理。
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.2.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
