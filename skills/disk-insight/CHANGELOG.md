@@ -1,5 +1,11 @@
 # 变更记录
 
+## [1.2.1] - 2026-11-28
+
+### 修复
+
+- `scripts/cleanup_classifier.py` 新增 `--output` 别名（与 `--out` 等价），与 SKILL.md 示例及 `disk_probe.py` 的 `--output` 保持一致；此前文档示例用 `--output` 会报 `unrecognized arguments`。
+
 ## [1.1.0] - 2026-10-21
 
 ### 新增
