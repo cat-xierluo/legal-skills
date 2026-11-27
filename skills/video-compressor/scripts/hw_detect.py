@@ -2,11 +2,12 @@
 """硬件检测与自适应编码配置模块。
 
 检测系统硬件能力（Apple Silicon VideoToolbox 等），
-自动选择最优 FFmpeg 编码参数。"""
+自动选择最优 FFmpeg 编码方案。"""
 
 from __future__ import annotations
 
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -18,9 +19,24 @@ from pathlib import Path
 _hw_cache: dict | None = None
 
 # 低码率源阈值 (bps)：源总码率 ≤ 此值视为录屏/课件特征，
-# 硬件路径（写死 2000k 目标码率、无 CRF）对这类源压缩收益极低，
-# 自动回退 x264 CRF 自适应编码
+# 硬件路径对这类源压缩收益低，自动回退 x264 CRF 自适应编码
 LOW_BITRATE_THRESHOLD = 3_000_000
+
+# PATH 之外的常见安装目录。agent / launchd / 极简 shell 常缺 Homebrew 前缀，
+# 仅靠 shutil.which 会让脚本开箱报"未找到 ffmpeg"。
+COMMON_BIN_DIRS = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"]
+
+
+def find_ffmpeg(name: str = "ffmpeg") -> str | None:
+    """定位 ffmpeg / ffprobe：先查 PATH，再回落常见安装目录。找不到返回 None。"""
+    found = shutil.which(name)
+    if found:
+        return found
+    for directory in COMMON_BIN_DIRS:
+        candidate = Path(directory) / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
 
 
 def ffmpeg_smoke_test(ffmpeg_path: str) -> None:
@@ -84,60 +100,89 @@ def ffmpeg_smoke_test(ffmpeg_path: str) -> None:
     sys.exit(1)
 
 
-def detect_hardware() -> dict:
-    """检测硬件能力，结果缓存在模块级别避免重复调用。"""
-    global _hw_cache
-    if _hw_cache is not None:
-        return _hw_cache
+def _detect_platform() -> str:
+    """判定平台：apple_silicon / generic_mac / linux / unknown。
 
-    ffmpeg_path = shutil.which("ffmpeg")
-    if not ffmpeg_path:
-        print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
-        sys.exit(1)
-    ffmpeg_smoke_test(ffmpeg_path)
-
-    hw = {
-        "platform": "unknown",
-        "cpu_cores": os.cpu_count() or 4,
-        "memory_gb": 0.0,
-        "has_h264_vt": False,
-        "has_hevc_vt": False,
-        "ffmpeg_version": "",
-    }
-
-    # macOS Apple Silicon 检测
+    注意：`sysctl -n hw.optional.arm64` 在部分 macOS（M1 Max 实测）返回空字符串，
+    不能只看它等于 "1"，否则 Apple Silicon 被误判为 generic_mac，硬件加速永不启用。
+    因此 sysctl 无明确结果时回落 platform.machine()。
+    """
     if sys.platform == "darwin":
         try:
             result = subprocess.run(
                 ["sysctl", "-n", "hw.optional.arm64"],
                 capture_output=True, text=True, timeout=5,
             )
-            if result.stdout.strip() == "1":
-                hw["platform"] = "apple_silicon"
-            else:
-                hw["platform"] = "generic_mac"
-        except Exception:
-            hw["platform"] = "generic_mac"
-
-        try:
-            result = subprocess.run(
-                ["sysctl", "-n", "hw.ncpu"],
-                capture_output=True, text=True, timeout=5,
-            )
-            hw["cpu_cores"] = int(result.stdout.strip())
+            value = result.stdout.strip()
+            if value == "1":
+                return "apple_silicon"
+            if value == "0":
+                return "generic_mac"
         except Exception:
             pass
+        # sysctl 未给出明确结果 → 用 machine() 兜底
+        return "apple_silicon" if platform.machine() == "arm64" else "generic_mac"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return "unknown"
 
+
+def _detect_cpu_cores() -> int:
+    if sys.platform == "darwin":
         try:
             result = subprocess.run(
-                ["sysctl", "-n", "hw.memsize"],
-                capture_output=True, text=True, timeout=5,
+                ["sysctl", "-n", "hw.ncpu"], capture_output=True, text=True, timeout=5,
             )
-            hw["memory_gb"] = round(int(result.stdout.strip()) / (1024 ** 3), 1)
+            value = result.stdout.strip()
+            if value.isdigit():
+                return int(value)
         except Exception:
             pass
-    elif sys.platform.startswith("linux"):
-        hw["platform"] = "linux"
+    return os.cpu_count() or 4
+
+
+def _detect_memory_gb() -> float:
+    """内存（GB）。sysctl 取不到时回落 os.sysconf，避免显示 0 GB。"""
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=5,
+            )
+            value = result.stdout.strip()
+            if value.isdigit() and int(value) > 0:
+                return round(int(value) / (1024 ** 3), 1)
+        except Exception:
+            pass
+    try:
+        total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+        if total > 0:
+            return round(total / (1024 ** 3), 1)
+    except (ValueError, OSError, AttributeError):
+        pass
+    return 0.0
+
+
+def detect_hardware() -> dict:
+    """检测硬件能力，结果缓存在模块级别避免重复调用。"""
+    global _hw_cache
+    if _hw_cache is not None:
+        return _hw_cache
+
+    ffmpeg_path = find_ffmpeg("ffmpeg")
+    if not ffmpeg_path:
+        print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
+        print("（已检查 PATH 及常见安装目录: " + ", ".join(COMMON_BIN_DIRS) + "）")
+        sys.exit(1)
+    ffmpeg_smoke_test(ffmpeg_path)
+
+    hw = {
+        "platform": _detect_platform(),
+        "cpu_cores": _detect_cpu_cores(),
+        "memory_gb": _detect_memory_gb(),
+        "has_h264_vt": False,
+        "has_hevc_vt": False,
+        "ffmpeg_version": "",
+    }
 
     # FFmpeg 编码器检测（smoke test 已确保 ffmpeg 能跑）
     try:
@@ -153,8 +198,7 @@ def detect_hardware() -> dict:
 
     try:
         result = subprocess.run(
-            [ffmpeg_path, "-version"],
-            capture_output=True, text=True, timeout=5,
+            [ffmpeg_path, "-version"], capture_output=True, text=True, timeout=5,
         )
         m = re.search(r"ffmpeg version (\d+\.\d+)", result.stdout)
         if m:
@@ -168,7 +212,7 @@ def detect_hardware() -> dict:
 
 def probe_bitrate(video_path: Path) -> int | None:
     """用 ffprobe 探测视频文件总码率 (bps)。失败或文件不存在返回 None。"""
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = find_ffmpeg("ffprobe")
     path = Path(video_path)
     if not ffprobe or not path.exists():
         return None
@@ -198,10 +242,8 @@ def select_profile(hw: dict, user_codec: str | None = None,
     if user_codec and user_codec in codec_map:
         return codec_map[user_codec]()
 
-    # 录屏/低码率源陷阱：硬件路径在 build_encode_args 中写死目标码率 2000k
-    # 且不支持 CRF 自适应，源总码率 ≤3 Mbps 时压完接近原大小甚至更大
-    # （实测 1.1 GB → 1.0 GB）。CRF 软件编码按画面内容动态分配码率，
-    # 静止画面几乎不耗码率，对录屏/课件类源压缩比和速度都显著更优。
+    # 录屏/低码率源陷阱：硬件路径对已高效编码的源压缩收益低，
+    # 源总码率 ≤3 Mbps 时走 x264 CRF 自适应编码（对静止画面几乎不耗码率）。
     if source_bitrate and source_bitrate <= LOW_BITRATE_THRESHOLD:
         print(f"  源码率 {source_bitrate / 1_000_000:.1f} Mbps ≤ 3 Mbps（录屏/课件特征），"
               f"自动选用 x264 CRF 自适应编码（--codec hevc_vt 可强制硬件路径）")
@@ -225,6 +267,7 @@ def _profile_hevc_vt() -> dict:
         "video_codec": "hevc_videotoolbox",
         "is_hardware": True,
         "optimal_workers": 1,
+        "vt_quality": 65,
     }
 
 
@@ -237,6 +280,7 @@ def _profile_h264_vt() -> dict:
         "video_codec": "h264_videotoolbox",
         "is_hardware": True,
         "optimal_workers": 1,
+        "vt_quality": 65,
     }
 
 
@@ -283,49 +327,33 @@ def build_encode_args(
     bufsize: str | None = None,
     audio_bitrate: str | None = None,
     preset: str | None = None,
+    vt_quality: int | None = None,
 ) -> list[str]:
     """根据编码配置构建完整的 FFmpeg 编码参数列表。"""
     audio_bitrate = audio_bitrate or "96k"
 
     name = profile["name"]
 
-    if name == "hevc_videotooloolbox":
-        # 不应到达这里，但作为安全网
-        name = "hevc_videotoolbox"
-
-    if name == "hevc_videotoolbox":
+    if name in ("hevc_videotoolbox", "h264_videotoolbox"):
+        # 关键：质量只由 -q:v 决定。实测只要同时给了 -b:v / -maxrate / -bufsize，
+        # VideoToolbox 就切到 ABR、-q:v 被架空（q40 与 q65 输出竟完全相同），
+        # 对低码率源压完几乎不减。因此这里不写任何码率参数，纯恒定质量，
+        # 由 --vt-quality（0-100）控制体积；需要限码率的场景改用 --codec x264 CRF。
+        quality = vt_quality if vt_quality is not None else profile.get("vt_quality", 65)
         args = [
-            "-c:v", "hevc_videotoolbox",
-            "-q:v", "65",
-            "-b:v", maxrate or "2000k",
-            "-maxrate", maxrate or "3000k",
-            "-bufsize", bufsize or "3000k",
-            "-tag:v", "hvc1",
+            "-c:v", name,
+            "-q:v", str(quality),
+        ]
+        if name == "hevc_videotoolbox":
+            args += ["-tag:v", "hvc1"]
+        args += [
             "-allow_sw", "1",
             "-movflags", "+faststart",
             "-c:a", "aac",
             "-b:a", audio_bitrate,
         ]
         if crf is not None:
-            print("  注意: VideoToolbox 编码器不支持 CRF 参数，已忽略")
-        if preset is not None:
-            print("  注意: VideoToolbox 编码器不支持 preset 参数，已忽略")
-        return args
-
-    if name == "h264_videotoolbox":
-        args = [
-            "-c:v", "h264_videotoolbox",
-            "-q:v", "65",
-            "-b:v", maxrate or "2000k",
-            "-maxrate", maxrate or "3000k",
-            "-bufsize", bufsize or "3000k",
-            "-allow_sw", "1",
-            "-movflags", "+faststart",
-            "-c:a", "aac",
-            "-b:a", audio_bitrate,
-        ]
-        if crf is not None:
-            print("  注意: VideoToolbox 编码器不支持 CRF 参数，已忽略")
+            print("  注意: VideoToolbox 编码器不支持 CRF 参数，已忽略（用 --vt-quality 控制质量）")
         if preset is not None:
             print("  注意: VideoToolbox 编码器不支持 preset 参数，已忽略")
         return args

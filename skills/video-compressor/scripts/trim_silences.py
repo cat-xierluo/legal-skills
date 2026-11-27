@@ -17,15 +17,14 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hw_detect import (build_encode_args, detect_hardware, print_hardware_info,
-                       probe_bitrate, select_profile)
+from hw_detect import (build_encode_args, detect_hardware, find_ffmpeg,
+                       print_hardware_info, probe_bitrate, select_profile)
 
 
 @dataclass
@@ -63,7 +62,7 @@ def run_cmd(cmd: list[str]) -> str:
 def get_duration(video_path: Path) -> float:
     try:
         out = run_cmd([
-            shutil.which("ffprobe") or "ffprobe",
+            find_ffmpeg("ffprobe") or "ffprobe",
             "-v", "error",
             "-show_entries", "format=duration",
             "-of", "json", str(video_path),
@@ -88,7 +87,7 @@ def detect_silent_segments(
     merge_gap = 60.0      # 相邻静默片段间距<60s就合并
 
     output = run_cmd([
-        shutil.which("ffmpeg") or "ffmpeg",
+        find_ffmpeg("ffmpeg") or "ffmpeg",
         "-i", str(video_path),
         "-af", f"highpass=f=300,lowpass=f=3000,silencedetect=noise={noise_db}dB:d={detect_window}",
         "-f", "null", "-",
@@ -136,7 +135,7 @@ def detect_static_segments(
 
     # 用 fps 滤镜一次性下采样到 1/interval fps，输出裸 RGB
     cmd = [
-        shutil.which("ffmpeg") or "ffmpeg",
+        find_ffmpeg("ffmpeg") or "ffmpeg",
         "-i", str(video_path),
         "-vf", f"fps=1/{int(sample_interval)},scale=4:4",
         "-pix_fmt", "rgb24",
@@ -240,7 +239,7 @@ def cut_segments(
 
     detach=True 时启动 ffmpeg 后立即返回 "PID=<pid> 日志=<path>"，
     父进程被杀不影响编码。"""
-    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    ffmpeg = find_ffmpeg("ffmpeg") or "ffmpeg"
     if not segments:
         cmd = [ffmpeg, "-y", "-i", str(video_path)] + encode_args + [str(output_path)]
         if detach:
@@ -329,7 +328,7 @@ def save_removed_clips(
     for i, seg in enumerate(segments):
         clip_path = output_dir / f"{video_path.stem}_cut_{i + 1}_{sec_to_time(seg.start).replace(':', '')}.mp4"
         cmd = [
-            shutil.which("ffmpeg") or "ffmpeg",
+            find_ffmpeg("ffmpeg") or "ffmpeg",
             "-y",
             "-i", str(video_path),
             "-ss", str(seg.start),
@@ -379,7 +378,7 @@ def main():
         print(f"文件不存在: {video_path}")
         sys.exit(1)
 
-    if not shutil.which("ffmpeg"):
+    if not find_ffmpeg("ffmpeg"):
         print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
         sys.exit(1)
 
