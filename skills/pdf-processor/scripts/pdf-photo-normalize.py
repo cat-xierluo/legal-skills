@@ -33,6 +33,8 @@ PAGE_SIZES_MM = {
 }
 DEFAULT_PAGE_SIZE = "a4"
 DEFAULT_CONTRAST_STRENGTH = 0.7
+DEFAULT_BINARIZE_HIGH = 235.0
+DEFAULT_BINARIZE_LOW = 195.0
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 TEXT_TILT_TOLERANCE_DEG = 0.3
 BAND_ANGLE_TOLERANCE_DEG = 1.2
@@ -64,6 +66,61 @@ def _order_quad(points: np.ndarray) -> np.ndarray:
 
 def _quad_is_convex(ordered_points: np.ndarray) -> bool:
     return cv2.isContourConvex(ordered_points.astype(np.float32))
+
+
+def _order_quad_clockwise(points: np.ndarray) -> np.ndarray:
+    """Order corners clockwise from the visual top-left, robust to rotation ties."""
+    center = points.mean(axis=0)
+    angles = np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0])
+    ordered = points[np.argsort(angles)]
+    candidates = []
+    for shift in range(4):
+        candidate = np.roll(ordered, -shift, axis=0)
+        top = candidate[1] - candidate[0]
+        left = candidate[3] - candidate[0]
+        top_angle = abs(float(np.degrees(np.arctan2(top[1], top[0])))) % 180
+        left_angle = abs(float(np.degrees(np.arctan2(left[1], left[0])))) % 180
+        tilt = (
+            min(top_angle, 180 - top_angle)
+            + min(abs(left_angle - 90), 180 - abs(left_angle - 90))
+        )
+        height = float(np.linalg.norm(left))
+        ratio = float(np.linalg.norm(top)) / height if height else 1.0
+        candidates.append((tilt, abs(ratio - 210 / 297), shift))
+    least_tilt = min(item[0] for item in candidates)
+    finalists = [item for item in candidates if item[0] <= least_tilt + 2.0]
+    start = min(finalists)[2]
+    return np.roll(ordered, -start, axis=0).astype(np.float32)
+
+
+def parse_quad(value: str) -> list[list[float]]:
+    """Parse ``x1,y1,x2,y2,x3,y3,x4,y4`` corner text, accepting Chinese commas."""
+    try:
+        numbers = [float(item) for item in value.replace("，", ",").split(",")]
+    except ValueError as exc:
+        raise ValueError(f"无法解析手动四角: {value}") from exc
+    if len(numbers) != 8:
+        raise ValueError("手动四角必须是 8 个数字：x1,y1,x2,y2,x3,y3,x4,y4")
+    return [[numbers[index], numbers[index + 1]] for index in range(0, 8, 2)]
+
+
+def _manual_quad(
+    points, image_size: tuple[int, int],
+) -> np.ndarray:
+    """Validate normalized manual corners and scale them to image pixels."""
+    array = np.asarray(points, dtype=np.float32)
+    if array.shape != (4, 2):
+        raise ValueError("手动四角必须是 4 个 (x, y) 点")
+    if not np.all(np.isfinite(array)):
+        raise ValueError("手动四角坐标必须是有限数值")
+    if np.any(array < 0) or np.any(array > 1):
+        raise ValueError("手动四角使用 0-1 归一化坐标")
+    ordered = _order_quad_clockwise(array)
+    if not _quad_is_convex(ordered) or cv2.contourArea(ordered) <= 0:
+        raise ValueError("手动四角必须是凸四边形")
+    return ordered * np.array(
+        (image_size[0] - 1, image_size[1] - 1), dtype=np.float32,
+    )
 
 
 def _has_document_edges(gray: np.ndarray, quad: np.ndarray) -> bool:
@@ -1253,6 +1310,26 @@ def normalize_illumination(
     return Image.fromarray(cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2RGB))
 
 
+def binarize_page(
+    image: Image.Image,
+    *,
+    high: float = DEFAULT_BINARIZE_HIGH,
+    low: float = DEFAULT_BINARIZE_LOW,
+) -> Image.Image:
+    """Flatten the paper background and map ink to black, keeping stroke edges."""
+    gray = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2GRAY)
+    short_edge = min(gray.shape)
+    kernel_size = max(15, int(round(short_edge * 0.025)) | 1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    background = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
+    background = cv2.GaussianBlur(background, (0, 0), kernel_size / 3.4)
+    normalized = cv2.divide(gray, np.maximum(background, 1), scale=255)
+    ink = np.clip(
+        (high - normalized.astype(np.float32)) / (high - low), 0.0, 1.0
+    )
+    return Image.fromarray((255 * (1.0 - ink)).astype(np.uint8)).convert("RGB")
+
+
 def _rotate_clockwise(image: Image.Image, angle: int) -> Image.Image:
     if angle == 0:
         return image
@@ -1381,6 +1458,10 @@ def normalize_photo_pdf(
     rotation: str = "auto",
     illumination_strength: float = 0.78,
     contrast_strength: float = DEFAULT_CONTRAST_STRENGTH,
+    quad: list[list[float]] | None = None,
+    binarize: bool = False,
+    binarize_high: float = DEFAULT_BINARIZE_HIGH,
+    binarize_low: float = DEFAULT_BINARIZE_LOW,
     debug_image: str | Path | None = None,
     report_file: str | Path | None = None,
 ) -> dict:
@@ -1393,17 +1474,23 @@ def normalize_photo_pdf(
         destination for destination in (target_path, debug_path, report_path)
         if destination is not None
     ])
+    if not 0 <= binarize_low < binarize_high <= 255:
+        raise ValueError("黑白化阈值必须满足 0 <= 下阈值 < 上阈值 <= 255")
 
     photo = load_photo(source_path)
-    quad = detect_document_quad(photo)
-    quad_source = "paper_edges" if quad is not None else "full_image"
     content_subject = None
-    if quad is None:
-        content_subject = detect_content_subject(photo)
-        if content_subject is not None:
-            quad = content_subject["quad"]
-            quad_source = "content_subject"
-    paper_matrix, paper_size, quad_meta = _paper_projection(photo.size, quad)
+    if quad is not None:
+        detected_quad = _manual_quad(quad, photo.size)
+        quad_source = "manual"
+    else:
+        detected_quad = detect_document_quad(photo)
+        quad_source = "paper_edges" if detected_quad is not None else "full_image"
+        if detected_quad is None:
+            content_subject = detect_content_subject(photo)
+            if content_subject is not None:
+                detected_quad = content_subject["quad"]
+                quad_source = "content_subject"
+    paper_matrix, paper_size, quad_meta = _paper_projection(photo.size, detected_quad)
     quad_meta["source"] = quad_source
     if content_subject is not None:
         quad_meta["content_subject"] = {
@@ -1436,7 +1523,7 @@ def normalize_photo_pdf(
     swaps_axes = clockwise in (90, 270)
     oriented_size = corrected_size[::-1] if swaps_axes else corrected_size
     final_size, resolved_page_size = resolve_page_size(oriented_size, page_size, dpi)
-    if quad_source == "paper_edges" and resolved_page_size in ("a4", "auto_a4"):
+    if quad_source in ("paper_edges", "manual") and resolved_page_size in ("a4", "auto_a4"):
         content_size = final_size
     else:
         content_size = _contained_size(oriented_size, final_size)
@@ -1445,11 +1532,14 @@ def normalize_photo_pdf(
     raster = _warp_image(photo, composed @ preview_matrix, render_size)
     oriented = _rotate_clockwise(Image.fromarray(raster), clockwise)
 
-    enhanced = normalize_illumination(
-        oriented,
-        strength=illumination_strength,
-        contrast_strength=contrast_strength,
-    )
+    if binarize:
+        enhanced = binarize_page(oriented, high=binarize_high, low=binarize_low)
+    else:
+        enhanced = normalize_illumination(
+            oriented,
+            strength=illumination_strength,
+            contrast_strength=contrast_strength,
+        )
     if table_report["status"] == "applied" or text_report["status"] == "applied":
         clip_points = cv2.perspectiveTransform(_image_corners(preview_size)[None], composed)[0]
         clip_mask = np.zeros(raster.shape[:2], dtype=np.uint8)
@@ -1469,12 +1559,12 @@ def normalize_photo_pdf(
     outputs = []
     if debug_path is not None:
         debug_array = np.asarray(photo).copy()
-        if quad is not None:
+        if detected_quad is not None:
             cv2.polylines(
                 debug_array,
-                [np.round(quad).astype(np.int32)],
+                [np.round(detected_quad).astype(np.int32)],
                 True,
-                (255, 0, 0) if quad_source == "paper_edges" else (0, 160, 0),
+                (255, 0, 0) if quad_source in ("paper_edges", "manual") else (0, 160, 0),
                 max(1, round(max(photo.size) / 600)),
             )
         outputs.append((debug_path, partial(Image.fromarray(debug_array).save, quality=95)))
@@ -1484,6 +1574,14 @@ def normalize_photo_pdf(
         tuple(pixels * 25.4 / mm for pixels, mm in zip(final_size, dimensions_mm))
         if dimensions_mm else (dpi, dpi)
     )
+    illumination_report = {
+        "strength": illumination_strength,
+        "contrast_strength": contrast_strength,
+        "before_shadow_score": _shadow_score(oriented),
+        "after_shadow_score": _shadow_score(enhanced),
+    }
+    if binarize:
+        illumination_report["status"] = "binarized"
     report = {
         "input": str(source_path),
         "output": str(target_path),
@@ -1493,17 +1591,18 @@ def normalize_photo_pdf(
         "rotation_reason": rotation_reason,
         "table_alignment": table_report,
         "text_deskew": text_report,
-        "illumination": {
-            "strength": illumination_strength,
-            "contrast_strength": contrast_strength,
-            "before_shadow_score": _shadow_score(oriented),
-            "after_shadow_score": _shadow_score(enhanced),
-        },
+        "illumination": illumination_report,
         "page_size": resolved_page_size,
         "output_size": final_size,
         "content_size": content_size,
         "dpi": dpi,
     }
+    if binarize:
+        report["binarization"] = {
+            "status": "applied",
+            "high": binarize_high,
+            "low": binarize_low,
+        }
     if report_path is not None:
         report_text = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
         outputs.append((report_path, lambda path: path.write_text(report_text, encoding="utf-8")))
@@ -1544,6 +1643,32 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CONTRAST_STRENGTH,
         help="附加对比度增强强度 0-1，默认 0.7",
     )
+    parser.add_argument(
+        "--quad",
+        help=(
+            "手动指定纸面四角，格式 x1,y1,x2,y2,x3,y3,x4,y4；"
+            "使用 0-1 归一化坐标（相对 EXIF 转正后的画面），用于纸边检测不可靠的拍照件"
+        ),
+    )
+    parser.add_argument(
+        "--bw",
+        "--black-white",
+        dest="bw",
+        action="store_true",
+        help="输出黑白页面：背景归一后把墨迹映射为纯黑，保留签名与印章边缘",
+    )
+    parser.add_argument(
+        "--bw-high",
+        type=float,
+        default=DEFAULT_BINARIZE_HIGH,
+        help="黑白化上阈值，高于该值视为纸面，默认 235",
+    )
+    parser.add_argument(
+        "--bw-low",
+        type=float,
+        default=DEFAULT_BINARIZE_LOW,
+        help="黑白化下阈值，低于该值视为墨迹，默认 195",
+    )
     parser.add_argument("--debug-image", help="另存检测边框调试图")
     parser.add_argument("--report", help="以 JSON 保存处理报告")
     return parser
@@ -1560,6 +1685,14 @@ def main() -> int:
         raise ValueError("阴影归一化强度必须在 0-1")
     if not 0 <= args.contrast_strength <= 1:
         raise ValueError("对比度增强强度必须在 0-1")
+    if not 0 <= args.bw_low < args.bw_high <= 255:
+        parser.error("黑白化阈值必须满足 0 <= 下阈值 < 上阈值 <= 255")
+    manual_quad = None
+    if args.quad:
+        try:
+            manual_quad = parse_quad(args.quad)
+        except ValueError as exc:
+            parser.error(str(exc))
 
     try:
         report = normalize_photo_pdf(
@@ -1571,6 +1704,10 @@ def main() -> int:
             rotation=args.rotate,
             illumination_strength=args.illumination_strength,
             contrast_strength=args.contrast_strength,
+            quad=manual_quad,
+            binarize=args.bw,
+            binarize_high=args.bw_high,
+            binarize_low=args.bw_low,
             debug_image=args.debug_image,
             report_file=args.report,
         )
@@ -1578,14 +1715,12 @@ def main() -> int:
         parser.error(str(exc))
     print("拍照件规整完成")
     print(f"EXIF 转正尺寸: {report['exif_transposed_size'][0]}×{report['exif_transposed_size'][1]}")
+    quad_source = report["quad"]["source"]
     print(
-        "纸面四边检测: "
-        f"{'成功' if report['quad']['quad_detected'] else '失败'}"
-        + (
-            "；内容主体 fallback: 成功"
-            if report["quad"]["source"] == "content_subject"
-            else "，保留整幅图像"
-        )
+        "纸面四角: 手动指定" if quad_source == "manual"
+        else "纸面四边检测: 失败；内容主体 fallback: 成功" if quad_source == "content_subject"
+        else "纸面四边检测: 成功" if quad_source == "paper_edges"
+        else "纸面四边检测: 失败，保留整幅图像"
     )
     print(f"粗方向旋转: {report['rotation_clockwise']}°（{report['rotation_reason']}）")
     print(f"表框校正: {report['table_alignment']['status']}")
@@ -1598,6 +1733,11 @@ def main() -> int:
         f"{report['illumination']['after_shadow_score']:.2f}"
     )
     print(f"页面策略: {report['page_size']}；输出尺寸: {report['output_size'][0]}×{report['output_size'][1]}")
+    if report.get("binarization", {}).get("status") == "applied":
+        print(
+            f"黑白化: 上阈值 {report['binarization']['high']}，"
+            f"下阈值 {report['binarization']['low']}"
+        )
     print(f"输出文件: {args.output}")
     return 0
 

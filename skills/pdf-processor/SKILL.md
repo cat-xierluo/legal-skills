@@ -2,7 +2,7 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.17.2"
+version: "2.18.0"
 description: PDF 处理工具，支持扫描件预处理、拍照件单张或批量规整合并、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
@@ -103,6 +103,20 @@ python3 scripts/pdf-photo-batch.py \
 ```
 
 目录内 JPG/PNG/TIFF/BMP/WebP 逐张进入单页规整流程后合并；也可显式传入多个文件或目录，顺序为参数顺序加目录内自然文件名排序。任一张失败即停止，不输出缺页 PDF。
+
+纸面四边检测不可靠时（纸边贴画面、深色桌面上有黑色物件、缺角），用 `--quad` 直接指定四角，坐标为 0–1 归一化值、相对 EXIF 转正后的画面，顺序任意。批量入口用 `--quad-file` 传 JSON，键为照片文件名，值为 4 个 `[x, y]` 点；未列出的照片继续走自动检测。指定四角后仍会执行表框与正文投影纠斜，选用 A4 时与完整纸边一样铺满页框。照片接近侧拍（约 45° 以上）时上方向有几何歧义，成品可能横竖颠倒，用 `--rotate 90/270` 纠正。
+
+```bash
+python3 scripts/pdf-photo-normalize.py \
+  --input page.jpg --output page.pdf \
+  --quad "0.100,0.094,0.897,0.105,0.940,0.976,0.086,0.966"
+
+python3 scripts/pdf-photo-batch.py \
+  --input /path/to/photo-dir --output merged.pdf \
+  --quad-file /tmp/quads.json --bw
+```
+
+`--bw` 把输出转为黑白：先用形态学闭运算估计纸面背景并做除法归一，再按 `--bw-high`（默认 235，高于该值视为纸面）与 `--bw-low`（默认 195，低于该值视为墨迹）做柔和二值化，笔画边缘保留灰阶过渡，签名与印章不丢失。黑白页面直接跳过阴影归一与对比度曲线。
 
 ### 4. 只做 OCR 文字层
 

@@ -68,6 +68,16 @@ python3 scripts/pdf-photo-normalize.py \
 python3 scripts/pdf-photo-batch.py \
   --input /path/to/photo-dir --output merged.pdf \
   --report /tmp/photo-batch-report.json
+
+# 纸边检测不可靠时手动指定四角，并输出黑白页面
+python3 scripts/pdf-photo-normalize.py \
+  --input photo.jpg --output photo.pdf \
+  --quad "0.100,0.094,0.897,0.105,0.940,0.976,0.086,0.966" --bw
+
+# 批量入口按文件名覆盖四角，其余照片继续自动检测
+python3 scripts/pdf-photo-batch.py \
+  --input /path/to/photo-dir --output merged.pdf \
+  --quad-file /tmp/quads.json --bw
 ```
 
 | 参数 | 默认 | 说明 |
@@ -76,10 +86,18 @@ python3 scripts/pdf-photo-batch.py \
 | `--rotate` | `auto` | 应用 EXIF 方向后，使用可用的 Tesseract OSD 检查 90° 倍数方向。也可指定顺时针角度 |
 | `--illumination-strength` | `0.78` | 亮度阴影归一强度，取值 0–1 |
 | `--contrast-strength` | `0.7` | 附加亮度曲线强度，取值 0–1。设 `0` 保留基础去阴影与局部对比度处理 |
+| `--quad` | 无 | 手动指定纸面四角，`x1,y1,x2,y2,x3,y3,x4,y4`，0–1 归一化坐标（相对 EXIF 转正后的画面），顺序任意；传入后跳过纸边检测与内容主体 fallback，仍执行表框与正文纠斜，选用 A4 时铺满页框 |
+| `--bw` | 关闭 | 输出黑白页面。用形态学闭运算估计纸面背景并做除法归一，再按上下阈值柔和二值化，跳过阴影归一与对比度曲线 |
+| `--bw-high` | `235` | 黑白化上阈值，高于该值视为纸面。须满足 `0 <= --bw-low < --bw-high <= 255` |
+| `--bw-low` | `195` | 黑白化下阈值，低于该值视为墨迹。阈值之间的像素保留灰阶过渡 |
 | `--dpi` | `300` | 输出栅格分辨率。标准页框的物理尺寸固定 |
 | `--jpeg-quality` | `90` | PDF 内嵌 JPEG 质量 |
 | `--report` | 无 | 输出 JSON 报告，记录纸面四边、方向、表框精校状态和校正前的角度、亮度离散指标、页面和内容尺寸 |
 | `--debug-image` | 无 | 在原图上标出检测到的纸面四边 |
+
+批量入口另有 `--quad-file`：JSON 对象，键为照片文件名，值为 4 个 `[x, y]` 归一化坐标点；文件名不匹配任何输入照片时报错，未列出的照片沿用自动检测。手动四角的报告 `quad.source` 为 `manual`，调试图沿用红色框。
+
+四角顺序任意：内部按质心极角排序，再用几何倾斜与 A4 竖版比例选定左上角起点。照片接近侧拍（相对正放约 45° 以上）时上方向存在几何歧义，成品可能横竖颠倒，用 `--rotate 90` 或 `--rotate 270` 纠正。
 
 表框精校适用于纸面或主体区域可定位且有连贯横竖边和多个单元格的平面表格。估计变形较大、表框残缺或纸面弯曲明显时，检查报告中的 `table_alignment.status`，并以实际渲染复核。自动裁纸边需要至少三条候选边能将纸面与较暗的外部区域区分开。纸边证据不足或候选框外有成片深色痕迹时，进入内容主体 fallback。
 
