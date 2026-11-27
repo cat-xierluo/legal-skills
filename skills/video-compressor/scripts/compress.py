@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 import subprocess
 import sys
 import time
@@ -12,8 +11,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from hw_detect import (build_encode_args, detect_hardware, print_hardware_info,
-                       probe_bitrate, select_profile)
+from hw_detect import (build_encode_args, detect_hardware, find_ffmpeg,
+                       print_hardware_info, probe_bitrate, select_profile)
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".ts"}
 
@@ -41,6 +40,7 @@ def compress_video(
     output_suffix: str,
     detach: bool = False,
     overwrite: bool = False,
+    name_pattern: str | None = None,
 ) -> tuple[bool, str, int, int]:
     """压缩单个视频文件。
 
@@ -48,20 +48,28 @@ def compress_video(
     - 同步模式: 信息是输出路径；失败时是 "日志=<path>"
     - detach 模式: 信息是 "PID=<pid> 日志=<path>"，压缩后大小始终为 0
     """
-    output_path = input_path.parent / f"{input_path.stem}{output_suffix}.mp4"
+    if name_pattern:
+        # 命名模板：{date}=当天 YYMMDD，{stem}=原文件名（不含扩展名）
+        rendered = name_pattern.format(date=datetime.now().strftime("%y%m%d"), stem=input_path.stem)
+        if not rendered.lower().endswith(".mp4"):
+            rendered += ".mp4"
+        output_path = input_path.parent / rendered
+    else:
+        output_path = input_path.parent / f"{input_path.stem}{output_suffix}.mp4"
     if output_path.exists() and not overwrite:
         # 防覆盖：已存在同名输出时自动序号递增，绝不静默毁掉旧压缩结果
         n = 2
-        candidate = input_path.parent / f"{input_path.stem}{output_suffix}_{n}.mp4"
-        while candidate.exists():
+        while True:
+            candidate = output_path.with_name(f"{output_path.stem}_{n}{output_path.suffix}")
+            if not candidate.exists():
+                break
             n += 1
-            candidate = input_path.parent / f"{input_path.stem}{output_suffix}_{n}.mp4"
         print(f"  输出 {output_path.name} 已存在，改用 {candidate.name}（--overwrite 可覆盖）")
         output_path = candidate
     original_size = input_path.stat().st_size
 
     cmd = [
-        shutil.which("ffmpeg") or "ffmpeg",
+        find_ffmpeg("ffmpeg") or "ffmpeg",
         "-y",
         "-i", str(input_path),
     ] + encode_args + [
@@ -150,9 +158,14 @@ def main():
                              "父进程被杀也不会影响编码，适合长视频或会话易断开的场景")
     parser.add_argument("--overwrite", action="store_true",
                         help="允许覆盖已存在的同名输出文件（默认自动改用 _compressed_2 等序号）")
+    parser.add_argument("--vt-quality", type=int, default=None,
+                        help="VideoToolbox 硬件编码质量 0-100（越大越清晰、文件越大；默认取 65，仅硬件编码生效）")
+    parser.add_argument("--name-pattern", default=None,
+                        help="输出命名模板，支持 {date}（当天 YYMMDD）与 {stem}（原文件名）；"
+                             "例如 '{date} {stem}'。设置后忽略 --output-suffix")
     args = parser.parse_args()
 
-    if not shutil.which("ffmpeg"):
+    if not find_ffmpeg("ffmpeg"):
         print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
         sys.exit(1)
 
@@ -176,6 +189,7 @@ def main():
         bufsize=args.bufsize if not profile["is_hardware"] else None,
         audio_bitrate=args.audio_bitrate,
         preset=args.preset if not profile["is_hardware"] else None,
+        vt_quality=args.vt_quality,
     )
 
     def args_for(video: Path):
@@ -201,6 +215,7 @@ def main():
             bufsize=args.bufsize if not file_profile["is_hardware"] else None,
             audio_bitrate=args.audio_bitrate,
             preset=args.preset if not file_profile["is_hardware"] else None,
+            vt_quality=args.vt_quality,
         )
         return file_profile, file_args
 
@@ -230,7 +245,7 @@ def main():
             print(f"  [自适应] {video.name}: {file_profile['display_name']}")
         ok, output, orig, comp = compress_video(
             video, file_args, args.output_suffix, detach=args.detach,
-            overwrite=args.overwrite,
+            overwrite=args.overwrite, name_pattern=args.name_pattern,
         )
         return index, video, ok, output, orig, comp
     start_time = time.monotonic()

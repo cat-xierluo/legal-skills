@@ -3,13 +3,13 @@ name: video-compressor
 description: 视频压缩与静默片段剪切工具。使用 FFmpeg CRF 模式压缩视频，适配屏幕录制/课件场景；支持检测并去除静默静止片段。自动检测硬件与源码率并选择最优编码方案（高码率源走 VideoToolbox 硬件加速，低码率录屏自动改用 x264 CRF 自适应编码）。本技能应在用户需要压缩视频、减小视频大小、去除视频空档时使用。不要用于：视频剪辑、音频提取、格式转换。
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
-version: "1.5.2"
+version: "1.5.3"
 license: MIT
 ---
 
 # video-compressor — 视频压缩工具
 
-使用 FFmpeg 将视频文件压缩为低比特率 MP4，减小文件体积的同时保留清晰的音频。自动检测硬件并选择最优编码方案（Apple Silicon 默认使用 VideoToolbox 硬件加速）。
+使用 FFmpeg 将视频文件压缩为低比特率 MP4，减小文件体积的同时保留清晰的音频。自动检测硬件并选择最优编码方案（高码率源在 Apple Silicon 走 VideoToolbox 硬件加速，低码率录屏自动走 x264 CRF 自适应编码）。
 
 ## 适用场景
 
@@ -52,9 +52,10 @@ license: MIT
 | 最大码率 | 2500k | VBV 码率上限 |
 | 音频比特率 | 96k | AAC 语音音质 |
 | 编码预设 | veryfast | 速度与压缩比平衡（仅软件编码） |
-| 编码器 | 自动检测 | Apple Silicon 默认 HEVC VT，其他 x264 |
+| 编码器 | 自动检测 | 高码率源在 Apple Silicon 走 HEVC VT，低码率录屏自动走 x264 CRF |
+| VT 质量值 | 65 | VideoToolbox `-q:v`（0-100，越大越清晰/越大；仅硬件编码，用 `--vt-quality` 调整） |
 | 并发线程 | 自动 | VideoToolbox 默认 1（共享硬件编码器，多并发反而慢），软件编码默认 ≤8 |
-| 输出后缀 | `_compressed` | 输出文件名后缀 |
+| 输出命名 | `_compressed` 后缀 | 后缀，或 `--name-pattern '{date} {stem}'` 模板 |
 
 详细配置说明见 `references/config.md`。
 
@@ -167,15 +168,16 @@ python3 scripts/trim_silences.py -i <路径> --noise-db -40 --min-duration 5
 | Apple Silicon (备用) | h264_videotoolbox | 同上 | H.264 | HEVC 不可用时的回退 |
 | 其他平台 | libx264 | 1x 实时 | H.264 | 标准软件编码 |
 
-> **实测参考（MacBook Air M1 无风扇，8GB）：**
-> - x264 veryfast CRF28 软编：约 **5–7× 实时**（单进程）；4–6 并发时约 **10× 实时**（已达该机型热降频天花板），更多并发反而下降
-> - HandBrake `vt_h264`：比 x264 快约 **15%**，但输出体积大 **60%**，收益不高
-> - **brew ffmpeg 内置 VideoToolbox 硬解链路不可用**（`hwaccel_output_format=videotoolbox` 报 `Unrecognised hwaccel output format`，brew 构建未含 VT 硬件帧输出）
-> - `preset` 升降档（ultrafast ↔ veryfast）对 x264 速度影响可忽略，不值得为提速降 preset
+> **实测参考（本机 Apple M1 Max，10 核 / 64 GB，ffmpeg 9.0.2，2026-11 复测）：**
+> - x264 veryfast CRF23 软编：速度**与画面动态强相关**——静态录屏段可达 **~19× 实时**，运动较多的整片约 **3× 实时**（56 分钟成片实测 18 分钟编完）。测速请用 60 秒采样实拍，不要套用固定倍数。
+> - `preset` 升降档（ultrafast ↔ veryfast）对 x264 速度影响小，但 ultrafast 体积约大 2.5 倍，不值得为提速降 preset。
+> - `-hwaccel videotoolbox` **硬件解码在本机可用但更慢**（30s 段 9.7s vs 软解 6.7s），H.264 软解已足够快，不要加硬解。
+> - `-threads 15` 与默认无差别（x264 默认已开满帧级线程），瓶颈在解码与单线程段，加线程无效。
+> - VideoToolbox 的 `-q:v` 一旦与 `-b:v`/`-maxrate`/`-bufsize` 同时出现，会被拖入 ABR、质量档失效（实测 q40 与 q65 输出完全相同）；v1.5.3 起脚本**只给 `-q:v`**。
 
 > 速度提示：上述数值为实际测试参考范围，实际速度受分辨率、帧率、画质参数、系统负载影响。**并发吞吐测试必须校验每个子进程的 rc**（return code）；进程秒退会留下"高速"的假象，必须在运行时检查实际输出文件大小和编码耗时。录屏/课件源码率特征为 ≤3Mbps，压缩前先 `ffprobe -v error -show_entries format=bit_rate -of csv=p=0 <file>` 确认。
 
-> 录屏/课件源码率陷阱（v1.5.0 已自动化）：压缩前先 `ffprobe` 查源文件 `bit_rate`。硬件路径（hevc_vt/h264_vt）在 `hw_detect.py` 中写死目标码率 2000k 且忽略 `--crf/--maxrate` 参数；源总码率 ≤3 Mbps（录屏/课件特征）时脚本自动选用 x264 CRF 自适应编码并打印提示，高码率源仍走硬件路径，`--codec` 显式指定可覆盖自动选择。CRF 自适应对静止画面几乎不耗码率，实测录屏压缩比 80-88%、速度 12-20x 实时。手动估算可用 60 秒采样：`ffmpeg -ss <中段> -t 60 -i 输入 -c:v libx264 -crf 23 ...` 看采样大小推算全片。
+> 录屏/课件源码率陷阱（v1.5.0 自动化，v1.5.3 修正硬件参数）：压缩前先 `ffprobe` 查源文件 `bit_rate`。源总码率 ≤3 Mbps（录屏/课件特征）时脚本自动选用 x264 CRF 自适应编码并打印提示；高码率源在 Apple Silicon 走硬件路径。硬件路径**不再写死 `-b:v 2000k`**——v1.5.3 起只用 `-q:v`（`--vt-quality` 0-100），对低码率源强制 `--codec hevc_vt` 也能真正压缩。实测同一录屏：x264 CRF23 压到 83%（12.7 MB/18s），硬件 q30 仅压到 65%（27.7 MB/57s），故低码率录屏仍应以 x264 为主。手动估算可用 60 秒采样：`ffmpeg -ss <中段> -t 60 -i 输入 -c:v libx264 -crf 23 ...` 看采样大小推算全片。
 
 启动时自动打印检测结果，如：
 ```
@@ -186,13 +188,16 @@ FFmpeg: 9.0 (VideoToolbox 支持: H.264 + HEVC)
 
 手动指定编码器：
 ```bash
-python3 scripts/compress.py -i <路径> --codec hevc_vt   # 强制 HEVC 硬件编码
+python3 scripts/compress.py -i <路径> --codec hevc_vt   # 强制 HEVC 硬件编码（质量默认 65）
+python3 scripts/compress.py -i <路径> --codec hevc_vt --vt-quality 40   # 硬件编码压更狠（文件更小）
 python3 scripts/compress.py -i <路径> --codec h264_vt   # 强制 H.264 硬件编码
 python3 scripts/compress.py -i <路径> --codec x264      # 强制软件编码
 python3 scripts/compress.py -i <路径> --codec x265      # 软件 HEVC 编码（高压缩）
 ```
 
 可选编码器：`hevc_vt` `h264_vt` `x264` `x265` `x264_fast`
+
+输出命名：默认 `原名_compressed.mp4`；`--name-pattern '{date} {stem}'` 可产出 `YYMMDD 原名.mp4`（`{date}`=当天 YYMMDD），已存在同名输出仍自动序号递增。
 
 ## 长视频与 detach 模式
 

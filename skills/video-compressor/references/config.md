@@ -22,7 +22,7 @@
 
 **注意**：
 
-- VideoToolbox 编码器不支持 CRF 和 preset 参数，使用 `-q:v 65` 控制质量
+- VideoToolbox 编码器不支持 CRF 和 preset 参数，质量由 `-q:v`（0-100，默认 65）控制，可用 `--vt-quality` 调整；**不要与 `-b:v`/`-maxrate`/`-bufsize` 同用**，否则切到 ABR、质量档失效
 - 软件编码（x264/x265）时 CRF 和 preset 参数正常生效
 - HEVC 输出的 MP4 文件使用 `-tag:v hvc1` 确保播放兼容性
 
@@ -85,6 +85,20 @@
 - **默认值**：`_compressed`
 - **格式**：字符串
 - **说明**：输出文件名后缀，插入在扩展名之前。例如 `video.mp4` → `video_compressed.mp4`
+
+### vt_quality（VideoToolbox 硬件质量）
+
+- **默认值**：`65`
+- **格式**：整数 0 ~ 100
+- **说明**：仅硬件编码（hevc_vt / h264_vt）生效。VideoToolbox 用 `-q:v` 控质：数越大越清晰、文件越大；越小压得越狠。脚本不写 `-b:v`，纯恒定质量。
+- **推荐值**：`65`（默认，质量优先）；`40`（体积与质量平衡）；`30`（体积优先，适合低动态录屏）
+- **注意**：`-q:v` 不能与 `-b:v`/`-maxrate`/`-bufsize` 同时出现，否则 VideoToolbox 转 ABR、`-q:v` 失效。
+
+### name_pattern（输出命名模板）
+
+- **默认值**：空（用 `--output-suffix`）
+- **格式**：字符串，支持 `{date}`（当天 YYMMDD）与 `{stem}`（原文件名去扩展名）
+- **说明**：例如 `--name-pattern '{date} {stem}'` → `251127 录制于 xxx.mp4`。设置后忽略 `--output-suffix`；已存在同名输出仍自动序号递增。
 
 ---
 

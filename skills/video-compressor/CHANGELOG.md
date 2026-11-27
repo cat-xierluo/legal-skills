@@ -2,6 +2,39 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.5.3] - 2026-11-28
+
+### 修复
+
+- **Apple Silicon / 内存检测失效**（`hw_detect.py`）：`sysctl -n hw.optional.arm64` 在部分 macOS（M1 Max 实测返回空字符串）导致平台被误判为 `generic_mac`，硬件加速永不启用；`hw.memsize` 取不到时内存显示 0 GB
+  - 平台判定在 sysctl 无明确结果时回落 `platform.machine()=="arm64"`
+  - 内存探测回落 `os.sysconf("SC_PHYS_PAGES")`，不再显示 0 GB
+  - 实测：修复前打印 `macOS (10 核 / 0 GB)`，修复后 `Apple Silicon (10 核 / 64 GB)`
+- **agent 环境找不到 ffmpeg**（`hw_detect.py` / `compress.py` / `trim_silences.py`）：脚本仅用 `shutil.which`，agent/launchd 极简 PATH 不含 `/opt/homebrew/bin`，开箱即报"未找到 ffmpeg"
+  - 新增 `find_ffmpeg()`：先查 PATH，再回落 `/opt/homebrew/bin`、`/usr/local/bin`、`/opt/local/bin`
+  - 三个脚本的 ffmpeg/ffprobe 查找与"未找到"守卫统一改用 `find_ffmpeg`
+- **硬件路径写死 `-b:v 2000k` 压不动 + `-q:v` 被架空**（`hw_detect.py`）：VideoToolbox 同时给 `-b:v/-maxrate/-bufsize` 会转 ABR，`-q:v` 失效（实测 q40 与 q65 输出完全相同）
+  - 去掉硬件分支全部码率参数，只用 `-q:v`（纯恒定质量）
+  - 新增 `--vt-quality`（0-100，默认 65）；同一录屏 q30/q40/q65 产出 27.7/33.6/66.9 MB，档位生效
+  - 清除 `hw_detect.py` 中 `hevc_videotooloolbox` 拼写死代码
+
+### 新增
+
+- **输出命名模板**（`compress.py`）：`--name-pattern '{date} {stem}'` → `YYMMDD 原名.mp4`（`{date}`=当天 YYMMDD），适配无人值守统一命名；同名输出仍自动序号递增
+- **回归测试** `scripts/test_hw_detect.py`：13 用例覆盖平台/内存探测回落、ffmpeg 查找回落、编码器选择、硬件参数不含码率
+
+### 文档
+
+- SKILL.md / config.md：修正硬件实测数据（速度与画面动态强相关、硬解更慢、加线程无效）、补 `--vt-quality`/`--name-pattern`，删除"写死 2000k"过时描述
+
+### 验证
+
+- 单测 13/13 通过（Python 3.9.6 与 3.14.7 均跑）
+- 极简 PATH（无 /opt/homebrew）压缩 1/10 素材（56 分钟成片切 343s）：默认 x264 75.2→12.7 MB（83.1%，18.3s），平台正确显示 Apple Silicon/64GB
+- 硬件 hevc_vt q30/q40/q65 体积递增且均可全解码；命名模板产出 `261128 tenth.mp4`，重复运行自动 `_2`
+
+---
+
 ## [1.5.2] - 2026-09-23
 
 ### 文档完善
