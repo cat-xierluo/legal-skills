@@ -69,27 +69,36 @@ def _quad_is_convex(ordered_points: np.ndarray) -> bool:
 
 
 def _order_quad_clockwise(points: np.ndarray) -> np.ndarray:
-    """Order corners clockwise from the visual top-left, robust to rotation ties."""
+    """Order corners clockwise, starting at the corner nearest the image's top-left.
+
+    The ring comes from the centroid angle, so no corner is picked twice. The
+    start corner is the one with the smallest ``x + y``: for a photo taken
+    within roughly 45° of upright that is always the page's top-left corner,
+    and unlike an edge-tilt comparison it is not confused by perspective
+    (the opposite corner can have the flatter edges). When two corners are
+    nearly tied there, i.e. a page photographed at about 45°, prefer the start
+    whose top edge is the short one, which keeps an upright portrait page
+    upright.
+    """
     center = points.mean(axis=0)
     angles = np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0])
     ordered = points[np.argsort(angles)]
-    candidates = []
-    for shift in range(4):
-        candidate = np.roll(ordered, -shift, axis=0)
-        top = candidate[1] - candidate[0]
-        left = candidate[3] - candidate[0]
-        top_angle = abs(float(np.degrees(np.arctan2(top[1], top[0])))) % 180
-        left_angle = abs(float(np.degrees(np.arctan2(left[1], left[0])))) % 180
-        tilt = (
-            min(top_angle, 180 - top_angle)
-            + min(abs(left_angle - 90), 180 - abs(left_angle - 90))
-        )
-        height = float(np.linalg.norm(left))
-        ratio = float(np.linalg.norm(top)) / height if height else 1.0
-        candidates.append((tilt, abs(ratio - 210 / 297), shift))
-    least_tilt = min(item[0] for item in candidates)
-    finalists = [item for item in candidates if item[0] <= least_tilt + 2.0]
-    start = min(finalists)[2]
+    sums = ordered[:, 0] + ordered[:, 1]
+    extent = max(
+        float(ordered[:, 0].max() - ordered[:, 0].min()),
+        float(ordered[:, 1].max() - ordered[:, 1].min()),
+    ) or 1.0
+    finalists = [index for index in range(4) if sums[index] <= sums.min() + extent * 0.005]
+    if len(finalists) == 1:
+        start = finalists[0]
+    else:
+        def portrait_distance(index: int) -> float:
+            candidate = np.roll(ordered, -index, axis=0)
+            top = float(np.linalg.norm(candidate[1] - candidate[0]))
+            left = float(np.linalg.norm(candidate[3] - candidate[0]))
+            return abs((top / left if left else 1.0) - 210 / 297)
+
+        start = min(finalists, key=lambda index: (portrait_distance(index), index))
     return np.roll(ordered, -start, axis=0).astype(np.float32)
 
 
@@ -115,12 +124,13 @@ def _manual_quad(
         raise ValueError("手动四角坐标必须是有限数值")
     if np.any(array < 0) or np.any(array > 1):
         raise ValueError("手动四角使用 0-1 归一化坐标")
-    ordered = _order_quad_clockwise(array)
+    # Order in pixel space so that the top-left tie window is isotropic.
+    ordered = _order_quad_clockwise(array * np.array(
+        (image_size[0] - 1, image_size[1] - 1), dtype=np.float32,
+    ))
     if not _quad_is_convex(ordered) or cv2.contourArea(ordered) <= 0:
         raise ValueError("手动四角必须是凸四边形")
-    return ordered * np.array(
-        (image_size[0] - 1, image_size[1] - 1), dtype=np.float32,
-    )
+    return ordered
 
 
 def _has_document_edges(gray: np.ndarray, quad: np.ndarray) -> bool:
