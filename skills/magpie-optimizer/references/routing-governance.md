@@ -445,10 +445,32 @@ curl -s http://127.0.0.1:<port>/v1/chat/completions \
 
 #### Codex 反复压缩时先核目录与工具定义
 
-1. **先看原会话日志。** 取同一会话前后的 `model_context_window`、自动压缩阈值和 `fallback model metadata` 记录，分别核磁盘配置与实际生效值。窗口和阈值一起降档时，检查当前模型的完整 slug 是否被会话解析。回退档位随客户端版本而定。 [Codex 模型元数据回退](https://github.com/openai/codex/blob/main/codex-rs/models-manager/src/model_info.rs)
-2. **再查 Magpie 目录取数。** 对齐进程启动时间、目录文件修改时间，以及 `app.log` 和轮换日志里桌面模型列表请求的 `EOF`、超时或代理拒绝。检查该请求访问的是本地网关还是 ChatGPT 上游，两处可能都有 `/backend-api/codex/models`。当前目录包含模型，只能证明磁盘上已有该条目。首次失效与恢复的日志若缺一段，保留因果缺口。
-3. **看故障请求把什么带了进来。** 按同一会话、时间窗及主调用对照 Magpie 的实际模型和 `prompt.parts`，分开看工具定义、工具结果和历史。模型元数据回退可能使按需工具改为直接展开，压缩历史后那些定义仍会进入下一请求。若要归因压缩节点，另核实际压缩请求的模型与规则命中。 [Codex 工具暴露方式](https://github.com/openai/codex/blob/main/codex-rs/core/src/mcp_tool_exposure.rs)
-4. **用已有后续回合核恢复。** 回读原会话 ID、Codex 进程、正常窗口和压缩线、工具定义占用与实际回合。若会话已恢复，沿原进度继续。若磁盘目录已正确而旧会话仍占用异常，按当前客户端可用方式在合适窗口冷加载原会话。涉及重载服务时先确认在途任务与操作授权。验收以同一会话能正常执行后续动作、工具占用回落、短输出后不立刻再压缩为准。
+排查顺序按「全局覆盖键 → 会话实际值 → 目录拉取 → 请求分项 → 恢复」推进。前两步只读用户级
+配置和会话日志，能在不碰网关的情况下排除或确认最常见的原因。
+
+1. **先看 Codex 用户级配置里的全局覆盖键。** 只读检查 `~/.codex/config.toml`（或该会话实际的
+   `CODEX_HOME`）顶层的 `model_context_window` 和 `model_auto_compact_token_limit`。这两个键在 Codex 里是
+   **全局覆盖**，不是模型配置优先于全局：
+   - `model_context_window`：取「配置值」与「模型 `max_context_window`」的较小者，替换目录给出的窗口；
+   - `model_auto_compact_token_limit`：直接替换模型自己的压缩线，不与模型值比较。
+
+   只要这两个键存在，Magpie 目录里各模型自己的窗口和压缩线就不会按原值生效。判别信号是：目录
+   拉取正常、多个窗口不同的模型在会话里读到的 `model_context_window` 却是同一个数，且等于
+   `配置值 × 生效百分比`。按模型调窗口应走 `magpie model context <provider/model> <n>`，不写这两个键。
+   去掉它们属于用户级配置变更：先备份、只删这两行、回读其余内容不变，并告知改完需新会话或
+   冷加载原会话；在跑的会话是否即时跟随以实际会话日志为准。由切换工具托管的配置还可能被其重写，
+   改后回读一次确认未被覆盖。依据：
+   [Codex 模型元数据覆盖](https://github.com/openai/codex/blob/main/codex-rs/models-manager/src/model_info.rs)
+   （`with_config_overrides`）与
+   [步骤设置中的启动覆盖](https://github.com/openai/codex/blob/main/codex-rs/core/src/session/step_settings.rs)
+   （`ModelInfoOverrides`）。
+2. **再看原会话日志的实际值。** 取同一会话前后的 `model_context_window`、自动压缩阈值和
+   `fallback model metadata` 记录，与上一步的磁盘配置对照。窗口和阈值一起降档时，检查当前模型的
+   完整 slug 是否被会话解析：不在目录里的入口会回退到默认元数据（窗口和工具暴露方式都会变）。
+   回退档位随客户端版本而定。 [Codex 模型元数据回退](https://github.com/openai/codex/blob/main/codex-rs/models-manager/src/model_info.rs)
+3. **再查 Magpie 目录取数。** 对齐进程启动时间、目录文件修改时间，以及 `app.log` 和轮换日志里桌面模型列表请求的 `EOF`、超时或代理拒绝。检查该请求访问的是本地网关还是 ChatGPT 上游，两处可能都有 `/backend-api/codex/models`。当前目录包含模型，只能证明磁盘上已有该条目。首次失效与恢复的日志若缺一段，保留因果缺口。
+4. **看故障请求把什么带了进来。** 按同一会话、时间窗及主调用对照 Magpie 的实际模型和 `prompt.parts`，分开看工具定义、工具结果和历史。模型元数据回退可能使按需工具改为直接展开，压缩历史后那些定义仍会进入下一请求；此时压缩只清历史，下一请求会立刻再次越线。若要归因压缩节点，另核实际压缩请求的模型与规则命中。 [Codex 工具暴露方式](https://github.com/openai/codex/blob/main/codex-rs/core/src/mcp_tool_exposure.rs)
+5. **用已有后续回合核恢复。** 回读原会话 ID、Codex 进程、正常窗口和压缩线、工具定义占用与实际回合。若会话已恢复，沿原进度继续。若磁盘目录已正确而旧会话仍占用异常，按当前客户端可用方式在合适窗口冷加载原会话。涉及重载服务时先确认在途任务与操作授权。验收以同一会话能正常执行后续动作、工具占用回落、短输出后不立刻再压缩为准。
 
 ### 9.3 辅助模型与路由组
 

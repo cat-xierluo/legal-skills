@@ -121,8 +121,25 @@ magpie model name <provider/model> "<display-name>"   # 全局显示名
 magpie model disable '<pattern>'                      # 全路由拒绝；enable 恢复
 magpie model price <provider/model> <in>,<out>,<cache-read>,<cache-write>   # USD / 1M tokens
 magpie model context <provider/model> <length>
+magpie model context-cap [<size>|off|all|own]          # 只对没有自带窗口的模型兜底
+magpie model window <agent> [<model>=<size>…|off]      # 某个 agent 单独被告知的窗口
+magpie model compact [on|off|<size>]                   # Codex / Claude Code / Grok 的长对话压缩
 magpie visible <agent> <provider|family|group>,…      # 客户端只显示这些；all 恢复
 ```
+
+**窗口与压缩线的优先级**（2026-11-26 按安装版 CLI help 与 Codex 上游源码核对）：
+
+| 层 | 入口 | 作用 |
+|---|---|---|
+| 模型 | `magpie model context <provider/model> <n>` | 该模型自己的窗口，优先于下面的兜底 |
+| 兜底 | `magpie model context-cap <size>` | 只影响没有自带窗口的模型；`all` 才连模型自己的值一起压 |
+| 路由组 | `magpie group set <id> context=<n>` | 组内按成员窗口；不写则取成员里最小的 |
+| 客户端 | `magpie model window <agent> …`、`magpie model compact <agent> …` | 单个 agent 被告知的窗口和压缩线 |
+
+以上都是 Magpie 写进模型目录的值。Codex 自己的用户级配置
+`model_context_window` / `model_auto_compact_token_limit` 是**全局覆盖**，会在目录值之上再压一次
+（窗口取与模型上限的较小者，压缩线直接替换），且不分模型。要按模型设置就用上表第一行，
+不要写这两个 Codex 键。排查顺序见[路由治理](routing-governance.md#codex-反复压缩时先核目录与工具定义)。
 
 ```sh
 magpie library                                        # 各 agent 共享配置
