@@ -1023,35 +1023,112 @@ class PhotoNormalizeTest(unittest.TestCase):
         )
         self.assertEqual(rotated.size, (990, 990))
 
-        # 该四角序列曾在旧起点算法下被横置；四个起点轮换都必须还原为竖版
+        # 该四角序列曾在旧起点算法下被横置；起点轮换与顺逆时针输入都必须还原为竖版
         quad = [[0, 0.429], [0.428, 0], [1, 0.573], [0.571, 1]]
         with tempfile.TemporaryDirectory() as tempdir:
             source = Path(tempdir) / "rotated.png"
             rotated.save(source)
             for shift in range(4):
-                with self.subTest(shift=shift):
-                    target = Path(tempdir) / f"output-{shift}.pdf"
-                    report = photo_normalize.normalize_photo_pdf(
-                        source,
-                        target,
-                        rotation="0",
-                        page_size="a4",
-                        dpi=110,
-                        quad=quad[shift:] + quad[:shift],
-                    )
-
-                    self.assertEqual(report["quad"]["source"], "manual")
-                    self.assertGreater(report["output_size"][1], report["output_size"][0])
-                    with fitz.open(target) as document:
-                        raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
-                        pixels = np.frombuffer(raster.samples, dtype=np.uint8).reshape(
-                            raster.height, raster.width,
+                for direction in (1, -1):
+                    candidate = np.roll(np.array(quad)[::direction], shift, axis=0).tolist()
+                    with self.subTest(shift=shift, direction=direction):
+                        target = Path(tempdir) / f"output-{shift}-{direction}.pdf"
+                        report = photo_normalize.normalize_photo_pdf(
+                            source,
+                            target,
+                            rotation="0",
+                            page_size="a4",
+                            dpi=110,
+                            quad=candidate,
                         )
-                    rows, columns = np.nonzero(pixels < 100)
-                    self.assertGreater(
-                        int(rows.max() - rows.min()), int(columns.max() - columns.min()),
-                        "竖版页面被横置",
-                    )
+
+                        self.assertEqual(report["quad"]["source"], "manual")
+                        self.assertGreater(report["output_size"][1], report["output_size"][0])
+                        with fitz.open(target) as document:
+                            raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
+                            pixels = np.frombuffer(raster.samples, dtype=np.uint8).reshape(
+                                raster.height, raster.width,
+                            )
+                        rows, columns = np.nonzero(pixels < 100)
+                        self.assertGreater(
+                            int(rows.max() - rows.min()), int(columns.max() - columns.min()),
+                            "竖版页面被横置",
+                        )
+
+    def test_manual_quad_keeps_upright_page_whose_opposite_corner_is_flatter(self):
+        # 真实竖拍页面的四角：上边比下边平、右边比左边直。2.18.0 曾因对角起点的
+        # “倾斜度”更小而把整页转了 180°，这里要求页首色块仍在输出页的上方。
+        quad = [(102, 100), (618, 104), (636, 886), (62, 878)]
+        page_width, page_height = 1240, 1754
+        canvas = Image.new("RGB", (700, 934), "white")
+        page = Image.new("RGB", (page_width, page_height), "white")
+        draw = ImageDraw.Draw(page)
+        draw.rectangle((124, 53, 1116, 140), fill="black")      # 页首标题块
+        draw.rectangle((744, 1649, 1054, 1704), fill="black")   # 页尾签名块
+        transform = photo_normalize.cv2.getPerspectiveTransform(
+            np.float32([[0, 0], [page_width - 1, 0], [page_width - 1, page_height - 1], [0, page_height - 1]]),
+            np.float32(quad),
+        )
+        captured = photo_normalize.cv2.warpPerspective(
+            np.asarray(page), transform, canvas.size, borderValue=(255, 255, 255),
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "upright.png"
+            target = Path(tempdir) / "output.pdf"
+            Image.fromarray(captured).save(source)
+            report = photo_normalize.normalize_photo_pdf(
+                source,
+                target,
+                rotation="0",
+                page_size="original",
+                dpi=110,
+                quad=[[x / 699, y / 933] for x, y in quad],
+            )
+
+            self.assertEqual(report["quad"]["source"], "manual")
+            self.assertGreater(report["output_size"][1], report["output_size"][0])
+            with fitz.open(target) as document:
+                raster = document[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
+                pixels = np.frombuffer(raster.samples, dtype=np.uint8).reshape(
+                    raster.height, raster.width,
+                )
+        band = pixels.shape[0] // 6
+        top_ink = int(np.count_nonzero(pixels[:band] < 100))
+        bottom_ink = int(np.count_nonzero(pixels[-band:] < 100))
+        self.assertGreater(top_ink, bottom_ink * 4, "页面被上下颠倒")
+
+    def test_manual_quad_start_corner_survives_perspective_and_input_order(self):
+        # 任意“大致正拍”的竖版页面：小角度旋转加四角独立扰动下，
+        # 8 种输入顺序都必须把同一个角选为左上角。
+        rng = np.random.default_rng(20261127)
+        checked = 0
+        for _ in range(150):
+            width, height = 1000.0, 1333.0
+            page_width = rng.uniform(420, 520)
+            page_height = page_width * rng.uniform(1.2, 1.5)
+            left, top = (width - page_width) / 2, (height - page_height) / 2
+            corners = np.float32([
+                [left, top], [left + page_width, top],
+                [left + page_width, top + page_height],
+                [left, top + page_height],
+            ])
+            angle = float(np.deg2rad(rng.uniform(-35, 35)))
+            rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+            corners = (corners - corners.mean(axis=0)) @ rotation.T + corners.mean(axis=0)
+            corners += rng.uniform(-1, 1, (4, 2)) * page_width * 0.02
+            corners = corners.astype(np.float32)
+            if not photo_normalize.cv2.isContourConvex(corners):
+                continue
+            quad = (corners / np.array([width - 1, height - 1])).tolist()
+            checked += 1
+            for shift in range(4):
+                for direction in (1, -1):
+                    candidate = np.roll(np.array(quad)[::direction], shift, axis=0).tolist()
+                    with self.subTest(sample=checked, shift=shift, direction=direction):
+                        ordered = photo_normalize._manual_quad(candidate, (1000, 1333))
+                        np.testing.assert_allclose(ordered[0], corners[0], atol=0.01)
+        self.assertGreater(checked, 120)
 
     def test_parse_quad_accepts_chinese_commas_and_rejects_wrong_count(self):
         self.assertEqual(
