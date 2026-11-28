@@ -47,6 +47,15 @@ class SnapshotTest(unittest.TestCase):
                                "--safety-root", str(self.safety), *extra], env=ENV,
                               capture_output=True, text=True)
 
+    def in_clean_env(self, fn, *args):
+        """进程内调用模块函数时使用净化后的 ENV，与子进程入口保持一致。
+
+        测试进程自身可能带着宿主泄漏的 GIT_CONFIG_* 等变量；模块的 git() 现在会
+        正确拒绝它们，所以进程内调用必须显式净化，否则用例会在夹具里被拒。
+        """
+        with patch.dict(os.environ, ENV, clear=True):
+            return fn(*args)
+
     def create(self, *extra):
         result = self.run_snapshot(*extra)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -93,9 +102,9 @@ class SnapshotTest(unittest.TestCase):
 
     def test_no_repository_write_and_late_mutation_cannot_change_snapshot(self):
         (self.repo / "tracked.txt").write_text("before\n")
-        before = MODULE.capture_git(self.repo)
+        before = self.in_clean_env(MODULE.capture_git, self.repo)
         out = self.create()
-        self.assertEqual(MODULE.capture_git(self.repo), before)
+        self.assertEqual(self.in_clean_env(MODULE.capture_git, self.repo), before)
         (self.repo / "tracked.txt").write_text("after\n")
         self.assertEqual((out / "working-tree/tracked.txt").read_text(), "before\n")
         self.assertEqual(self.verify(out).returncode, 0)
@@ -165,12 +174,12 @@ class SnapshotTest(unittest.TestCase):
 
         with patch.dict(os.environ, ENV, clear=True), patch.object(MODULE.shutil, "copy2", side_effect=drift):
             with self.assertRaisesRegex(ValueError, "drift"):
-                MODULE.snapshot(self.repo, self.safety, "drift")
+                self.in_clean_env(MODULE.snapshot, self.repo, self.safety, "drift")
         markers = list(self.safety.rglob("INCOMPLETE.json"))
         self.assertEqual(len(markers), 1)
         with patch.dict(os.environ, ENV, clear=True), patch.object(MODULE.shutil, "copy2", side_effect=OSError("copy failed")):
             with self.assertRaises(OSError):
-                MODULE.snapshot(self.repo, self.safety, "failure")
+                self.in_clean_env(MODULE.snapshot, self.repo, self.safety, "failure")
         self.assertEqual(len(list(self.safety.rglob("INCOMPLETE.json"))), 2)
 
     def test_inside_repo_output_and_invalid_label_fail_before_creation(self):
@@ -263,6 +272,30 @@ class SnapshotTest(unittest.TestCase):
         r = self.run_snapshot("--max-bytes", "100")
         self.assertNotEqual(r.returncode, 0)
         self.assertTrue(list(self.safety.rglob("INCOMPLETE.json")))
+
+    def test_config_routing_env_is_refused_not_crashed(self):
+        # 回归：宿主泄漏 GIT_CONFIG_COUNT 时，脚本应明确拒绝，而不是让 git 抛
+        # "missing config key GIT_CONFIG_KEY_0" 这类无法理解的错误（DSH 实测，2026-11-28）。
+        for key, value in (("GIT_CONFIG_COUNT", "1"), ("GIT_CONFIG_PARAMETERS", "'user.name=x'"),
+                           ("GIT_NAMESPACE", "ns")):
+            with self.subTest(key=key):
+                env = dict(ENV, **{key: value})
+                result = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(self.repo),
+                                         "--safety-root", str(self.safety)], env=env,
+                                        capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("routing", (result.stdout + result.stderr).lower())
+                self.assertNotIn("missing config key", result.stdout + result.stderr)
+                self.assertFalse((self.safety / self.repo.name).exists(),
+                                 "拒绝必须发生在创建任何快照之前")
+
+    def test_in_process_git_helper_refuses_routing_env(self):
+        # 回归：capture_git()/git() 会被当作库函数进程内直接调用（本测试文件即是），
+        # 仅靠 snapshot() 入口检查会被绕过，git 照样撞上泄漏变量并以 128 退出。
+        with patch.dict(os.environ, {"GIT_CONFIG_COUNT": "1"}):
+            with self.assertRaises(ValueError) as caught:
+                MODULE.capture_git(self.repo)
+        self.assertIn("GIT_CONFIG_COUNT", str(caught.exception))
 
     def test_untracked_nested_repository_is_explicitly_skipped(self):
         nested = self.repo / "nested"
