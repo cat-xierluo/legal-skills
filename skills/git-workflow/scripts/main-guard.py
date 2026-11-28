@@ -75,6 +75,7 @@ def save(p, data, new=False):
 def layout(repo):
     require(platform.system() == 'Darwin' and hasattr(os, 'chflags'),
             '仅支持 macOS uchg；其他平台 NOT_VERIFIED，未修改权限')
+    # 权威名单是 main-directory-snapshot.py 的 ROUTING；三处保持一致，新增键时同步修改。
     require(not any(os.environ.get(k) for k in ('GIT_DIR', 'GIT_COMMON_DIR', 'GIT_WORK_TREE',
                     'GIT_INDEX_FILE', 'GIT_NAMESPACE', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS')),
             '拒绝 Git 环境覆盖')

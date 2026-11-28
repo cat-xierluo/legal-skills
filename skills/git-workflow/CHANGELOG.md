@@ -1,5 +1,18 @@
 # 变更日志
 
+## [1.27.3] - 2026-11-28
+
+### 修复
+
+- 修复 `main-directory-snapshot.py` 在宿主泄漏 `GIT_CONFIG_COUNT` 时直接崩溃并抛出 git 的 `missing config key GIT_CONFIG_KEY_0`。它的 `ROUTING` 拒绝名单只有 4 个目录路由变量，比 `main-guard.py` / `main-git-gate.py` 少了 `GIT_NAMESPACE`、`GIT_CONFIG_COUNT`、`GIT_CONFIG_PARAMETERS`，后两者既能让 git 指向别处，也会让 git 解析失败（DSH 的 bash 工具实测会注入空键的 `GIT_CONFIG_COUNT=10`）。现补齐为同一份 7 项名单，并在三处加注指明权威来源。拒绝仍发生在创建任何快照之前，不做静默净化。
+
+### 验证
+
+- 新增回归用例：三个泄漏键分别注入时，脚本非 0 退出、信息含 `routing`、不含 `missing config key`、且未创建快照目录。修复前该用例对 `GIT_CONFIG_COUNT` 报 git 原生错误，对另两个键完全不拒绝；修复后通过。
+- `test-main-directory-snapshot` 19/19、`test-main-git-gate` 18/18、`test-main-guard` 22/22；三处名单程序化比对一致。
+
+---
+
 ## [1.27.2] - 2026-11-25
 
 ### 修复

@@ -264,6 +264,22 @@ class SnapshotTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertTrue(list(self.safety.rglob("INCOMPLETE.json")))
 
+    def test_config_routing_env_is_refused_not_crashed(self):
+        # 回归：宿主泄漏 GIT_CONFIG_COUNT 时，脚本应明确拒绝，而不是让 git 抛
+        # "missing config key GIT_CONFIG_KEY_0" 这类无法理解的错误（DSH 实测，2026-11-28）。
+        for key, value in (("GIT_CONFIG_COUNT", "1"), ("GIT_CONFIG_PARAMETERS", "'user.name=x'"),
+                           ("GIT_NAMESPACE", "ns")):
+            with self.subTest(key=key):
+                env = dict(ENV, **{key: value})
+                result = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(self.repo),
+                                         "--safety-root", str(self.safety)], env=env,
+                                        capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("routing", (result.stdout + result.stderr).lower())
+                self.assertNotIn("missing config key", result.stdout + result.stderr)
+                self.assertFalse((self.safety / self.repo.name).exists(),
+                                 "拒绝必须发生在创建任何快照之前")
+
     def test_untracked_nested_repository_is_explicitly_skipped(self):
         nested = self.repo / "nested"
         nested.mkdir()

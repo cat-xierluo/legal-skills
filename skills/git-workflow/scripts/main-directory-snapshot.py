@@ -13,7 +13,11 @@ import subprocess
 import sys
 import uuid
 
-ROUTING = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR")
+# 与 main-guard.py / main-git-gate.py 保持同一份名单：除目录路由外，CONFIG_* 与
+# NAMESPACE 同样能让 git 指向别处或直接解析失败（宿主泄漏 GIT_CONFIG_COUNT 时
+# git 会报 "missing config key"，而不是这里给出可理解的拒绝）。
+ROUTING = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
+           "GIT_NAMESPACE", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS")
 
 
 def git(repo, *args):

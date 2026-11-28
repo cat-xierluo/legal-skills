@@ -15,6 +15,7 @@ import sys
 READ = {"status", "diff", "log", "show", "rev-parse", "ls-files", "ls-tree",
         "cat-file", "check-ignore", "describe", "merge-base", "for-each-ref",
         "show-ref", "rev-list", "version", "help"}
+# 权威名单是 main-directory-snapshot.py 的 ROUTING；三处保持一致，新增键时同步修改。
 ROUTING_ENV = {"GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
                "GIT_NAMESPACE", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"}
 SAFE_CONFIG = {"user.name", "user.email", "commit.gpgsign"}
