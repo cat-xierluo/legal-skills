@@ -20,7 +20,17 @@ ROUTING = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
            "GIT_NAMESPACE", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS")
 
 
+def routing_override():
+    """返回当前环境中第一个命中的 Git 路由/配置覆盖变量，没有则 None。"""
+    return next((key for key in ROUTING if os.environ.get(key)), None)
+
+
 def git(repo, *args):
+    # 防御放在真正调用 git 的地方：除 CLI 入口的 snapshot() 外，capture_git() 等
+    # 也会被当作库函数直接调用，不能只依赖入口检查。
+    override = routing_override()
+    if override:
+        raise ValueError("unset Git routing environment before snapshot: " + override)
     env = dict(os.environ, GIT_OPTIONAL_LOCKS="0")
     return subprocess.check_output(["git", "-C", str(repo), *args], env=env)
 
@@ -155,7 +165,7 @@ def capture_git(repo):
 
 
 def snapshot(repo, safety_root, label, include_ignored=False, max_bytes=None):
-    if any(os.environ.get(k) for k in ROUTING):
+    if routing_override():
         raise ValueError("unset Git routing environment before snapshot")
     repo = Path(repo).expanduser().resolve()
     top = Path(os.fsdecode(git(repo, "rev-parse", "--show-toplevel").strip())).resolve()

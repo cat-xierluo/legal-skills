@@ -5,6 +5,7 @@
 ### 修复
 
 - 修复 `main-directory-snapshot.py` 在宿主泄漏 `GIT_CONFIG_COUNT` 时直接崩溃并抛出 git 的 `missing config key GIT_CONFIG_KEY_0`。它的 `ROUTING` 拒绝名单只有 4 个目录路由变量，比 `main-guard.py` / `main-git-gate.py` 少了 `GIT_NAMESPACE`、`GIT_CONFIG_COUNT`、`GIT_CONFIG_PARAMETERS`，后两者既能让 git 指向别处，也会让 git 解析失败（DSH 的 bash 工具实测会注入空键的 `GIT_CONFIG_COUNT=10`）。现补齐为同一份 7 项名单，并在三处加注指明权威来源。拒绝仍发生在创建任何快照之前，不做静默净化。
+- 同一脚本的 `git()` 辅助函数此前直接复制 `os.environ`，`capture_git()` 等被当作库函数进程内调用时会绕过入口检查、照样撞上泄漏变量。现把拒绝下沉到 `git()` 本身，两个入口行为一致，错误信息带上命中的变量名。测试夹具的进程内调用改用净化后的环境（此前 `test_no_repository_write_and_late_mutation_cannot_change_snapshot` 在宿主泄漏环境下必然 error）。
 
 ### 验证
 
